@@ -236,7 +236,6 @@ const elements = {
     dayBreakdownTitle: () => document.getElementById('day-breakdown-title'),
     dayTotalsTitle: () => document.getElementById('day-totals-title'),
     portionVariationSections: () => document.getElementById('portion-variation-sections'),
-    addPortionVariation: () => document.getElementById('add-portion-variation'),
     addPortionVariationSection: () => document.getElementById('add-portion-variation-section'),
     materialsLayout: () => document.getElementById('materials-layout'),
     selectedMaterialsPreview: () => document.getElementById('selected-materials-preview'),
@@ -247,7 +246,6 @@ const elements = {
     btnSaveEquipment: () => document.getElementById('btn-save-equipment'),
     servingsLabel: () => document.getElementById('servings-label'),
     ingredientsList: () => document.getElementById('ingredients-list'),
-    addIngredient: () => document.getElementById('add-ingredient'),
     addIngredientSection: () => document.getElementById('add-ingredient-section'),
     instructionsLabel: () => document.getElementById('instructions-label'),
     instructionsStartMode: () => document.getElementById('instructions-start-mode'),
@@ -537,21 +535,13 @@ function initializeFormListeners() {
         updateRecipeFromForm();
     });
 
-    // Add ingredient button
-    elements.addIngredient()?.addEventListener('click', () => {
-        addIngredientRowToLastSection();
-    });
-
+    // Add ingredient section button
     elements.addIngredientSection()?.addEventListener('click', () => {
         addIngredientSectionEditor();
         updateRecipeFromForm();
     });
 
-    elements.addPortionVariation()?.addEventListener('click', () => {
-        addPortionVariationRowToLastSection();
-        updateRecipeFromForm();
-    });
-
+    // Add portion variation section button
     elements.addPortionVariationSection()?.addEventListener('click', () => {
         addPortionVariationSectionEditor();
         updateRecipeFromForm();

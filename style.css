@@ -637,40 +637,52 @@ body {
     box-shadow: 0 0 0 3px rgba(66, 213, 59, 0.2);
 }
 
-.instruction-section-editor {
+.instruction-section-editor,
+.ingredient-section-editor,
+.portion-variation-section-editor {
     border: 1px solid var(--color-gray-300);
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
     background: var(--color-gray-100);
 }
 
-.instruction-section-editor-header {
+.instruction-section-editor-header,
+.ingredient-section-editor-header,
+.portion-variation-section-editor-header {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
     margin-bottom: var(--spacing-sm);
 }
 
-.instruction-section-editor-header input {
+.instruction-section-editor-header input,
+.ingredient-section-editor-header input,
+.portion-variation-section-editor-header input {
     flex: 1;
     min-width: 0;
 }
 
-.instruction-section-editor-meta {
+.instruction-section-editor-meta,
+.ingredient-section-paste,
+.portion-variation-section-editor-meta {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
     margin-bottom: var(--spacing-sm);
 }
 
-.instruction-section-control {
+.instruction-section-control,
+.portion-variation-section-control {
     display: flex;
     flex-direction: column;
     gap: 6px;
     min-width: 0;
 }
 
-.instruction-section-editor-meta label {
+.instruction-section-editor-meta label,
+.ingredient-section-paste label,
+.portion-variation-section-editor-meta label,
+.portion-variation-section-control label {
     font-size: 0.8125rem;
     font-weight: 600;
     color: var(--color-gray-700);
@@ -678,24 +690,36 @@ body {
 
 .instruction-section-editor select,
 .instruction-section-editor input,
-.instruction-section-editor textarea {
+.instruction-section-editor textarea,
+.ingredient-section-editor select,
+.ingredient-section-editor input,
+.ingredient-section-editor textarea,
+.portion-variation-section-editor select,
+.portion-variation-section-editor input,
+.portion-variation-section-editor textarea {
     width: 100%;
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
 }
 
-.instruction-section-editor .btn-remove {
+.instruction-section-editor .btn-remove,
+.ingredient-section-editor .btn-remove,
+.portion-variation-section-editor .btn-remove {
     margin-top: 0;
 }
 
-.instruction-section-steps {
+.instruction-section-steps,
+.ingredient-section-rows,
+.portion-variation-section-rows {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
 }
 
-.instruction-section-actions {
+.instruction-section-actions,
+.ingredient-section-actions,
+.portion-variation-section-actions {
     margin-top: var(--spacing-sm);
 }
 
@@ -903,6 +927,9 @@ body {
 
 .form-group label,
 .instruction-section-editor-meta label,
+.ingredient-section-paste label,
+.portion-variation-section-editor-meta label,
+.portion-variation-section-control label,
 .image-control-row label {
     color: #b7c2ce;
 }
@@ -914,6 +941,12 @@ body {
 .instruction-section-editor select,
 .instruction-section-editor input,
 .instruction-section-editor textarea,
+.ingredient-section-editor select,
+.ingredient-section-editor input,
+.ingredient-section-editor textarea,
+.portion-variation-section-editor select,
+.portion-variation-section-editor input,
+.portion-variation-section-editor textarea,
 .ingredient-row input,
 .instruction-row textarea,
 .portion-variation-main input,
@@ -928,6 +961,10 @@ body {
 .form-group textarea::placeholder,
 .instruction-section-editor input::placeholder,
 .instruction-section-editor textarea::placeholder,
+.ingredient-section-editor input::placeholder,
+.ingredient-section-editor textarea::placeholder,
+.portion-variation-section-editor input::placeholder,
+.portion-variation-section-editor textarea::placeholder,
 .ingredient-row input::placeholder,
 .instruction-row textarea::placeholder,
 .portion-variation-main input::placeholder,
@@ -972,6 +1009,8 @@ body {
 .image-upload-area,
 .selected-materials-preview,
 .instruction-section-editor,
+.ingredient-section-editor,
+.portion-variation-section-editor,
 .portion-variation-row,
 .image-controls,
 .form-actions {
