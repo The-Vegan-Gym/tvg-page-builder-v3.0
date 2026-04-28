@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Page Generator - The Vegan Gym</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ===================== -->
+        <!-- EDITOR PANEL (LEFT)   -->
+        <!-- ===================== -->
+        <aside class="editor-panel">
+            <div class="editor-header">
+                <h1>TVG Recipe Page Generator</h1>
+                <p>Enter recipe details to generate a formatted page</p>
+            </div>
+
+            <form id="recipe-form" class="recipe-form">
+                <!-- Master Paste Section -->
+                <section class="form-section master-paste-section">
+                    <h2>Master Paste</h2>
+                    <div class="form-group">
+                        <label for="master-paste">Paste Recipe Data</label>
+                        <textarea id="master-paste" name="masterPaste" rows="8" placeholder="Paste structured recipe data here..."></textarea>
+                    </div>
+                    <div class="master-paste-actions">
+                        <button type="button" id="btn-fill-all" class="btn-primary">Fill All</button>
+                        <button type="button" id="btn-copy-ai-instructions" class="btn-secondary">Copy AI Instructions</button>
+                        <button type="button" id="btn-copy-ai-info-instructions" class="btn-secondary">Copy Info AI Prompt</button>
+                        <button type="button" id="btn-copy-ai-day-instructions" class="btn-secondary">Copy Day AI Prompt</button>
+                    </div>
+                    <div id="master-paste-status" class="master-paste-status"></div>
+                </section>
+
+                <!-- Basic Info Section -->
+                <section class="form-section">
+                    <h2>Basic Information</h2>
+
+                    <div class="form-group">
+                        <label for="page-type">Page Type</label>
+                        <select id="page-type" name="pageType">
+                            <option value="recipe">Recipe</option>
+                            <option value="day-of-eating">Day of Eating</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="title">Recipe Title</label>
+                        <input type="text" id="title" name="title" placeholder="e.g., Edamame Avocado Toast">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="hero-image">Hero Image</label>
+                        <div class="image-upload-area" id="image-upload-area">
+                            <input type="file" id="hero-image" name="heroImage" accept="image/*" hidden>
+                            <div class="upload-placeholder" id="upload-placeholder">
+                                <span class="upload-icon">📷</span>
+                                <span>Click to upload image</span>
+                            </div>
+                            <img id="image-preview-thumb" class="image-preview-thumb" alt="Preview">
+                        </div>
+                        <div class="image-controls" id="image-controls">
+                            <div class="image-control-row">
+                                <label for="image-scale">Zoom</label>
+                                <input type="range" id="image-scale" min="0" max="300" value="100">
+                                <span id="image-scale-value">100%</span>
+                            </div>
+                            <div class="image-control-row">
+                                <label for="hero-height">Hero Height</label>
+                                <input type="range" id="hero-height" min="180" max="420" value="309">
+                                <span id="hero-height-value">309px</span>
+                            </div>
+                            <div class="image-control-row">
+                                <label for="image-pos-x">Position X</label>
+                                <input type="range" id="image-pos-x" min="0" max="100" value="50">
+                            </div>
+                            <div class="image-control-row">
+                                <label for="image-pos-y">Position Y</label>
+                                <input type="range" id="image-pos-y" min="0" max="500" value="50">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description" rows="3" placeholder="A short description of the recipe..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="page-number">Page Number</label>
+                        <input type="text" id="page-number" name="pageNumber" placeholder="e.g., 14">
+                    </div>
+                </section>
+
+                <!-- Macros Section -->
+                <section class="form-section">
+                    <h2>Nutrition Information</h2>
+                    <div class="macro-inputs">
+                        <div class="form-group">
+                            <label for="calories">Calories</label>
+                            <input type="text" id="calories" name="calories" placeholder="441">
+                        </div>
+                        <div class="form-group">
+                            <label for="protein">Protein (g)</label>
+                            <input type="text" id="protein" name="protein" placeholder="21">
+                        </div>
+                        <div class="form-group">
+                            <label for="carbs">Carbs (g)</label>
+                            <input type="text" id="carbs" name="carbs" placeholder="56">
+                        </div>
+                        <div class="form-group">
+                            <label for="fat">Fat (g)</label>
+                            <input type="text" id="fat" name="fat" placeholder="18">
+                        </div>
+                    </div>
+                </section>
+
+                <section class="form-section day-plan-only">
+                    <h2>Meals</h2>
+                    <div class="form-group">
+                        <label for="day-meals-paste">Meal Card Paste</label>
+                        <textarea id="day-meals-paste" name="dayMealsPaste" rows="5" placeholder="Breakfast;Green Maca Smoothie;1 serving;516;24;64;26&#10;Lunch;Black Bean Cowboy Caviar;1 bowl;418;20;70;10"></textarea>
+                        <p class="form-hint">Paste one meal per line as: `Meal Label;Meal Name;Portion Note;Calories;Protein;Carbs;Fat`</p>
+                        <button type="button" id="btn-copy-day-meals-prompt" class="btn-secondary btn-day-meals-paste">Copy Meal AI Prompt</button>
+                        <button type="button" id="btn-day-meals-paste" class="btn-secondary btn-day-meals-paste">Paste Meals Into Cards</button>
+                    </div>
+                    <div id="day-meals-list" class="day-meals-list">
+                        <!-- Meal editors will be added dynamically -->
+                    </div>
+                    <button type="button" id="add-day-meal" class="btn-add">+ Add Meal</button>
+                </section>
+
+                <section class="form-section day-plan-only">
+                    <h2>Day Highlights</h2>
+                    <div class="form-group">
+                        <label for="day-highlights-title">Nutrition Highlights Title</label>
+                        <input type="text" id="day-highlights-title" name="dayHighlightsTitle" placeholder="e.g., Nutrition Highlights">
+                    </div>
+                    <div class="form-group">
+                        <label for="day-highlights">Nutrition Highlights</label>
+                        <textarea id="day-highlights" name="dayHighlights" rows="5" placeholder="One highlight per line"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="day-tips-title">Tips Title</label>
+                        <input type="text" id="day-tips-title" name="dayTipsTitle" placeholder="e.g., Tips for Success">
+                    </div>
+                    <div class="form-group">
+                        <label for="day-tips">Tips</label>
+                        <textarea id="day-tips" name="dayTips" rows="5" placeholder="One tip per line"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="day-meals-title">Meals Section Title</label>
+                        <input type="text" id="day-meals-title" name="dayMealsTitle" placeholder="e.g., Meals">
+                    </div>
+                    <div class="form-group">
+                        <label for="day-breakdown-title">Macronutrient Breakdown Title</label>
+                        <input type="text" id="day-breakdown-title" name="dayBreakdownTitle" placeholder="e.g., Macronutrient Breakdown">
+                    </div>
+                    <div class="form-group">
+                        <label for="day-totals-title">Daily Totals Title</label>
+                        <input type="text" id="day-totals-title" name="dayTotalsTitle" placeholder="e.g., Daily Totals">
+                    </div>
+                </section>
+
+                <section class="form-section recipe-only">
+                    <h2>Portion Variations (Optional)</h2>
+                    <div id="portion-variation-sections" class="portion-variation-sections">
+                        <!-- Portion variation set editors will be added dynamically -->
+                    </div>
+                    <button type="button" id="add-portion-variation" class="btn-add">+ Add Portion Row</button>
+                    <button type="button" id="add-portion-variation-section" class="btn-add">+ Add Portion Variation Set</button>
+                </section>
+
+                <!-- Materials Section -->
+                <section class="form-section recipe-only">
+                    <h2>Materials/Equipment</h2>
+                    <div class="form-group">
+                        <label for="materials-layout">Materials Layout</label>
+                        <select id="materials-layout" name="materialsLayout">
+                            <option value="full-width">Full Width - Spans Entire Page (Recommended)</option>
+                            <option value="column">Column - Left Side Only</option>
+                        </select>
+                        <p class="form-hint">Full width spreads materials across the page for more space</p>
+                    </div>
+                    <div class="selected-materials-preview" id="selected-materials-preview">
+                        <span class="no-materials-text">No equipment selected</span>
+                    </div>
+                    <button type="button" id="btn-select-equipment" class="btn-select-equipment">
+                        Select Equipment
+                    </button>
+                </section>
+
+                <!-- Ingredients Section -->
+                <section class="form-section recipe-only">
+                    <h2>Ingredients</h2>
+                    <div class="form-group">
+                        <label for="servings-label">Servings Label</label>
+                        <input type="text" id="servings-label" name="servingsLabel" placeholder="e.g., Ingredients for 1 Serving">
+                    </div>
+                    <div id="ingredients-list" class="ingredients-list">
+                        <!-- Ingredient set editors will be added dynamically -->
+                    </div>
+                    <button type="button" id="add-ingredient" class="btn-add">+ Add Ingredient</button>
+                    <button type="button" id="add-ingredient-section" class="btn-add">+ Add Ingredient Set</button>
+                </section>
+
+                <!-- Instructions Section -->
+                <section class="form-section recipe-only">
+                    <h2>Instructions</h2>
+                    <div class="form-group">
+                        <label for="instructions-label">Instructions Label</label>
+                        <input type="text" id="instructions-label" name="instructionsLabel" placeholder="e.g., Instructions for 1 Serving">
+                    </div>
+                    <div id="instructions-list" class="instructions-list">
+                        <!-- Instruction rows will be added dynamically -->
+                    </div>
+                    <button type="button" id="add-instruction" class="btn-add">+ Add Step</button>
+                    <button type="button" id="add-instruction-section" class="btn-add">+ Add Instruction Set</button>
+                </section>
+
+                <!-- Note Section -->
+                <section class="form-section">
+                    <h2>Note/Callout (Optional)</h2>
+                    <div class="form-group">
+                        <label for="note">Note Text</label>
+                        <textarea id="note" name="note" rows="3" placeholder="Optional tip or note about the recipe..."></textarea>
+                    </div>
+                </section>
+
+                <!-- Action Buttons -->
+                <div class="form-actions">
+                    <button type="button" id="btn-print" class="btn-primary">Export PDF</button>
+                    <button type="button" id="btn-export-jpg" class="btn-primary">Export JPG</button>
+                    <button type="button" id="btn-save-json" class="btn-secondary">Save Recipe</button>
+                    <button type="button" id="btn-load-json" class="btn-secondary">Load Recipe</button>
+                    <input type="file" id="json-file-input" accept=".json" hidden>
+                    <button type="button" id="btn-clear" class="btn-danger">Clear All</button>
+                </div>
+            </form>
+        </aside>
+
+        <!-- ===================== -->
+        <!-- PREVIEW PANEL (RIGHT) -->
+        <!-- ===================== -->
+        <main class="preview-panel">
+            <div class="preview-header">
+                <h2>Live Preview</h2>
+                <div class="preview-controls">
+                    <button type="button" id="btn-zoom-out" class="btn-zoom">−</button>
+                    <span id="zoom-level">100%</span>
+                    <button type="button" id="btn-zoom-in" class="btn-zoom">+</button>
+                    <button type="button" id="btn-center-preview" class="btn-zoom btn-center-preview" title="Center Preview">Center</button>
+                </div>
+            </div>
+            <div class="preview-container" id="preview-container">
+                <div class="recipe-page-wrapper">
+                    <div class="recipe-page" id="recipe-page">
+                        <!-- Recipe page content rendered by JS -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Hidden printable page -->
+    <div class="print-only" id="print-page">
+        <!-- Clone of recipe page for printing -->
+    </div>
+
+    <!-- Equipment Selection Overlay -->
+    <div class="equipment-overlay" id="equipment-overlay">
+        <div class="equipment-modal">
+            <div class="equipment-modal-header">
+                <h3>Select Equipment</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-equipment">&times;</button>
+            </div>
+            <div class="equipment-grid" id="equipment-grid">
+                <!-- Equipment icons will be populated by JS -->
+            </div>
+            <div class="equipment-modal-footer">
+                <button type="button" id="btn-save-equipment" class="btn-primary">Save Selection</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="script.js"></script>
+</body>
+</html>

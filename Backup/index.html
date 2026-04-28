@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Page Generator - The Vegan Gym</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ===================== -->
+        <!-- EDITOR PANEL (LEFT)   -->
+        <!-- ===================== -->
+        <aside class="editor-panel">
+            <div class="editor-header">
+                <h1>Recipe Page Generator</h1>
+                <p>Enter recipe details to generate a formatted page</p>
+            </div>
+
+            <form id="recipe-form" class="recipe-form">
+                <!-- Basic Info Section -->
+                <section class="form-section">
+                    <h2>Basic Information</h2>
+
+                    <div class="form-group">
+                        <label for="title">Recipe Title</label>
+                        <input type="text" id="title" name="title" placeholder="e.g., Edamame Avocado Toast">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="hero-image">Hero Image</label>
+                        <div class="image-upload-area" id="image-upload-area">
+                            <input type="file" id="hero-image" name="heroImage" accept="image/*" hidden>
+                            <div class="upload-placeholder" id="upload-placeholder">
+                                <span class="upload-icon">📷</span>
+                                <span>Click to upload image</span>
+                            </div>
+                            <img id="image-preview-thumb" class="image-preview-thumb" alt="Preview">
+                        </div>
+                        <div class="image-controls" id="image-controls">
+                            <div class="image-control-row">
+                                <label for="image-scale">Zoom</label>
+                                <input type="range" id="image-scale" min="0" max="300" value="100">
+                                <span id="image-scale-value">100%</span>
+                            </div>
+                            <div class="image-control-row">
+                                <label for="image-pos-x">Position X</label>
+                                <input type="range" id="image-pos-x" min="0" max="100" value="50">
+                            </div>
+                            <div class="image-control-row">
+                                <label for="image-pos-y">Position Y</label>
+                                <input type="range" id="image-pos-y" min="0" max="500" value="50">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description" rows="3" placeholder="A short description of the recipe..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="page-number">Page Number</label>
+                        <input type="text" id="page-number" name="pageNumber" placeholder="e.g., 14">
+                    </div>
+                </section>
+
+                <!-- Macros Section -->
+                <section class="form-section">
+                    <h2>Nutrition Information</h2>
+                    <div class="macro-inputs">
+                        <div class="form-group">
+                            <label for="calories">Calories</label>
+                            <input type="text" id="calories" name="calories" placeholder="441">
+                        </div>
+                        <div class="form-group">
+                            <label for="protein">Protein (g)</label>
+                            <input type="text" id="protein" name="protein" placeholder="21">
+                        </div>
+                        <div class="form-group">
+                            <label for="carbs">Carbs (g)</label>
+                            <input type="text" id="carbs" name="carbs" placeholder="56">
+                        </div>
+                        <div class="form-group">
+                            <label for="fat">Fat (g)</label>
+                            <input type="text" id="fat" name="fat" placeholder="18">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Materials Section -->
+                <section class="form-section">
+                    <h2>Materials/Equipment</h2>
+                    <div class="selected-materials-preview" id="selected-materials-preview">
+                        <span class="no-materials-text">No equipment selected</span>
+                    </div>
+                    <button type="button" id="btn-select-equipment" class="btn-select-equipment">
+                        Select Equipment
+                    </button>
+                </section>
+
+                <!-- Ingredients Section -->
+                <section class="form-section">
+                    <h2>Ingredients</h2>
+                    <div class="form-group">
+                        <label for="servings-label">Servings Label</label>
+                        <input type="text" id="servings-label" name="servingsLabel" placeholder="e.g., Ingredients for 1 Serving">
+                    </div>
+                    <div id="ingredients-list" class="ingredients-list">
+                        <!-- Ingredient rows will be added dynamically -->
+                    </div>
+                    <button type="button" id="add-ingredient" class="btn-add">+ Add Ingredient</button>
+                </section>
+
+                <!-- Instructions Section -->
+                <section class="form-section">
+                    <h2>Instructions</h2>
+                    <div class="form-group">
+                        <label for="instructions-label">Instructions Label</label>
+                        <input type="text" id="instructions-label" name="instructionsLabel" placeholder="e.g., Instructions for 1 Serving">
+                    </div>
+                    <div class="form-group">
+                        <label for="left-column-steps">Steps in Left Column</label>
+                        <input type="number" id="left-column-steps" name="leftColumnSteps" min="1" max="10" value="3" placeholder="3">
+                        <p class="form-hint">Number of steps to show in the left column</p>
+                    </div>
+                    <div id="instructions-list" class="instructions-list">
+                        <!-- Instruction rows will be added dynamically -->
+                    </div>
+                    <button type="button" id="add-instruction" class="btn-add">+ Add Step</button>
+                </section>
+
+                <!-- Note Section -->
+                <section class="form-section">
+                    <h2>Note/Callout (Optional)</h2>
+                    <div class="form-group">
+                        <label for="note">Note Text</label>
+                        <textarea id="note" name="note" rows="3" placeholder="Optional tip or note about the recipe..."></textarea>
+                    </div>
+                </section>
+
+                <!-- Action Buttons -->
+                <div class="form-actions">
+                    <button type="button" id="btn-print" class="btn-primary">Print / Export PDF</button>
+                    <button type="button" id="btn-save-json" class="btn-secondary">Save as JSON</button>
+                    <button type="button" id="btn-load-json" class="btn-secondary">Load JSON</button>
+                    <input type="file" id="json-file-input" accept=".json" hidden>
+                    <button type="button" id="btn-clear" class="btn-danger">Clear All</button>
+                </div>
+            </form>
+        </aside>
+
+        <!-- ===================== -->
+        <!-- PREVIEW PANEL (RIGHT) -->
+        <!-- ===================== -->
+        <main class="preview-panel">
+            <div class="preview-header">
+                <h2>Live Preview</h2>
+                <div class="preview-controls">
+                    <button type="button" id="btn-zoom-out" class="btn-zoom">−</button>
+                    <span id="zoom-level">100%</span>
+                    <button type="button" id="btn-zoom-in" class="btn-zoom">+</button>
+                </div>
+            </div>
+            <div class="preview-container" id="preview-container">
+                <div class="recipe-page-wrapper">
+                    <div class="recipe-page" id="recipe-page">
+                        <!-- Recipe page content rendered by JS -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Hidden printable page -->
+    <div class="print-only" id="print-page">
+        <!-- Clone of recipe page for printing -->
+    </div>
+
+    <!-- Equipment Selection Overlay -->
+    <div class="equipment-overlay" id="equipment-overlay">
+        <div class="equipment-modal">
+            <div class="equipment-modal-header">
+                <h3>Select Equipment</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-equipment">&times;</button>
+            </div>
+            <div class="equipment-grid" id="equipment-grid">
+                <!-- Equipment icons will be populated by JS -->
+            </div>
+            <div class="equipment-modal-footer">
+                <button type="button" id="btn-save-equipment" class="btn-primary">Save Selection</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
