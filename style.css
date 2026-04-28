@@ -723,8 +723,7 @@ body {
     margin-top: var(--spacing-sm);
 }
 
-.ingredient-row,
-.instruction-row {
+.ingredient-row {
     display: flex;
     gap: var(--spacing-sm);
     align-items: flex-start;
@@ -744,6 +743,9 @@ body {
 
 .instruction-row {
     position: relative;
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: flex-start;
 }
 
 .instruction-row .step-number {
@@ -761,6 +763,114 @@ body {
     margin-top: 6px;
 }
 
+.instruction-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    min-width: 0;
+}
+
+.instruction-row-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    flex-shrink: 0;
+}
+
+.btn-toggle-checkboxes {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: var(--color-gray-200);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--color-gray-600);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    opacity: 0.5;
+    margin-top: 6px;
+}
+
+.btn-toggle-checkboxes:hover {
+    background: var(--color-gray-300);
+    opacity: 1;
+}
+
+.instruction-checkbox-section {
+    padding: var(--spacing-sm);
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: var(--radius-sm);
+    border: 1px dashed var(--color-gray-300);
+}
+
+.instruction-checkbox-items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+}
+
+.instruction-checkbox-item {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.instruction-checkbox-item input {
+    flex: 1;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-family: var(--font-primary);
+    font-size: 0.8125rem;
+    border: 1px solid var(--color-gray-300);
+    border-radius: var(--radius-sm);
+    background: var(--color-white);
+}
+
+.btn-remove-small {
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: var(--color-gray-200);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--color-gray-600);
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-remove-small:hover {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.btn-add-checkbox-item {
+    width: 100%;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: 1px dashed var(--color-gray-400);
+    background: transparent;
+    border-radius: var(--radius-sm);
+    color: var(--color-gray-600);
+    font-family: var(--font-primary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-add-checkbox-item:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: rgba(66, 213, 59, 0.05);
+}
+
 .instruction-row .step-number.step-bullet {
     width: 10px;
     height: 10px;
@@ -772,9 +882,8 @@ body {
     font-size: 0;
 }
 
-.instruction-row textarea {
-    flex: 1;
-    min-width: 0;
+.instruction-content textarea {
+    width: 100%;
     min-height: 60px;
     font-family: var(--font-primary);
     font-size: 0.875rem;
@@ -784,7 +893,7 @@ body {
     resize: vertical;
 }
 
-.instruction-row textarea:focus {
+.instruction-content textarea:focus {
     outline: none;
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(66, 213, 59, 0.2);
@@ -948,7 +1057,7 @@ body {
 .portion-variation-section-editor input,
 .portion-variation-section-editor textarea,
 .ingredient-row input,
-.instruction-row textarea,
+.instruction-content textarea,
 .portion-variation-main input,
 .portion-variation-macros input,
 .portion-variation-url {
@@ -1087,6 +1196,52 @@ body {
 .instruction-row .step-number {
     background: #303943;
     color: #dbe4ec;
+}
+
+.btn-toggle-checkboxes,
+.btn-remove-small {
+    background: #252c34;
+    color: #a7b3bf;
+}
+
+.btn-toggle-checkboxes:hover {
+    background: #303943;
+}
+
+.btn-remove-small:hover {
+    background: rgba(239, 83, 80, 0.12);
+    color: #ff8d8a;
+}
+
+.instruction-checkbox-section {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: #3b4652;
+}
+
+.instruction-checkbox-item input {
+    background: #0f1318;
+    color: #edf2f7;
+    border-color: #303943;
+}
+
+.instruction-checkbox-item input::placeholder {
+    color: #728091;
+}
+
+.instruction-checkbox-item input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(66, 213, 59, 0.18);
+}
+
+.btn-add-checkbox-item {
+    border-color: #3b4652;
+    color: #9aa6b2;
+}
+
+.btn-add-checkbox-item:hover {
+    background: rgba(66, 213, 59, 0.08);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
 }
 
 .btn-add {
@@ -1591,11 +1746,44 @@ body {
     margin-right: 7px;
 }
 
+.instruction-text-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-8);
+}
+
 .instruction-text {
     font-size: 12px;
     line-height: 1.5;
     color: var(--color-gray-800);
-    flex: 1;
+    font-weight: 500;
+}
+
+.instruction-checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.instruction-checkbox-item-preview {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.checkbox-box {
+    font-size: 16px;
+    color: var(--color-gray-600);
+    flex-shrink: 0;
+    margin-top: -1px;
+}
+
+.checkbox-text {
+    color: var(--color-gray-700);
     font-weight: 500;
 }
 
@@ -1785,8 +1973,13 @@ body {
     .print-only .description-text,
     .print-only .ingredient-name-cell,
     .print-only .ingredient-amount-cell,
-    .print-only .instruction-text {
+    .print-only .instruction-text,
+    .print-only .checkbox-text {
         color: #424242 !important;
+    }
+
+    .print-only .checkbox-box {
+        color: #757575 !important;
     }
 
     .print-only .section-title {

@@ -1032,8 +1032,15 @@ function getInstructionSectionsFromForm() {
             const startMode = section.querySelector('.instruction-section-start-mode')?.value || 'auto';
             const stepStyle = section.querySelector('.instruction-section-step-style')?.value || 'numbered';
             const steps = Array.from(section.querySelectorAll('.instruction-row'))
-                .map(row => row.querySelector('textarea')?.value || '')
-                .filter(Boolean);
+                .map(row => {
+                    const text = row.querySelector('textarea')?.value || '';
+                    const checkboxItems = Array.from(row.querySelectorAll('.instruction-checkbox-item input'))
+                        .map(input => input.value || '')
+                        .filter(Boolean);
+
+                    return checkboxItems.length > 0 ? { text, checkboxItems } : text;
+                })
+                .filter(step => typeof step === 'string' ? step : step.text);
 
             return { label, startMode, stepStyle, steps };
         })
@@ -1380,8 +1387,12 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
     container.appendChild(section);
 
     const stepsContainer = section.querySelector('.instruction-section-steps');
-    (steps.length ? steps : ['']).forEach((stepText) => {
-        addInstructionRow(stepText, stepsContainer);
+    (steps.length ? steps : ['']).forEach((step) => {
+        if (typeof step === 'string') {
+            addInstructionRow(step, stepsContainer, []);
+        } else {
+            addInstructionRow(step.text || '', stepsContainer, step.checkboxItems || []);
+        }
     });
 
     renumberInstructions();
@@ -1398,7 +1409,7 @@ function addInstructionRowToLastSection(text = '') {
     addInstructionRow(text, lastSectionSteps);
 }
 
-function addInstructionRow(text = '', container = null) {
+function addInstructionRow(text = '', container = null, checkboxItems = []) {
     const targetContainer = container || elements.instructionsList();
     const stepNumber = targetContainer.querySelectorAll('.instruction-row').length + 1;
 
@@ -1406,19 +1417,72 @@ function addInstructionRow(text = '', container = null) {
     row.className = 'instruction-row';
     row.innerHTML = `
         <span class="step-number">${stepNumber}</span>
-        <textarea placeholder="Enter instruction step...">${escapeHtml(text)}</textarea>
-        <button type="button" class="btn-remove" title="Remove">×</button>
+        <div class="instruction-content">
+            <textarea placeholder="Enter instruction step...">${escapeHtml(text)}</textarea>
+            <div class="instruction-checkbox-section" style="display: none;">
+                <div class="instruction-checkbox-items"></div>
+                <button type="button" class="btn-add-checkbox-item">+ Add Checkbox Item</button>
+            </div>
+        </div>
+        <div class="instruction-row-actions">
+            <button type="button" class="btn-toggle-checkboxes" title="Toggle Checkboxes">☑</button>
+            <button type="button" class="btn-remove" title="Remove">×</button>
+        </div>
     `;
 
-    row.querySelector('textarea').addEventListener('input', debounce(updateRecipeFromForm, 150));
+    const textarea = row.querySelector('textarea');
+    const checkboxSection = row.querySelector('.instruction-checkbox-section');
+    const checkboxItemsContainer = row.querySelector('.instruction-checkbox-items');
+    const toggleBtn = row.querySelector('.btn-toggle-checkboxes');
+    const addCheckboxBtn = row.querySelector('.btn-add-checkbox-item');
+
+    textarea.addEventListener('input', debounce(updateRecipeFromForm, 150));
+
     row.querySelector('.btn-remove').addEventListener('click', () => {
         row.remove();
         renumberInstructions();
         updateRecipeFromForm();
     });
 
+    toggleBtn.addEventListener('click', () => {
+        const isVisible = checkboxSection.style.display !== 'none';
+        checkboxSection.style.display = isVisible ? 'none' : 'block';
+        toggleBtn.style.opacity = isVisible ? '0.5' : '1';
+    });
+
+    addCheckboxBtn.addEventListener('click', () => {
+        addCheckboxItem('', checkboxItemsContainer);
+    });
+
     targetContainer.appendChild(row);
+
+    // Add existing checkbox items
+    if (checkboxItems && checkboxItems.length > 0) {
+        checkboxSection.style.display = 'block';
+        toggleBtn.style.opacity = '1';
+        checkboxItems.forEach(item => {
+            addCheckboxItem(item, checkboxItemsContainer);
+        });
+    }
+
     renumberInstructions();
+}
+
+function addCheckboxItem(text = '', container) {
+    const item = document.createElement('div');
+    item.className = 'instruction-checkbox-item';
+    item.innerHTML = `
+        <input type="text" placeholder="Checkbox item text..." value="${escapeHtml(text)}">
+        <button type="button" class="btn-remove-small" title="Remove">×</button>
+    `;
+
+    item.querySelector('input').addEventListener('input', debounce(updateRecipeFromForm, 150));
+    item.querySelector('.btn-remove-small').addEventListener('click', () => {
+        item.remove();
+        updateRecipeFromForm();
+    });
+
+    container.appendChild(item);
 }
 
 function getInstructionSectionStepStyle(section) {
@@ -1979,15 +2043,36 @@ function createInstructionContinuationHeaderNode() {
     return createInstructionHeaderNode(`${title} - Directions continued`);
 }
 
-function createInstructionNode(text, index, stepStyle = 'numbered') {
+function createInstructionNode(step, index, stepStyle = 'numbered') {
     const item = document.createElement('div');
     item.className = 'instruction-item';
+
+    const text = typeof step === 'string' ? step : step.text;
+    const checkboxItems = typeof step === 'object' && step.checkboxItems ? step.checkboxItems : null;
+
     const markerHtml = stepStyle === 'bulleted'
         ? '<span class="instruction-bullet" aria-hidden="true"></span>'
         : `<span class="instruction-number">${index + 1}</span>`;
+
+    let checkboxHtml = '';
+    if (checkboxItems && checkboxItems.length > 0) {
+        const checkboxListHtml = checkboxItems
+            .map(itemText => `
+                <div class="instruction-checkbox-item-preview">
+                    <span class="checkbox-box">☐</span>
+                    <span class="checkbox-text">${escapeHtml(itemText)}</span>
+                </div>
+            `)
+            .join('');
+        checkboxHtml = `<div class="instruction-checkbox-list">${checkboxListHtml}</div>`;
+    }
+
     item.innerHTML = `
         ${markerHtml}
-        <span class="instruction-text">${escapeHtml(text)}</span>
+        <div class="instruction-text-wrapper">
+            <span class="instruction-text">${escapeHtml(text)}</span>
+            ${checkboxHtml}
+        </div>
     `;
     return item;
 }
@@ -3636,17 +3721,15 @@ function centerPreview() {
 
     if (!container || !wrapper) return;
 
-    const containerRect = container.getBoundingClientRect();
-    const wrapperRect = wrapper.getBoundingClientRect();
+    // Get the wrapper's dimensions
+    const wrapperWidth = wrapper.offsetWidth;
+    const wrapperHeight = wrapper.offsetHeight;
 
-    const left = Math.max(
-        0,
-        container.scrollLeft + (wrapperRect.left - containerRect.left) - ((container.clientWidth - wrapperRect.width) / 2)
-    );
-    const top = Math.max(
-        0,
-        container.scrollTop + (wrapperRect.top - containerRect.top) - ((container.clientHeight - wrapperRect.height) / 2)
-    );
+    // Calculate scroll position to center the wrapper in the viewport
+    // If content is larger than viewport, scroll to show the center
+    // If content is smaller, scroll to 0 (CSS grid centering handles it)
+    const left = Math.max(0, (wrapperWidth - container.clientWidth) / 2);
+    const top = Math.max(0, (wrapperHeight - container.clientHeight) / 2);
 
     container.scrollTo({
         left,
