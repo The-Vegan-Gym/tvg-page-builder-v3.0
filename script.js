@@ -4122,8 +4122,13 @@ function centerPreviewWithBehavior(behavior = 'auto') {
 
     if (!container || !wrapper) return;
 
-    previewPanX = (container.clientWidth - wrapper.offsetWidth) / 2;
-    previewPanY = (container.clientHeight - wrapper.offsetHeight) / 2;
+    const containerRect = container.getBoundingClientRect();
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const deltaX = (containerRect.left + (containerRect.width / 2)) - (wrapperRect.left + (wrapperRect.width / 2));
+    const deltaY = (containerRect.top + (containerRect.height / 2)) - (wrapperRect.top + (wrapperRect.height / 2));
+
+    previewPanX += deltaX;
+    previewPanY += deltaY;
     applyPreviewPan();
 }
 
