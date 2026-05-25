@@ -42,6 +42,7 @@ const DEFAULT_PORTION_VARIATION_SVG = `<svg width="36" height="36" viewBox="0 0 
  */
 const EMPTY_RECIPE = {
     pageType: "recipe",
+    pageStyle: "standard",
     title: "",
     image: "",
     heroHeight: 309,
@@ -50,6 +51,8 @@ const EMPTY_RECIPE = {
         posX: 50,
         posY: 50
     },
+    showCornerLogo: false,
+    showMacroBar: true,
     macros: {
         calories: "",
         protein: "",
@@ -72,13 +75,13 @@ const EMPTY_RECIPE = {
     servingsLabel: "Ingredients for 1 Serving",
     ingredientSections: [],
     instructionsLabel: "Instructions for 1 Serving",
-    instructionsStartMode: "auto",
-    materialsLayout: "full-width",
+    instructionsStartMode: "force-right-column",
+    materialsLayout: "column",
     materials: [],
     ingredients: [],
     instructionSections: [],
     instructions: [],
-    note: "",
+    notes: [],
     pageNumber: ""
 };
 
@@ -91,6 +94,8 @@ const EMPTY_RECIPE = {
  */
 let currentRecipe = { ...EMPTY_RECIPE };
 let zoomLevel = 100;
+let previewPanX = 0;
+let previewPanY = 0;
 
 function normalizeRecipe(recipe = {}) {
     const normalized = {
@@ -112,6 +117,9 @@ function normalizeRecipe(recipe = {}) {
         ingredientSections: Array.isArray(recipe.ingredientSections) ? recipe.ingredientSections : [],
         instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
         instructionSections: Array.isArray(recipe.instructionSections) ? recipe.instructionSections : [],
+        notes: Array.isArray(recipe.notes)
+            ? recipe.notes
+            : (recipe.note ? [recipe.note] : []),
         portionVariations: Array.isArray(recipe.portionVariations) ? recipe.portionVariations : [],
         portionVariationSections: Array.isArray(recipe.portionVariationSections) ? recipe.portionVariationSections : []
     };
@@ -205,6 +213,7 @@ const elements = {
     masterPaste: () => document.getElementById('master-paste'),
     masterPasteStatus: () => document.getElementById('master-paste-status'),
     pageType: () => document.getElementById('page-type'),
+    pageStyle: () => document.getElementById('page-style'),
     title: () => document.getElementById('title'),
     heroImage: () => document.getElementById('hero-image'),
     imageUploadArea: () => document.getElementById('image-upload-area'),
@@ -217,8 +226,10 @@ const elements = {
     heroHeightValue: () => document.getElementById('hero-height-value'),
     imagePosX: () => document.getElementById('image-pos-x'),
     imagePosY: () => document.getElementById('image-pos-y'),
+    showCornerLogo: () => document.getElementById('show-corner-logo'),
     description: () => document.getElementById('description'),
     pageNumber: () => document.getElementById('page-number'),
+    showMacroBar: () => document.getElementById('show-macro-bar'),
     calories: () => document.getElementById('calories'),
     protein: () => document.getElementById('protein'),
     carbs: () => document.getElementById('carbs'),
@@ -252,7 +263,8 @@ const elements = {
     instructionsList: () => document.getElementById('instructions-list'),
     addInstruction: () => document.getElementById('add-instruction'),
     addInstructionSection: () => document.getElementById('add-instruction-section'),
-    note: () => document.getElementById('note'),
+    notesList: () => document.getElementById('notes-list'),
+    addNote: () => document.getElementById('add-note'),
 
     // Buttons
     btnFillAll: () => document.getElementById('btn-fill-all'),
@@ -283,13 +295,101 @@ const elements = {
 document.addEventListener('DOMContentLoaded', async () => {
     await loadIconsDatabase();
     populatePortionVariationIconOptions();
+    initializeCollapsibleSections();
     initializeMaterialsSelector();
+    initializePreviewPanning();
     initializeFormListeners();
     initializeButtonListeners();
     loadRecipeToForm(currentRecipe);
     renderRecipePage();
     setZoomToFit();
 });
+
+function initializeCollapsibleSections() {
+    document.querySelectorAll('.recipe-form > .form-section').forEach((section) => {
+        if (section.dataset.accordionInitialized === 'true') return;
+
+        const heading = section.querySelector(':scope > h2');
+        if (!heading) return;
+
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'form-section-toggle';
+        toggle.setAttribute('aria-expanded', 'true');
+
+        const title = document.createElement('span');
+        title.className = 'form-section-toggle-title';
+        title.textContent = heading.textContent;
+
+        const icon = document.createElement('span');
+        icon.className = 'form-section-toggle-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = '⌄';
+
+        toggle.append(title, icon);
+        heading.replaceWith(toggle);
+
+        const content = document.createElement('div');
+        content.className = 'form-section-content';
+        while (toggle.nextSibling) {
+            content.appendChild(toggle.nextSibling);
+        }
+        section.appendChild(content);
+
+        toggle.addEventListener('click', () => {
+            const isCollapsed = section.classList.toggle('is-collapsed');
+            content.hidden = isCollapsed;
+            toggle.setAttribute('aria-expanded', String(!isCollapsed));
+        });
+
+        section.dataset.accordionInitialized = 'true';
+    });
+}
+
+function initializePreviewPanning() {
+    const container = elements.previewContainer();
+    if (!container) return;
+
+    let isPanning = false;
+    let startX = 0;
+    let startY = 0;
+    let startPanX = 0;
+    let startPanY = 0;
+
+    container.addEventListener('mousedown', (event) => {
+        if (event.button !== 1) return;
+
+        event.preventDefault();
+        isPanning = true;
+        startX = event.clientX;
+        startY = event.clientY;
+        startPanX = previewPanX;
+        startPanY = previewPanY;
+        container.classList.add('is-middle-panning');
+    });
+
+    window.addEventListener('mousemove', (event) => {
+        if (!isPanning) return;
+
+        event.preventDefault();
+        previewPanX = startPanX + (event.clientX - startX);
+        previewPanY = startPanY + (event.clientY - startY);
+        applyPreviewPan();
+    });
+
+    window.addEventListener('mouseup', (event) => {
+        if (event.button !== 1 && isPanning) return;
+
+        isPanning = false;
+        container.classList.remove('is-middle-panning');
+    });
+
+    container.addEventListener('auxclick', (event) => {
+        if (event.button === 1) {
+            event.preventDefault();
+        }
+    });
+}
 
 /**
  * Load icons from the JSON database
@@ -502,10 +602,23 @@ function initializeFormListeners() {
         updatePageTypeVisibility(elements.pageType().value);
         updateRecipeFromForm();
     });
+    elements.pageStyle()?.addEventListener('change', () => {
+        if (elements.pageStyle().value === 'printer-friendly') {
+            elements.heroHeight().value = '120';
+            elements.heroHeightValue().textContent = '120px';
+            elements.showCornerLogo().checked = false;
+        } else {
+            elements.heroHeight().value = '309';
+            elements.heroHeightValue().textContent = '309px';
+            elements.showCornerLogo().checked = true;
+        }
+        updateRecipeFromForm();
+    });
 
     // Materials layout
     elements.materialsLayout()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
     elements.instructionsStartMode()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
+    elements.showMacroBar()?.addEventListener('change', updateRecipeFromForm);
 
     // Image upload
     elements.imageUploadArea()?.addEventListener('click', () => {
@@ -535,6 +648,8 @@ function initializeFormListeners() {
         updateRecipeFromForm();
     });
 
+    elements.showCornerLogo()?.addEventListener('change', updateRecipeFromForm);
+
     // Add ingredient section button
     elements.addIngredientSection()?.addEventListener('click', () => {
         addIngredientSectionEditor();
@@ -554,6 +669,11 @@ function initializeFormListeners() {
 
     elements.addInstructionSection()?.addEventListener('click', () => {
         addInstructionSectionEditor();
+        updateRecipeFromForm();
+    });
+
+    elements.addNote()?.addEventListener('click', () => {
+        addNoteRow();
         updateRecipeFromForm();
     });
 
@@ -618,9 +738,12 @@ function initializeButtonListeners() {
 function loadRecipeToForm(recipe) {
     recipe = normalizeRecipe(recipe);
     elements.pageType().value = recipe.pageType || 'recipe';
+    elements.pageStyle().value = recipe.pageStyle || 'standard';
     elements.title().value = recipe.title || '';
     elements.description().value = recipe.description || '';
     elements.pageNumber().value = recipe.pageNumber || '';
+    elements.showCornerLogo().checked = !isPrinterFriendly(recipe) && recipe.showCornerLogo === true;
+    elements.showMacroBar().checked = recipe.showMacroBar !== false;
     elements.calories().value = recipe.macros?.calories || '';
     elements.protein().value = recipe.macros?.protein || '';
     elements.carbs().value = recipe.macros?.carbs || '';
@@ -628,10 +751,9 @@ function loadRecipeToForm(recipe) {
     elements.servingsLabel().value = recipe.servingsLabel || 'Ingredients for 1 Serving';
     elements.instructionsLabel().value = recipe.instructionsLabel || 'Instructions for 1 Serving';
     if (elements.instructionsStartMode()) {
-        elements.instructionsStartMode().value = recipe.instructionsStartMode || 'auto';
+        elements.instructionsStartMode().value = recipe.instructionsStartMode || 'force-right-column';
     }
-    elements.materialsLayout().value = recipe.materialsLayout || 'full-width';
-    elements.note().value = recipe.note || '';
+    elements.materialsLayout().value = recipe.materialsLayout || 'column';
     elements.dayHighlightsTitle().value = recipe.dayHighlightsTitle || 'Nutrition Highlights';
     elements.dayTipsTitle().value = recipe.dayTipsTitle || 'Tips for Success';
     elements.dayMealsTitle().value = recipe.dayMealsTitle || 'Meals';
@@ -639,8 +761,9 @@ function loadRecipeToForm(recipe) {
     elements.dayTotalsTitle().value = recipe.dayTotalsTitle || 'Daily Totals';
     elements.dayHighlights().value = (recipe.dayHighlights || []).join('\n');
     elements.dayTips().value = (recipe.dayTips || []).join('\n');
-    elements.heroHeight().value = recipe.heroHeight || 309;
-    elements.heroHeightValue().textContent = `${recipe.heroHeight || 309}px`;
+    const heroHeightValue = isPrinterFriendly(recipe) ? 120 : (recipe.heroHeight || 309);
+    elements.heroHeight().value = heroHeightValue;
+    elements.heroHeightValue().textContent = `${heroHeightValue}px`;
     updatePageTypeVisibility(recipe.pageType || 'recipe');
 
     // Load image if present
@@ -697,10 +820,19 @@ function loadRecipeToForm(recipe) {
             section.label,
             section.steps,
             index === 0,
-            section.startMode || 'auto',
+            section.startMode || 'force-right-column',
             section.stepStyle || 'numbered'
         );
     });
+
+    // Load notes
+    const notesList = elements.notesList();
+    if (notesList) {
+        notesList.innerHTML = '';
+        (recipe.notes || []).forEach((noteText) => {
+            addNoteRow(noteText);
+        });
+    }
 
     const dayMealsList = elements.dayMealsList();
     if (dayMealsList) {
@@ -721,14 +853,17 @@ function updateRecipeFromForm() {
 
     currentRecipe = {
         pageType: elements.pageType()?.value || 'recipe',
+        pageStyle: elements.pageStyle()?.value || 'standard',
         title: elements.title()?.value || '',
         image: elements.imagePreviewThumb()?.src || '',
-        heroHeight: parseInt(elements.heroHeight()?.value, 10) || 309,
+        heroHeight: elements.pageStyle()?.value === 'printer-friendly' ? 120 : (parseInt(elements.heroHeight()?.value, 10) || 309),
         imageSettings: {
             scale: parseInt(elements.imageScale()?.value) || 100,
             posX: parseInt(elements.imagePosX()?.value) || 50,
             posY: parseInt(elements.imagePosY()?.value) || 50
         },
+        showCornerLogo: elements.pageStyle()?.value === 'printer-friendly' ? false : elements.showCornerLogo()?.checked === true,
+        showMacroBar: elements.showMacroBar()?.checked !== false,
         macros: {
             calories: elements.calories()?.value || '',
             protein: elements.protein()?.value || '',
@@ -750,14 +885,14 @@ function updateRecipeFromForm() {
         portionVariationSections,
         servingsLabel: primaryIngredientSection.label || 'Ingredients for 1 Serving',
         instructionsLabel: elements.instructionsLabel()?.value || 'Instructions for 1 Serving',
-        instructionsStartMode: instructionSections[0]?.startMode || elements.instructionsStartMode()?.value || 'auto',
-        materialsLayout: elements.materialsLayout()?.value || 'full-width',
+        instructionsStartMode: instructionSections[0]?.startMode || elements.instructionsStartMode()?.value || 'force-right-column',
+        materialsLayout: elements.materialsLayout()?.value || 'column',
         materials: getSelectedMaterials(),
         ingredients: primaryIngredientSection.ingredients || [],
         ingredientSections,
         instructionSections,
         instructions: instructionSections[0]?.steps || getInstructionsFromForm(),
-        note: elements.note()?.value || '',
+        notes: getNotesFromForm(),
         pageNumber: elements.pageNumber()?.value || ''
     };
 
@@ -1000,11 +1135,17 @@ function getInstructionsFromForm() {
     return getInstructionSectionsFromForm().flatMap(section => section.steps);
 }
 
+function getNotesFromForm() {
+    return Array.from(elements.notesList()?.querySelectorAll('.note-text-input') || [])
+        .map(textarea => textarea.value)
+        .filter(text => text.trim());
+}
+
 function getInstructionSectionsForForm(recipe) {
     const normalizedSections = (recipe.instructionSections || [])
         .map(section => ({
             label: section.label || 'Instructions',
-            startMode: section.startMode || 'auto',
+            startMode: section.startMode || 'force-right-column',
             stepStyle: section.stepStyle || 'numbered',
             steps: Array.isArray(section.steps) ? section.steps : []
         }))
@@ -1016,7 +1157,7 @@ function getInstructionSectionsForForm(recipe) {
 
     return [{
         label: recipe.instructionsLabel || 'Instructions for 1 Serving',
-        startMode: recipe.instructionsStartMode || 'auto',
+        startMode: recipe.instructionsStartMode || 'force-right-column',
         stepStyle: 'numbered',
         steps: recipe.instructions || []
     }];
@@ -1029,7 +1170,7 @@ function getInstructionSectionsFromForm() {
             const label = index === 0
                 ? (elements.instructionsLabel()?.value || 'Instructions for 1 Serving')
                 : ((labelInput?.value || '').trim() || `Instructions Section ${index + 1}`);
-            const startMode = section.querySelector('.instruction-section-start-mode')?.value || 'auto';
+            const startMode = section.querySelector('.instruction-section-start-mode')?.value || 'force-right-column';
             const stepStyle = section.querySelector('.instruction-section-step-style')?.value || 'numbered';
             const steps = Array.from(section.querySelectorAll('.instruction-row'))
                 .map(row => {
@@ -1049,7 +1190,7 @@ function getInstructionSectionsFromForm() {
     if (sections.length === 0) {
         return [{
             label: elements.instructionsLabel()?.value || 'Instructions for 1 Serving',
-            startMode: 'auto',
+            startMode: 'force-right-column',
             stepStyle: 'numbered',
             steps: []
         }];
@@ -1109,6 +1250,26 @@ function parseIngredientPasteBlock(text) {
             return { name, amount };
         })
         .filter((ingredient) => ingredient.name || ingredient.amount);
+}
+
+function parsePortionVariationPasteBlock(text) {
+    return String(text || '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+            const parts = line.split(';').map(p => p.trim());
+            return {
+                label: parts[0] || '',
+                calories: parts[1] || '',
+                protein: parts[2] || '',
+                carbs: parts[3] || '',
+                fat: parts[4] || '',
+                fiber: parts[5] || '',
+                url: parts[6] || ''
+            };
+        })
+        .filter((variation) => variation.label);
 }
 
 /**
@@ -1228,6 +1389,13 @@ function addPortionVariationSectionEditor(label = '', icon = '', variations = []
                 <select class="portion-variation-section-icon"></select>
             </div>
         </div>
+        <div class="portion-variation-section-paste">
+            <textarea class="portion-variation-section-paste-input" rows="4" placeholder="Paste portion variations here, one per line:&#10;Caramel Fudge;190;15;11;7;5&#10;Chocolate Brownie;195;15;8;9;12"></textarea>
+            <div class="portion-variation-section-paste-actions">
+                <button type="button" class="btn-secondary btn-copy-portion-ai-prompt">Copy AI Prompt</button>
+                <button type="button" class="btn-secondary btn-portion-variation-paste">Paste Into This Set</button>
+            </div>
+        </div>
         <div class="portion-variation-section-rows"></div>
         <div class="portion-variation-section-actions">
             <button type="button" class="btn-add btn-add-portion-inline">+ Add Portion Variation</button>
@@ -1245,6 +1413,65 @@ function addPortionVariationSectionEditor(label = '', icon = '', variations = []
 
     section.querySelector('.btn-add-portion-inline')?.addEventListener('click', () => {
         addPortionVariationRow({}, section.querySelector('.portion-variation-section-rows'));
+        updateRecipeFromForm();
+    });
+
+    section.querySelector('.btn-copy-portion-ai-prompt')?.addEventListener('click', () => {
+        const aiPrompt = `You are helping me format portion variation data for my Recipe Page Generator.
+
+Please analyze the product information provided and output ONLY the structured data in this exact format:
+
+Label;Calories;Protein;Carbs;Fat;Fiber;URL
+
+Each line represents one portion variation with:
+- Label: Portion size and product name (e.g., "1 bar (60g) - Caramel Fudge")
+- Calories: Total calories (number only)
+- Protein: Protein in grams (number only)
+- Carbs: Carbohydrates in grams (number only)
+- Fat: Fat in grams (number only)
+- Fiber: Fiber in grams (number only)
+- URL: Purchase link (optional, can be left blank)
+
+IMPORTANT RULES:
+- One variation per line
+- Semicolon-separated values
+- Numbers only for macros (no units)
+- If a field is unknown, leave it blank but keep the semicolon
+- Do NOT add commentary, explanations, or markdown
+- Output plain text only
+
+Example output:
+1 bar (60g) - Caramel Fudge;190;15;11;7;5;https://example.com/caramel
+1 bar (60g) - Chocolate Brownie;195;15;8;9;12;https://example.com/chocolate
+1 bar (60g) - Peanut Butter;200;16;10;8;6;`;
+
+        navigator.clipboard.writeText(aiPrompt).then(() => {
+            const btn = section.querySelector('.btn-copy-portion-ai-prompt');
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy AI prompt:', err);
+            alert('Failed to copy to clipboard. Please try again.');
+        });
+    });
+
+    section.querySelector('.btn-portion-variation-paste')?.addEventListener('click', () => {
+        const pasteInput = section.querySelector('.portion-variation-section-paste-input');
+        const rowsContainer = section.querySelector('.portion-variation-section-rows');
+        const parsedVariations = parsePortionVariationPasteBlock(pasteInput?.value || '');
+
+        if (!pasteInput || !rowsContainer || parsedVariations.length === 0) {
+            return;
+        }
+
+        rowsContainer.innerHTML = '';
+        parsedVariations.forEach((variation) => {
+            addPortionVariationRow(variation, rowsContainer);
+        });
+        pasteInput.value = '';
         updateRecipeFromForm();
     });
 
@@ -1325,9 +1552,32 @@ function addPortionVariationRow(variation = {}, container = null) {
 }
 
 /**
+ * Add a new note row to the form
+ */
+function addNoteRow(text = '') {
+    const container = elements.notesList();
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'note-row';
+    row.innerHTML = `
+        <textarea class="note-text-input" rows="2" placeholder="e.g., Note: Press tofu for 15 minutes to remove excess moisture.">${escapeHtml(text)}</textarea>
+        <button type="button" class="btn-remove" title="Remove">×</button>
+    `;
+
+    row.querySelector('.note-text-input').addEventListener('input', debounce(updateRecipeFromForm, 150));
+    row.querySelector('.btn-remove').addEventListener('click', () => {
+        row.remove();
+        updateRecipeFromForm();
+    });
+
+    container.appendChild(row);
+}
+
+/**
  * Add a new instruction row to the form
  */
-function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, startMode = 'auto', stepStyle = 'numbered') {
+function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, startMode = 'force-right-column', stepStyle = 'numbered') {
     const container = elements.instructionsList();
     const section = document.createElement('div');
     section.className = 'instruction-section-editor';
@@ -1402,7 +1652,7 @@ function addInstructionRowToLastSection(text = '') {
     let lastSectionSteps = elements.instructionsList()?.querySelector('.instruction-section-editor:last-child .instruction-section-steps');
 
     if (!lastSectionSteps) {
-        addInstructionSectionEditor(elements.instructionsLabel()?.value || 'Instructions for 1 Serving', [], true, currentRecipe.instructionsStartMode || 'auto');
+        addInstructionSectionEditor(elements.instructionsLabel()?.value || 'Instructions for 1 Serving', [], true, currentRecipe.instructionsStartMode || 'force-right-column');
         lastSectionSteps = elements.instructionsList()?.querySelector('.instruction-section-editor:last-child .instruction-section-steps');
     }
 
@@ -1566,7 +1816,7 @@ function renderRecipePage() {
     }
 
     // Build materials HTML
-    const materialsLayout = recipe.materialsLayout || 'full-width';
+    const materialsLayout = recipe.materialsLayout || 'column';
     const materialsHtml = recipe.materials?.map(materialId => {
         const material = AVAILABLE_MATERIALS.find(m => m.id === materialId);
         if (!material) return '';
@@ -1583,29 +1833,40 @@ function renderRecipePage() {
         </div>
     ` : '';
 
-    // Build note callout HTML
-    const noteHtml = recipe.note ? `
+    // Helper function to format note text with bold before colon
+    function formatNoteText(text) {
+        const colonIndex = text.indexOf(':');
+        if (colonIndex > 0) {
+            const beforeColon = escapeHtml(text.substring(0, colonIndex + 1));
+            const afterColon = escapeHtml(text.substring(colonIndex + 1));
+            return `<strong>${beforeColon}</strong>${afterColon}`;
+        }
+        return escapeHtml(text);
+    }
+
+    // Build note callout HTML for multiple notes
+    const notesHtml = (recipe.notes || []).map((noteText, index) => `
         <div class="note-callout">
             <span class="note-icon">
                 <svg width="20" height="19" viewBox="0 0 20 19" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M7.61077 2.89669L8.69799 2.17188L10.5101 2.89669L15.9462 9.05762L18.483 12.6817L17.3958 14.8561L11.9597 15.9434L6.16118 16.6682H3.62433L2.53711 14.8561L5.43637 6.88317L7.61077 2.89669Z" fill="white"/>
-                    <g clip-path="url(#note-alert-clip)">
+                    <g clip-path="url(#note-alert-clip-${index})">
                         <path d="M18.9403 12.1813C18.9931 12.371 19.0667 12.8187 19.0775 13.016C19.1459 14.3101 18.1222 15.7543 16.8714 16.0776L5.27533 17.9952C3.0536 18.1176 1.4219 15.8355 2.24473 13.7381L6.27485 2.98732C7.5625 0.91819 9.89823 0.837898 11.4706 2.65637C13.9332 5.50314 16.2155 8.6012 18.617 11.5052C18.7084 11.7111 18.8805 11.9702 18.9403 12.1813ZM8.43708 2.87809C8.09644 2.98267 7.7394 3.28834 7.56083 3.59546C6.16362 7.22805 4.80389 10.8825 3.47758 14.5424C3.25967 15.6448 4.10124 16.6332 5.21018 16.5644L16.422 14.721C17.5977 14.3779 18.0466 12.9248 17.2273 11.9814L10.1333 3.26485C9.6573 2.82249 9.06082 2.68591 8.43708 2.87809Z" fill="black"/>
                         <path d="M9.12364 6.22816C9.51047 6.10778 9.94397 6.25884 10.1515 6.60989C10.3992 7.02821 10.3722 7.82076 10.4271 8.31936C10.5321 9.27083 10.6374 10.2209 10.7517 11.1715C10.7006 11.9037 9.72734 12.0637 9.44451 11.3864C9.19849 10.1044 8.81313 8.84059 8.56853 7.56318C8.46749 7.03523 8.52783 6.41301 9.12298 6.22827L9.12364 6.22816Z" fill="black"/>
                         <path d="M10.5686 14.1642C11.0525 14.0846 11.3798 13.6241 11.2994 13.1355C11.2191 12.6469 10.7616 12.3154 10.2777 12.395C9.7937 12.4746 9.46649 12.9351 9.54682 13.4237C9.62714 13.9122 10.0846 14.2438 10.5686 14.1642Z" fill="black"/>
                     </g>
                     <defs>
-                        <clipPath id="note-alert-clip">
+                        <clipPath id="note-alert-clip-${index}">
                             <rect width="17.1816" height="15.86" fill="white" transform="translate(0 2.78906) rotate(-9.33713)"/>
                         </clipPath>
                     </defs>
                 </svg>
             </span>
-            <span class="note-text">${escapeHtml(recipe.note)}</span>
+            <span class="note-text">${formatNoteText(noteText)}</span>
         </div>
-    ` : '';
+    `).join('');
 
-    const heroHeight = Number.parseInt(recipe.heroHeight, 10) || 309;
+    const heroHeight = isPrinterFriendly(recipe) ? 120 : (Number.parseInt(recipe.heroHeight, 10) || 309);
     const heroImageHtml = createHeroImageMarkup(recipe);
 
     const macroValues = [
@@ -1615,6 +1876,7 @@ function renderRecipePage() {
         recipe.macros?.fat
     ];
     const hasMacroData = macroValues.some(value => String(value || '').trim() !== '');
+    const shouldShowMacroBar = recipe.showMacroBar !== false && hasMacroData;
     const macroBarHtml = hasMacroData ? `
         <span>${recipe.macros?.calories || '0'} CAL</span>
         <span class="macro-divider">|</span>
@@ -1627,7 +1889,7 @@ function renderRecipePage() {
 
     // Render the complete page
     page.innerHTML = `
-        <div class="recipe-page page-primary">
+        <div class="recipe-page page-primary${isPrinterFriendly(recipe) ? ' printer-friendly-page' : ''}">
             <!-- Hero Section -->
             <div class="hero-section" style="height: ${heroHeight}px;">
                 ${heroImageHtml}
@@ -1636,7 +1898,7 @@ function renderRecipePage() {
             </div>
 
             <!-- Macro Bar -->
-            ${hasMacroData ? `
+            ${shouldShowMacroBar ? `
             <div class="macro-bar">
                 <div class="macro-bar-content">
                     ${macroBarHtml}
@@ -1669,35 +1931,48 @@ function renderRecipePage() {
 
     // Paginate ingredients and instructions in reading order after rendering
     requestAnimationFrame(() => {
-        paginateRecipeFlow(noteHtml);
+        paginateRecipeFlow(notesHtml);
     });
 }
 
 function renderDayOfEatingPage(page, recipe) {
-    const heroHeight = Number.parseInt(recipe.heroHeight, 10) || 309;
+    const heroHeight = isPrinterFriendly(recipe) ? 120 : (Number.parseInt(recipe.heroHeight, 10) || 309);
     const heroImageHtml = createHeroImageMarkup(recipe);
     const macroBarHtml = createMacroBarMarkup(recipe.macros);
     const hasMacroData = hasAnyMacroData(recipe.macros);
-    const noteHtml = recipe.note ? `
+    const shouldShowMacroBar = recipe.showMacroBar !== false && hasMacroData;
+
+    // Helper function to format note text with bold before colon
+    function formatNoteText(text) {
+        const colonIndex = text.indexOf(':');
+        if (colonIndex > 0) {
+            const beforeColon = escapeHtml(text.substring(0, colonIndex + 1));
+            const afterColon = escapeHtml(text.substring(colonIndex + 1));
+            return `<strong>${beforeColon}</strong>${afterColon}`;
+        }
+        return escapeHtml(text);
+    }
+
+    const notesHtml = (recipe.notes || []).map((noteText, index) => `
         <div class="note-callout">
             <span class="note-icon">
                 <svg width="20" height="19" viewBox="0 0 20 19" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M7.61077 2.89669L8.69799 2.17188L10.5101 2.89669L15.9462 9.05762L18.483 12.6817L17.3958 14.8561L11.9597 15.9434L6.16118 16.6682H3.62433L2.53711 14.8561L5.43637 6.88317L7.61077 2.89669Z" fill="white"/>
-                    <g clip-path="url(#note-alert-clip-day)">
+                    <g clip-path="url(#note-alert-clip-day-${index})">
                         <path d="M18.9403 12.1813C18.9931 12.371 19.0667 12.8187 19.0775 13.016C19.1459 14.3101 18.1222 15.7543 16.8714 16.0776L5.27533 17.9952C3.0536 18.1176 1.4219 15.8355 2.24473 13.7381L6.27485 2.98732C7.5625 0.91819 9.89823 0.837898 11.4706 2.65637C13.9332 5.50314 16.2155 8.6012 18.617 11.5052C18.7084 11.7111 18.8805 11.9702 18.9403 12.1813ZM8.43708 2.87809C8.09644 2.98267 7.7394 3.28834 7.56083 3.59546C6.16362 7.22805 4.80389 10.8825 3.47758 14.5424C3.25967 15.6448 4.10124 16.6332 5.21018 16.5644L16.422 14.721C17.5977 14.3779 18.0466 12.9248 17.2273 11.9814L10.1333 3.26485C9.6573 2.82249 9.06082 2.68591 8.43708 2.87809Z" fill="black"/>
                         <path d="M9.12364 6.22816C9.51047 6.10778 9.94397 6.25884 10.1515 6.60989C10.3992 7.02821 10.3722 7.82076 10.4271 8.31936C10.5321 9.27083 10.6374 10.2209 10.7517 11.1715C10.7006 11.9037 9.72734 12.0637 9.44451 11.3864C9.19849 10.1044 8.81313 8.84059 8.56853 7.56318C8.46749 7.03523 8.52783 6.41301 9.12298 6.22827L9.12364 6.22816Z" fill="black"/>
                         <path d="M10.5686 14.1642C11.0525 14.0846 11.3798 13.6241 11.2994 13.1355C11.2191 12.6469 10.7616 12.3154 10.2777 12.395C9.7937 12.4746 9.46649 12.9351 9.54682 13.4237C9.62714 13.9122 10.0846 14.2438 10.5686 14.1642Z" fill="black"/>
                     </g>
                     <defs>
-                        <clipPath id="note-alert-clip-day">
+                        <clipPath id="note-alert-clip-day-${index}">
                             <rect width="17.1816" height="15.86" fill="white" transform="translate(0 2.78906) rotate(-9.33713)"/>
                         </clipPath>
                     </defs>
                 </svg>
             </span>
-            <span class="note-text">${escapeHtml(recipe.note)}</span>
+            <span class="note-text">${formatNoteText(noteText)}</span>
         </div>
-    ` : '';
+    `).join('');
 
     const mealsHtml = (recipe.dayMeals || []).map((meal) => createDayMealCardMarkup(meal)).join('');
     const breakdownSvg = createMacroBreakdownSvg(recipe.macros);
@@ -1705,14 +1980,14 @@ function renderDayOfEatingPage(page, recipe) {
     const tipsHtml = createDayListMarkup(recipe.dayTips || [], 'dot');
 
     page.innerHTML = `
-        <div class="recipe-page page-primary day-plan-page">
+        <div class="recipe-page page-primary day-plan-page${isPrinterFriendly(recipe) ? ' printer-friendly-page' : ''}">
             <div class="hero-section" style="height: ${heroHeight}px;">
                 ${heroImageHtml}
                 <div class="hero-overlay"></div>
                 <h1 class="recipe-title">${escapeHtml(recipe.title || 'Day of Eating')}</h1>
             </div>
 
-            ${hasMacroData ? `
+            ${shouldShowMacroBar ? `
             <div class="macro-bar">
                 <div class="macro-bar-content">
                     ${macroBarHtml}
@@ -1754,7 +2029,7 @@ function renderDayOfEatingPage(page, recipe) {
                             ${tipsHtml}
                         </div>
                         ` : ''}
-                        ${noteHtml ? `<div class="day-plan-note">${noteHtml}</div>` : ''}
+                        ${notesHtml ? `<div class="day-plan-note">${notesHtml}</div>` : ''}
                     </div>
                 </div>
                 ${hasMacroData ? `
@@ -1780,10 +2055,22 @@ function renderDayOfEatingPage(page, recipe) {
 }
 
 function createHeroImageMarkup(recipe) {
+    const isPrintFriendly = isPrinterFriendly(recipe);
     const imgSettings = recipe.imageSettings || { scale: 100, posX: 50, posY: 50 };
-    return recipe.image
-        ? `<img class="hero-image" src="${recipe.image}" alt="${escapeHtml(recipe.title)}" style="transform: scale(${imgSettings.scale / 100}); object-position: ${imgSettings.posX}% ${imgSettings.posY}%;">`
+    const imageHtml = isPrintFriendly
+        ? `<div class="hero-print-background"></div>`
+        : recipe.image
+        ? `<div class="hero-image-layer" role="img" aria-label="${escapeHtml(recipe.title)}" style="background-image: url('${recipe.image}'); background-position: ${imgSettings.posX}% ${imgSettings.posY}%; transform: scale(${imgSettings.scale / 100});"></div>`
         : `<div class="hero-placeholder">No image uploaded</div>`;
+    const logoHtml = recipe.showCornerLogo === true
+        ? `<div class="hero-corner-logo"><img src="logo.png" alt="The Vegan Gym"></div>`
+        : '';
+
+    return `${imageHtml}${logoHtml}`;
+}
+
+function isPrinterFriendly(recipe = {}) {
+    return recipe.pageStyle === 'printer-friendly';
 }
 
 function hasAnyMacroData(macros = {}) {
@@ -2288,7 +2575,7 @@ function paginateRecipeFlow(noteHtml = '') {
         .filter((section) => section.variations.length > 0);
     const instructionSections = getInstructionSectionsForForm(currentRecipe)
         .filter(section => section.steps.length > 0);
-    const materialsLayout = currentRecipe.materialsLayout || 'full-width';
+    const materialsLayout = currentRecipe.materialsLayout || 'column';
     const materialsHtml = (currentRecipe.materials || []).map((materialId) => {
         const material = AVAILABLE_MATERIALS.find(m => m.id === materialId);
         if (!material) return '';
@@ -2341,7 +2628,7 @@ function paginateRecipeFlow(noteHtml = '') {
     if (instructionSections.length > 0) {
         instructionSections.forEach((section) => {
             const stepStyle = section.stepStyle || 'numbered';
-            applyInstructionStartMode(section.label || 'Instructions', section.steps, section.startMode || 'auto', stepStyle);
+            applyInstructionStartMode(section.label || 'Instructions', section.steps, section.startMode || 'force-right-column', stepStyle);
             placeInstructionNode(() => createInstructionHeaderNode(section.label || 'Instructions'));
 
             section.steps.forEach((instruction, index) => {
@@ -2522,6 +2809,9 @@ async function handleExportJpg() {
         const brandPrimary = getComputedStyle(document.documentElement)
             .getPropertyValue('--color-primary')
             .trim() || '#42d53b';
+        const printerFriendly = isPrinterFriendly(currentRecipe);
+        const macroBarColor = printerFriendly ? '#d9d9d9' : brandPrimary;
+        const recipeTitleColor = printerFriendly ? '#222222' : '#ffffff';
 
         const baseFilename = getExportTitle();
 
@@ -2561,7 +2851,7 @@ async function handleExportJpg() {
             clone.style.boxShadow = 'none';
 
             // Fix hero image for export. html2canvas is unreliable with object-fit on img tags.
-            const heroImage = clone.querySelector('.hero-image');
+            const heroImage = clone.querySelector('.hero-image, .hero-image-layer');
             if (heroImage) {
                 const imgSettings = currentRecipe.imageSettings || { scale: 100, posX: 50, posY: 50 };
                 const heroImageExport = document.createElement('div');
@@ -2590,8 +2880,9 @@ async function handleExportJpg() {
                 }
                 /* Force light mode colors for export */
                 .recipe-page { background: #ffffff !important; }
-                .recipe-title { color: #ffffff !important; }
-                .macro-bar-content { background: ${brandPrimary} !important; color: #000000 !important; position: relative !important; }
+                .recipe-title { color: ${recipeTitleColor} !important; }
+                .hero-print-background { background: #ffffff !important; }
+                .macro-bar-content { background: ${macroBarColor} !important; color: #000000 !important; position: relative !important; }
                 .macro-bar-content span { color: #000000 !important; position: relative !important; z-index: 1 !important; }
                 .macro-bar-content .macro-divider { color: #000000 !important; }
                 .description-text { color: #424242 !important; }
@@ -2655,6 +2946,19 @@ async function handleExportJpg() {
 
             const heroSection = clone.querySelector('.hero-section');
             const macroBar = clone.querySelector('.macro-bar');
+            const cornerLogo = clone.querySelector('.hero-corner-logo');
+            let cornerLogoRect = null;
+            if (cornerLogo) {
+                const cloneRect = clone.getBoundingClientRect();
+                const logoRect = cornerLogo.getBoundingClientRect();
+                cornerLogoRect = {
+                    x: (logoRect.left - cloneRect.left) * scaleX,
+                    y: (logoRect.top - cloneRect.top) * scaleY,
+                    width: logoRect.width * scaleX,
+                    height: logoRect.height * scaleY
+                };
+                cornerLogo.remove();
+            }
             const heroSectionHeight = heroSection?.offsetHeight || 0;
             const heroRect = heroSection ? {
                 x: 0,
@@ -2698,7 +3002,7 @@ async function handleExportJpg() {
             ctx.fillRect(0, 0, targetWidth, targetHeight);
             ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
 
-            if (currentRecipe.image && heroRect) {
+            if (!printerFriendly && currentRecipe.image && heroRect) {
                 try {
                     const sourceHeroImage = await loadImageElement(currentRecipe.image);
                     drawHeroImageToCanvas(ctx, sourceHeroImage, heroRect, currentRecipe.imageSettings || { scale: 100, posX: 50, posY: 50 });
@@ -2708,6 +3012,15 @@ async function handleExportJpg() {
                     }
                 } catch (heroError) {
                     console.warn('Unable to redraw original hero image at export resolution.', heroError);
+                }
+            }
+
+            if (cornerLogoRect && currentRecipe.showCornerLogo === true) {
+                try {
+                    const cornerLogoImage = await loadImageElement('logo.png');
+                    drawCornerLogoToCanvas(ctx, cornerLogoImage, cornerLogoRect, { printerFriendly });
+                } catch (cornerLogoError) {
+                    console.warn('Unable to redraw corner logo at export resolution.', cornerLogoError);
                 }
             }
 
@@ -2778,7 +3091,7 @@ function parseMasterPaste(text) {
         title: '',
         macros: { calories: '', protein: '', carbs: '', fat: '' },
         description: '',
-        note: '',
+        notes: [],
         dayMealsTitle: 'Meals',
         dayBreakdownTitle: 'Macronutrient Breakdown',
         dayHighlightsTitle: 'Nutrition Highlights',
@@ -2899,7 +3212,7 @@ function parseMasterPaste(text) {
             currentDirectionsSection = {
                 label: parts[0] || result.instructionsLabel || 'Instructions for 1 Serving',
                 stepStyle: parts[1] || 'numbered',
-                startMode: parts[2] || 'auto',
+                startMode: parts[2] || result.instructionsStartMode || 'force-right-column',
                 steps: []
             };
             result.instructionSections.push(currentDirectionsSection);
@@ -3017,7 +3330,7 @@ function parseMasterPaste(text) {
             }
         } else if (currentSection === 'TEXT') {
             // First non-empty line in a text block could be a title
-            if (textBlockContent.length === 0) {
+            if (textBlockContent.length === 0 && !textBlockTitle) {
                 // Check if next line exists and is not empty
                 const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
                 if (nextLine) {
@@ -3085,9 +3398,16 @@ function parseMasterPaste(text) {
                 result.macros.fat = parts[3] || result.macros.fat;
             }
         } else if (currentSection === 'DIRECTIONS') {
-            // Each line is a step
-            result.instructions.push(line);
-            currentDirectionsSection?.steps.push(line);
+            const checkboxMatch = line.match(/^-\s*\[\s*\]\s*(.+)$/) || line.match(/^\[\s*\]\s*(.+)$/);
+            if (checkboxMatch) {
+                addCheckboxItemToLastInstruction(result.instructions, checkboxMatch[1].trim());
+                if (currentDirectionsSection) {
+                    addCheckboxItemToLastInstruction(currentDirectionsSection.steps, checkboxMatch[1].trim());
+                }
+            } else {
+                result.instructions.push(line);
+                currentDirectionsSection?.steps.push(line);
+            }
         }
     }
 
@@ -3100,7 +3420,7 @@ function parseMasterPaste(text) {
         result.instructionSections = [{
             label: result.instructionsLabel || 'Instructions for 1 Serving',
             stepStyle: 'numbered',
-            startMode: 'auto',
+            startMode: result.instructionsStartMode || 'force-right-column',
             steps: result.instructions
         }];
     }
@@ -3130,6 +3450,32 @@ function parseMasterPaste(text) {
     return result;
 }
 
+function addCheckboxItemToLastInstruction(steps, itemText) {
+    if (!Array.isArray(steps) || !itemText) {
+        return;
+    }
+
+    const lastIndex = steps.length - 1;
+    if (lastIndex < 0) {
+        steps.push({ text: '', checkboxItems: [itemText] });
+        return;
+    }
+
+    const lastStep = steps[lastIndex];
+    if (typeof lastStep === 'string') {
+        steps[lastIndex] = {
+            text: lastStep,
+            checkboxItems: [itemText]
+        };
+        return;
+    }
+
+    if (lastStep && typeof lastStep === 'object') {
+        lastStep.checkboxItems = Array.isArray(lastStep.checkboxItems) ? lastStep.checkboxItems : [];
+        lastStep.checkboxItems.push(itemText);
+    }
+}
+
 /**
  * Helper to save a text block to description or note
  */
@@ -3143,12 +3489,8 @@ function saveTextBlock(result, blockIndex, title, content) {
         // First text block goes to description
         result.description = text;
     } else {
-        // Additional text blocks go to note
-        if (result.note) {
-            result.note += '\n\n' + text;
-        } else {
-            result.note = text;
-        }
+        // Additional text blocks go to notes array
+        result.notes.push(text);
     }
 }
 
@@ -3201,7 +3543,12 @@ function matchMaterialsByName(names) {
 }
 
 function getExportTitle() {
-    return (currentRecipe.title || '').trim() || 'Recipe';
+    const title = (currentRecipe.title || '').trim() || 'Recipe';
+    if (!isPrinterFriendly(currentRecipe)) {
+        return title;
+    }
+
+    return / - Printer Friendly$/i.test(title) ? title : `${title} - Printer Friendly`;
 }
 
 /**
@@ -3225,7 +3572,7 @@ function handleFillAll() {
             title: parsed.title,
             macros: parsed.macros,
             description: parsed.description,
-            note: parsed.note,
+            notes: parsed.notes,
             dayMealsTitle: parsed.dayMealsTitle,
             dayBreakdownTitle: parsed.dayBreakdownTitle,
             dayHighlightsTitle: parsed.dayHighlightsTitle,
@@ -3285,8 +3632,8 @@ Recipe Title;Meal Type;dietary flags;serves;prep time;cook time;calories;protein
 Description or intro text (optional)
 
 ::TEXT::
-Optional Note Title
-Note or tip text (this becomes a callout box - if it says Note or Tip, put : after the title)
+Note:
+Optional note or tip text (this becomes a callout box)
 
 ::INGREDIENTS::
 Ingredient;Amount
@@ -3305,6 +3652,9 @@ Ingredient;Amount
 
 ::DIRECTIONS::
 Step one text
+Step with checkbox items
+- [ ] Checkbox item one
+- [ ] Checkbox item two
 Step two text
 Step three text
 ...
@@ -3318,16 +3668,22 @@ IMPORTANT RULES:
 - The last META field is a comma-separated or pipe-separated list of equipment/material names inferred from the image and recipe data
 - Only include real equipment choices such as bowl, pot, pan, blender, knife, cutting board, strainer, tray, containers, spoon, whisk, etc.
 - If no equipment can be inferred, leave the last field blank but keep the semicolon
-- ::TEXT:: sections (optional, can have 0-2):
+- ::TEXT:: sections (optional, can have 0 or more):
   - First ::TEXT:: section = description (appears under title)
-  - Second ::TEXT:: section = note/callout (appears in bottom callout box)
-  - If a TEXT section has a title, put it on the first line
+  - Additional ::TEXT:: sections = note callouts (appear as separate callout boxes)
+  - Use one additional ::TEXT:: section for each note, tip, warning, disclaimer, or callout from the source
+  - Each note callout is rendered separately with an alert icon
+  - For note callouts, put the note label on the first line, usually "Note:" or "Tip:"
+  - Text before a colon (:) in notes will appear bold (e.g., "Note:" or "Tip:")
 - Ingredient rows: Name;Amount (semicolon-separated)
 - If the recipe/image/data contains 2 or more ingredient groups or components, you MUST preserve them as separate ingredient sets using ::TABLE Name::
 - Examples of separate ingredient sets: smoothie + topping, salad + dressing, bowl + sauce, crust + filling, marinade + main recipe
 - Do NOT flatten multiple ingredient groups into one list when the source clearly separates them
 - Use ::TABLE Name:: for ingredient groups (optional when there is only one group, required when there are multiple groups)
-- Directions: one step per line, no bullets, no numbering
+- Directions: one step per line, no bullets, no numbering for normal steps
+- For a step that needs checkbox sub-items, put the parent step on its own line, then put each checkbox item immediately below it as: - [ ] Checkbox item text
+- Checkbox item lines must always start with "- [ ]" and must directly follow the parent direction step they belong to
+- Use checkbox items for ingredient add-in lists, checklist-style substeps, or grouped items within a single step
 - Do NOT add commentary, explanations, or markdown
 - Output plain text only
 - If a field is unknown, leave it blank but keep the semicolon
@@ -3341,8 +3697,12 @@ Tofu Scramble;Breakfast;gf,sf;2 Servings;10 min;15 min;320;18;24;16;skillet, spa
 A protein-packed breakfast that's ready in minutes.
 
 ::TEXT::
-Chef's Tip
+Chef's Tip:
 For best results, press the tofu for at least 15 minutes to remove excess moisture.
+
+::TEXT::
+Note:
+This recipe is naturally gluten-free and soy-free when using appropriate ingredients.
 
 ::INGREDIENTS::
 Firm tofu;14 oz
@@ -3365,7 +3725,10 @@ Chia seeds;1 tsp
 Press tofu and crumble into a bowl
 Heat oil in a pan over medium heat
 Add crumbled tofu and cook for 5 minutes
-Add nutritional yeast, turmeric, and salt
+Add the seasoning ingredients
+- [ ] Nutritional yeast
+- [ ] Turmeric
+- [ ] Salt
 Cook for 5 more minutes until golden`;
 
     // Copy to clipboard
@@ -3396,8 +3759,8 @@ Title;Reference Page;;1 Serving;;;calories;protein;carbs;fat;equipment names;por
 Short description text
 
 ::TEXT::
-Optional Note
-Optional callout text
+Note:
+Optional note or callout text
 
 ::INGREDIENTS Nutrition Highlights::
 Highlight text;
@@ -3417,6 +3780,9 @@ Bullet point text
 
 ::DIRECTIONS Preparing Fresh Product;numbered;auto::
 Step text
+Step with checkbox items
+- [ ] Checkbox item one
+- [ ] Checkbox item two
 Step text
 
 IMPORTANT RULES:
@@ -3426,6 +3792,12 @@ IMPORTANT RULES:
 - If macros are unknown, use 0.
 - The 11th META field is equipment/materials. Leave blank if none.
 - The 12th META field is the portion variation icon name. Use an existing equipment/material icon name or leave blank.
+- ::TEXT:: sections (optional, can have 0 or more):
+  - First ::TEXT:: section = description (appears under title)
+  - Additional ::TEXT:: sections = note callouts (appear as separate callout boxes with alert icons)
+  - Use one additional ::TEXT:: section for each note, tip, warning, disclaimer, or callout from the source
+  - For note callouts, put the note label on the first line, usually "Note:" or "Tip:"
+  - Text before a colon (:) in notes will appear bold (e.g., "Note:" or "Tip:")
 - Use the INGREDIENTS section for Nutrition Highlights when making info pages.
 - For Nutrition Highlights, put each highlight on its own line with a trailing semicolon.
 - Use one ::PORTION_VARIATIONS ...:: block per brand/group when needed.
@@ -3434,6 +3806,8 @@ IMPORTANT RULES:
 - Each ::DIRECTIONS ...:: header format is: ::DIRECTIONS Label;step style;start mode::
 - step style must be either numbered or bulleted
 - start mode must be auto, force-right-column, or keep-with-first-step
+- For a direction step that needs checkbox sub-items, put the parent step on its own line, then put each checkbox item immediately below it as: - [ ] Checkbox item text
+- Checkbox item lines must always start with "- [ ]" and must directly follow the parent direction step they belong to
 - If a field is unknown, leave it blank but keep delimiters intact
 
 Example:
@@ -3443,6 +3817,10 @@ Protein Bars;Reference Page;;1 Serving;;;190;15;11;7;protein bar;protein bar
 
 ::TEXT::
 A quick reference page for high-protein snack bars with macro comparisons.
+
+::TEXT::
+Note:
+Check labels because nutrition facts can vary by flavor and package size.
 
 ::INGREDIENTS Nutrition Highlights::
 High in protein to support satiety;
@@ -3494,7 +3872,7 @@ Page Title;Day of Eating;;1 Day;;;Total Calories;Total Protein;Total Carbs;Total
 Short day overview or description
 
 ::TEXT::
-Optional Note
+Note:
 Optional note or disclaimer
 
 ::DAY_MEALS Meals::
@@ -3520,6 +3898,12 @@ RULES:
 - Use EXACT section headers
 - META line must stay semicolon-separated
 - The second META field must be exactly: Day of Eating
+- ::TEXT:: sections (optional, can have 0 or more):
+  - First ::TEXT:: section = description (appears under title)
+  - Additional ::TEXT:: sections = note callouts (appear as separate callout boxes with alert icons)
+  - Use one additional ::TEXT:: section for each note, tip, warning, disclaimer, or callout from the source
+  - For note callouts, put the note label on the first line, usually "Note:" or "Tip:"
+  - Text before a colon (:) in notes will appear bold (e.g., "Note:" or "Tip:")
 - Use one meal per line in ::DAY_MEALS::
 - Meal Label examples: Breakfast, Lunch, Dinner, Snack, Mid-Morning Snack, Afternoon Snack, Evening Snack
 - Meal row format must be exactly:
@@ -3541,7 +3925,7 @@ Day of Eating;Day of Eating;;1 Day;;;1842;134;198;65;
 A well-rounded day of eating with a balance of lean protein, complex carbs, healthy fats, and fiber.
 
 ::TEXT::
-Note
+Note:
 This is a sample day of eating. Nutritional needs vary based on the individual.
 
 ::DAY_MEALS Meals::
@@ -3703,6 +4087,13 @@ function updateZoom() {
 
     const wrapper = page.closest('.recipe-page-wrapper');
     const { width: pageWidth, height: pageHeight } = getRecipePageDimensions();
+    const container = elements.previewContainer();
+    const previousCenterRatio = container && wrapper
+        ? {
+            x: ((container.clientWidth / 2) - previewPanX) / Math.max(wrapper.offsetWidth, 1),
+            y: ((container.clientHeight / 2) - previewPanY) / Math.max(wrapper.offsetHeight, 1)
+        }
+        : null;
 
     elements.zoomLevelDisplay().textContent = `${zoomLevel}%`;
     page.style.transform = `scale(${scale})`;
@@ -3713,29 +4104,34 @@ function updateZoom() {
         wrapper.style.width = `${pageWidth * scale}px`;
         wrapper.style.height = `${pageHeight * scale}px`;
     }
+
+    if (container && wrapper && previousCenterRatio) {
+        previewPanX = (container.clientWidth / 2) - (wrapper.offsetWidth * previousCenterRatio.x);
+        previewPanY = (container.clientHeight / 2) - (wrapper.offsetHeight * previousCenterRatio.y);
+        applyPreviewPan();
+    }
 }
 
 function centerPreview() {
+    centerPreviewWithBehavior('smooth');
+}
+
+function centerPreviewWithBehavior(behavior = 'auto') {
     const container = elements.previewContainer();
     const wrapper = elements.recipePage()?.closest('.recipe-page-wrapper');
 
     if (!container || !wrapper) return;
 
-    // Get the wrapper's dimensions
-    const wrapperWidth = wrapper.offsetWidth;
-    const wrapperHeight = wrapper.offsetHeight;
+    previewPanX = (container.clientWidth - wrapper.offsetWidth) / 2;
+    previewPanY = (container.clientHeight - wrapper.offsetHeight) / 2;
+    applyPreviewPan();
+}
 
-    // Calculate scroll position to center the wrapper in the viewport
-    // If content is larger than viewport, scroll to show the center
-    // If content is smaller, scroll to 0 (CSS grid centering handles it)
-    const left = Math.max(0, (wrapperWidth - container.clientWidth) / 2);
-    const top = Math.max(0, (wrapperHeight - container.clientHeight) / 2);
+function applyPreviewPan() {
+    const wrapper = elements.recipePage()?.closest('.recipe-page-wrapper');
+    if (!wrapper) return;
 
-    container.scrollTo({
-        left,
-        top,
-        behavior: 'smooth'
-    });
+    wrapper.style.transform = `translate(${previewPanX}px, ${previewPanY}px)`;
 }
 
 /**
@@ -3746,11 +4142,8 @@ function setZoomToFit() {
     const page = elements.recipePage();
     if (!container || !page) return;
 
-    const containerStyles = getComputedStyle(container);
-    const paddingX = parseFloat(containerStyles.paddingLeft) + parseFloat(containerStyles.paddingRight);
-    const paddingY = parseFloat(containerStyles.paddingTop) + parseFloat(containerStyles.paddingBottom);
-    const containerWidth = container.clientWidth - paddingX;
-    const containerHeight = container.clientHeight - paddingY;
+    const containerWidth = Math.max(1, container.clientWidth - 64);
+    const containerHeight = Math.max(1, container.clientHeight - 64);
     const { width: pageWidth, height: pageHeight } = getRecipePageDimensions();
 
     if (!pageWidth || !pageHeight) return;
@@ -3762,6 +4155,7 @@ function setZoomToFit() {
 
     zoomLevel = Math.round(scale * 100);
     updateZoom();
+    requestAnimationFrame(() => centerPreviewWithBehavior('auto'));
 }
 
 // Recalculate zoom on window resize
@@ -3830,7 +4224,8 @@ async function createHeroOverlayCanvas(heroSection, scaleRatio) {
     }
 
     const overlayClone = heroSection.cloneNode(true);
-    overlayClone.querySelector('.hero-image, .hero-image-export, .hero-placeholder')?.remove();
+    overlayClone.querySelector('.hero-image, .hero-image-layer, .hero-image-export, .hero-placeholder')?.remove();
+    overlayClone.querySelector('.hero-corner-logo')?.remove();
     overlayClone.style.width = `${heroSection.offsetWidth}px`;
     overlayClone.style.height = `${heroSection.offsetHeight}px`;
     overlayClone.style.minWidth = `${heroSection.offsetWidth}px`;
@@ -3911,6 +4306,32 @@ function drawCoverImageToCanvas(ctx, img, rect, options = {}) {
     }
     ctx.clip();
     ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+    ctx.restore();
+}
+
+function drawCornerLogoToCanvas(ctx, img, rect, options = {}) {
+    if (!ctx || !img || !rect) {
+        return;
+    }
+
+    const scale = rect.width / 152;
+    const logoWidth = 158 * scale;
+    const logoHeight = logoWidth * (img.naturalHeight / img.naturalWidth);
+    const logoX = rect.x + (2 * scale);
+    const logoY = rect.y;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(rect.x, rect.y);
+    ctx.lineTo(rect.x + rect.width, rect.y);
+    ctx.lineTo(rect.x + rect.width, rect.y + rect.height);
+    ctx.closePath();
+    ctx.fillStyle = '#000000';
+    ctx.fill();
+    ctx.clip();
+    ctx.globalAlpha = 1;
+    ctx.filter = options.printerFriendly ? 'grayscale(1) brightness(3) contrast(2)' : 'none';
+    ctx.drawImage(img, logoX, logoY, logoWidth, logoHeight);
     ctx.restore();
 }
 

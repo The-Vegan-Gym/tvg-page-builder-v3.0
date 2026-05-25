@@ -50,6 +50,14 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="page-style">Style</label>
+                        <select id="page-style" name="pageStyle">
+                            <option value="standard">Standard</option>
+                            <option value="printer-friendly">Printer Friendly</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label for="title">Recipe Title</label>
                         <input type="text" id="title" name="title" placeholder="e.g., Edamame Avocado Toast">
                     </div>
@@ -84,11 +92,10 @@
                                 <input type="range" id="image-pos-y" min="0" max="500" value="50">
                             </div>
                         </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="description">Description</label>
-                        <textarea id="description" name="description" rows="3" placeholder="A short description of the recipe..."></textarea>
+                        <label class="form-toggle image-corner-logo-toggle">
+                            <input type="checkbox" id="show-corner-logo" name="showCornerLogo">
+                            <span>Show corner logo</span>
+                        </label>
                     </div>
 
                     <div class="form-group">
@@ -100,6 +107,10 @@
                 <!-- Macros Section -->
                 <section class="form-section">
                     <h2>Nutrition Information</h2>
+                    <label class="form-toggle">
+                        <input type="checkbox" id="show-macro-bar" name="showMacroBar" checked>
+                        <span>Show green macro bar</span>
+                    </label>
                     <div class="macro-inputs">
                         <div class="form-group">
                             <label for="calories">Calories</label>
@@ -117,6 +128,15 @@
                             <label for="fat">Fat (g)</label>
                             <input type="text" id="fat" name="fat" placeholder="18">
                         </div>
+                    </div>
+                </section>
+
+                <!-- Description Section -->
+                <section class="form-section">
+                    <h2>Description</h2>
+                    <div class="form-group">
+                        <label for="description">Description Text</label>
+                        <textarea id="description" name="description" rows="3" placeholder="A short description of the recipe..."></textarea>
                     </div>
                 </section>
 
@@ -181,10 +201,10 @@
                     <div class="form-group">
                         <label for="materials-layout">Materials Layout</label>
                         <select id="materials-layout" name="materialsLayout">
-                            <option value="full-width">Full Width - Spans Entire Page (Recommended)</option>
-                            <option value="column">Column - Left Side Only</option>
+                            <option value="full-width">Full Width - Spans Entire Page</option>
+                            <option value="column" selected>Column - Left Side Only</option>
                         </select>
-                        <p class="form-hint">Full width spreads materials across the page for more space</p>
+                        <p class="form-hint">Column keeps materials on the left side with ingredients</p>
                     </div>
                     <div class="selected-materials-preview" id="selected-materials-preview">
                         <span class="no-materials-text">No equipment selected</span>
@@ -221,13 +241,12 @@
                     <button type="button" id="add-instruction-section" class="btn-add">+ Add Instruction Set</button>
                 </section>
 
-                <!-- Note Section -->
+                <!-- Notes Section -->
                 <section class="form-section">
-                    <h2>Note/Callout (Optional)</h2>
-                    <div class="form-group">
-                        <label for="note">Note Text</label>
-                        <textarea id="note" name="note" rows="3" placeholder="Optional tip or note about the recipe..."></textarea>
-                    </div>
+                    <h2>Notes/Callouts (Optional)</h2>
+                    <p class="form-hint">Add text before a colon to make it bold (e.g., "Note:" or "Prep Tip:")</p>
+                    <div id="notes-list"></div>
+                    <button type="button" id="add-note" class="btn-add">+ Add Note</button>
                 </section>
 
                 <!-- Action Buttons -->
