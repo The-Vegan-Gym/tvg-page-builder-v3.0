@@ -62,6 +62,12 @@
                         <input type="text" id="title" name="title" placeholder="e.g., Edamame Avocado Toast">
                     </div>
 
+                    <div class="image-control-row">
+                        <label for="title-font-size">Title Font Size</label>
+                        <input type="range" id="title-font-size" min="24" max="64" value="40">
+                        <span id="title-font-size-value">40px</span>
+                    </div>
+
                     <div class="form-group">
                         <label for="hero-image">Hero Image</label>
                         <div class="image-upload-area" id="image-upload-area">
@@ -109,7 +115,7 @@
                     <h2>Nutrition Information</h2>
                     <label class="form-toggle">
                         <input type="checkbox" id="show-macro-bar" name="showMacroBar" checked>
-                        <span>Show green macro bar</span>
+                        <span>Show Macro Bar</span>
                     </label>
                     <div class="macro-inputs">
                         <div class="form-group">
@@ -134,6 +140,10 @@
                 <!-- Description Section -->
                 <section class="form-section">
                     <h2>Description</h2>
+                    <label class="form-toggle">
+                        <input type="checkbox" id="show-description" name="showDescription" checked>
+                        <span>Show description</span>
+                    </label>
                     <div class="form-group">
                         <label for="description">Description Text</label>
                         <textarea id="description" name="description" rows="3" placeholder="A short description of the recipe..."></textarea>
@@ -251,10 +261,15 @@
 
                 <!-- Action Buttons -->
                 <div class="form-actions">
-                    <button type="button" id="btn-print" class="btn-primary">Export PDF</button>
-                    <button type="button" id="btn-export-jpg" class="btn-primary">Export JPG</button>
-                    <button type="button" id="btn-save-json" class="btn-secondary">Save Recipe</button>
-                    <button type="button" id="btn-load-json" class="btn-secondary">Load Recipe</button>
+                    <div class="form-actions-stack">
+                        <button type="button" id="btn-print" class="btn-primary">Export PDF</button>
+                        <button type="button" id="btn-export-editable-pdf" class="btn-primary">Export Editable PDF</button>
+                        <button type="button" id="btn-export-jpg" class="btn-primary">Export JPG</button>
+                    </div>
+                    <div class="form-actions-row">
+                        <button type="button" id="btn-save-json" class="btn-secondary">Save Recipe</button>
+                        <button type="button" id="btn-load-json" class="btn-secondary">Load Recipe</button>
+                    </div>
                     <input type="file" id="json-file-input" accept=".json" hidden>
                     <button type="button" id="btn-clear" class="btn-danger">Clear All</button>
                 </div>
@@ -268,6 +283,7 @@
             <div class="preview-header">
                 <h2>Live Preview</h2>
                 <div class="preview-controls">
+                    <button type="button" id="btn-export-jpg-preview" class="btn-preview-export">Export JPG</button>
                     <button type="button" id="btn-zoom-out" class="btn-zoom">−</button>
                     <span id="zoom-level">100%</span>
                     <button type="button" id="btn-zoom-in" class="btn-zoom">+</button>

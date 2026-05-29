@@ -14,6 +14,12 @@
  * Will be loaded from icons-database.json
  */
 let AVAILABLE_MATERIALS = [];
+let AVAILABLE_PORTION_VARIATION_ICONS = [];
+
+const CUSTOM_PORTION_VARIATION_ICON_FILES = [
+    { id: 'cart', name: 'Cart', path: 'Icons/cart.svg' },
+    { id: 'link', name: 'Link', path: 'Icons/link.svg' }
+];
 
 const FALLBACK_EQUIPMENT_SVG = `<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect x="8" y="8" width="32" height="32" rx="6" stroke="black" stroke-width="2"/>
@@ -44,6 +50,7 @@ const EMPTY_RECIPE = {
     pageType: "recipe",
     pageStyle: "standard",
     title: "",
+    titleFontSize: 40,
     image: "",
     heroHeight: 309,
     imageSettings: {
@@ -53,6 +60,7 @@ const EMPTY_RECIPE = {
     },
     showCornerLogo: false,
     showMacroBar: true,
+    showDescription: true,
     macros: {
         calories: "",
         protein: "",
@@ -128,7 +136,8 @@ function normalizeRecipe(recipe = {}) {
         .map((section) => ({
             label: section.label || 'Portion Variations',
             icon: section.icon ?? '',
-            variations: Array.isArray(section.variations) ? section.variations : []
+            linkIconPosition: section.linkIconPosition === 'left' ? 'left' : 'right',
+            variations: Array.isArray(section.variations) ? section.variations.map(normalizePortionVariation) : []
         }))
         .filter((section) =>
             section.label ||
@@ -146,7 +155,8 @@ function normalizeRecipe(recipe = {}) {
         normalized.portionVariationSections = [{
             label: normalized.portionVariationsLabel || EMPTY_RECIPE.portionVariationsLabel,
             icon: normalized.portionVariationIcon || '',
-            variations: normalized.portionVariations
+            linkIconPosition: 'right',
+            variations: normalized.portionVariations.map(normalizePortionVariation)
         }];
     }
 
@@ -189,6 +199,38 @@ function normalizeRecipe(recipe = {}) {
     return normalized;
 }
 
+function normalizePortionVariation(variation = {}) {
+    if (typeof variation === 'string') {
+        return {
+            label: variation,
+            calories: '',
+            protein: '',
+            carbs: '',
+            fat: '',
+            fiber: '',
+            url: '',
+            showMacros: true
+        };
+    }
+
+    return {
+        label: variation.label || '',
+        calories: variation.calories || '',
+        protein: variation.protein || '',
+        carbs: variation.carbs || '',
+        fat: variation.fat || '',
+        fiber: variation.fiber || '',
+        url: variation.url || '',
+        showMacros: variation.showMacros !== false
+    };
+}
+
+function parseBooleanFlag(value, defaultValue = true) {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    if (!normalized) return defaultValue;
+    return !['0', 'false', 'no', 'off', 'hide', 'hidden'].includes(normalized);
+}
+
 function getRecipePageDimensions() {
     const page = elements.recipePage();
 
@@ -215,6 +257,8 @@ const elements = {
     pageType: () => document.getElementById('page-type'),
     pageStyle: () => document.getElementById('page-style'),
     title: () => document.getElementById('title'),
+    titleFontSize: () => document.getElementById('title-font-size'),
+    titleFontSizeValue: () => document.getElementById('title-font-size-value'),
     heroImage: () => document.getElementById('hero-image'),
     imageUploadArea: () => document.getElementById('image-upload-area'),
     imagePreviewThumb: () => document.getElementById('image-preview-thumb'),
@@ -228,6 +272,7 @@ const elements = {
     imagePosY: () => document.getElementById('image-pos-y'),
     showCornerLogo: () => document.getElementById('show-corner-logo'),
     description: () => document.getElementById('description'),
+    showDescription: () => document.getElementById('show-description'),
     pageNumber: () => document.getElementById('page-number'),
     showMacroBar: () => document.getElementById('show-macro-bar'),
     calories: () => document.getElementById('calories'),
@@ -272,6 +317,8 @@ const elements = {
     btnCopyAIInfoInstructions: () => document.getElementById('btn-copy-ai-info-instructions'),
     btnCopyAIDayInstructions: () => document.getElementById('btn-copy-ai-day-instructions'),
     btnExportJpg: () => document.getElementById('btn-export-jpg'),
+    btnExportJpgPreview: () => document.getElementById('btn-export-jpg-preview'),
+    btnExportEditablePdf: () => document.getElementById('btn-export-editable-pdf'),
     btnPrint: () => document.getElementById('btn-print'),
     btnSaveJson: () => document.getElementById('btn-save-json'),
     btnLoadJson: () => document.getElementById('btn-load-json'),
@@ -351,21 +398,49 @@ function initializePreviewPanning() {
     if (!container) return;
 
     let isPanning = false;
+    let isSpacePanEnabled = false;
+    let panningButton = null;
     let startX = 0;
     let startY = 0;
     let startPanX = 0;
     let startPanY = 0;
 
-    container.addEventListener('mousedown', (event) => {
-        if (event.button !== 1) return;
+    container.tabIndex = 0;
+    container.setAttribute('aria-label', 'Recipe preview. Hold Space and drag to pan.');
 
+    const canUseSpacePan = () => document.activeElement === container || container.contains(document.activeElement);
+
+    const setSpacePanEnabled = (enabled) => {
+        isSpacePanEnabled = enabled;
+        container.classList.toggle('is-space-pan-enabled', enabled && !isPanning);
+    };
+
+    const startPanning = (event, mode) => {
         event.preventDefault();
+        container.focus({ preventScroll: true });
         isPanning = true;
+        panningButton = event.button;
         startX = event.clientX;
         startY = event.clientY;
         startPanX = previewPanX;
         startPanY = previewPanY;
-        container.classList.add('is-middle-panning');
+        container.classList.remove('is-space-pan-enabled');
+        container.classList.add('is-preview-panning');
+        container.classList.toggle('is-middle-panning', mode === 'middle');
+        container.classList.toggle('is-space-panning', mode === 'space');
+    };
+
+    container.addEventListener('mousedown', (event) => {
+        container.focus({ preventScroll: true });
+
+        if (event.button === 1) {
+            startPanning(event, 'middle');
+            return;
+        }
+
+        if (event.button === 0 && isSpacePanEnabled) {
+            startPanning(event, 'space');
+        }
     });
 
     window.addEventListener('mousemove', (event) => {
@@ -378,15 +453,37 @@ function initializePreviewPanning() {
     });
 
     window.addEventListener('mouseup', (event) => {
-        if (event.button !== 1 && isPanning) return;
+        if (!isPanning || event.button !== panningButton) return;
 
         isPanning = false;
-        container.classList.remove('is-middle-panning');
+        panningButton = null;
+        container.classList.remove('is-preview-panning', 'is-middle-panning', 'is-space-panning');
+        container.classList.toggle('is-space-pan-enabled', isSpacePanEnabled);
     });
 
     container.addEventListener('auxclick', (event) => {
         if (event.button === 1) {
             event.preventDefault();
+        }
+    });
+
+    window.addEventListener('keydown', (event) => {
+        if (event.code !== 'Space' || event.repeat || !canUseSpacePan()) return;
+
+        event.preventDefault();
+        setSpacePanEnabled(true);
+    });
+
+    window.addEventListener('keyup', (event) => {
+        if (event.code !== 'Space') return;
+
+        event.preventDefault();
+        setSpacePanEnabled(false);
+    });
+
+    container.addEventListener('blur', () => {
+        if (!isPanning) {
+            setSpacePanEnabled(false);
         }
     });
 }
@@ -412,6 +509,12 @@ async function loadIconsDatabase() {
         // Fallback to empty array if loading fails
         AVAILABLE_MATERIALS = [];
     }
+
+    const customIcons = await loadCustomPortionVariationIcons();
+    AVAILABLE_PORTION_VARIATION_ICONS = [
+        ...customIcons,
+        ...AVAILABLE_MATERIALS
+    ];
 }
 
 function getSafeEquipmentSvg(item) {
@@ -443,6 +546,36 @@ function getSafeEquipmentSvg(item) {
     }
 }
 
+async function loadCustomPortionVariationIcons() {
+    const loadedIcons = await Promise.all(CUSTOM_PORTION_VARIATION_ICON_FILES.map(async (icon) => {
+        try {
+            const response = await fetch(icon.path);
+            if (!response.ok) {
+                throw new Error(`Unable to load ${icon.path}`);
+            }
+
+            const svg = await response.text();
+            return {
+                id: icon.id,
+                name: icon.name,
+                svg: getSafeEquipmentSvg({ name: icon.name, svg: sanitizeInlineSvg(svg) })
+            };
+        } catch (error) {
+            console.warn(`Unable to load custom portion variation icon "${icon.name}".`, error);
+            return null;
+        }
+    }));
+
+    return loadedIcons.filter(Boolean);
+}
+
+function sanitizeInlineSvg(svg) {
+    return String(svg || '')
+        .replace(/<\?xml[^>]*>/gi, '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .trim();
+}
+
 function populatePortionVariationIconOptions() {
     const selects = elements.portionVariationSections()?.querySelectorAll('.portion-variation-section-icon') || [];
     selects.forEach((select) => {
@@ -452,7 +585,7 @@ function populatePortionVariationIconOptions() {
             <option value="none">None</option>
         `;
 
-        AVAILABLE_MATERIALS.forEach((material) => {
+        AVAILABLE_PORTION_VARIATION_ICONS.forEach((material) => {
             const option = document.createElement('option');
             option.value = material.id;
             option.textContent = material.name;
@@ -619,6 +752,7 @@ function initializeFormListeners() {
     elements.materialsLayout()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
     elements.instructionsStartMode()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
     elements.showMacroBar()?.addEventListener('change', updateRecipeFromForm);
+    elements.showDescription()?.addEventListener('change', updateRecipeFromForm);
 
     // Image upload
     elements.imageUploadArea()?.addEventListener('click', () => {
@@ -637,6 +771,12 @@ function initializeFormListeners() {
     elements.heroHeight()?.addEventListener('input', () => {
         const value = elements.heroHeight().value;
         elements.heroHeightValue().textContent = `${value}px`;
+        updateRecipeFromForm();
+    });
+
+    elements.titleFontSize()?.addEventListener('input', () => {
+        const value = elements.titleFontSize().value;
+        elements.titleFontSizeValue().textContent = `${value}px`;
         updateRecipeFromForm();
     });
 
@@ -697,6 +837,10 @@ function initializeButtonListeners() {
 
     // Export JPG button
     elements.btnExportJpg()?.addEventListener('click', handleExportJpg);
+    elements.btnExportJpgPreview()?.addEventListener('click', handleExportJpg);
+
+    // Editable PDF button
+    elements.btnExportEditablePdf()?.addEventListener('click', handleExportEditablePdf);
 
     // Print button
     elements.btnPrint()?.addEventListener('click', handlePrint);
@@ -740,6 +884,10 @@ function loadRecipeToForm(recipe) {
     elements.pageType().value = recipe.pageType || 'recipe';
     elements.pageStyle().value = recipe.pageStyle || 'standard';
     elements.title().value = recipe.title || '';
+    const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || 40;
+    elements.titleFontSize().value = titleFontSize;
+    elements.titleFontSizeValue().textContent = `${titleFontSize}px`;
+    elements.showDescription().checked = recipe.showDescription !== false;
     elements.description().value = recipe.description || '';
     elements.pageNumber().value = recipe.pageNumber || '';
     elements.showCornerLogo().checked = !isPrinterFriendly(recipe) && recipe.showCornerLogo === true;
@@ -796,7 +944,8 @@ function loadRecipeToForm(recipe) {
                 section.label,
                 section.icon || '',
                 section.variations || [],
-                index === 0
+                index === 0,
+                section.linkIconPosition || 'right'
             );
         });
     }
@@ -855,6 +1004,7 @@ function updateRecipeFromForm() {
         pageType: elements.pageType()?.value || 'recipe',
         pageStyle: elements.pageStyle()?.value || 'standard',
         title: elements.title()?.value || '',
+        titleFontSize: parseInt(elements.titleFontSize()?.value, 10) || 40,
         image: elements.imagePreviewThumb()?.src || '',
         heroHeight: elements.pageStyle()?.value === 'printer-friendly' ? 120 : (parseInt(elements.heroHeight()?.value, 10) || 309),
         imageSettings: {
@@ -864,6 +1014,7 @@ function updateRecipeFromForm() {
         },
         showCornerLogo: elements.pageStyle()?.value === 'printer-friendly' ? false : elements.showCornerLogo()?.checked === true,
         showMacroBar: elements.showMacroBar()?.checked !== false,
+        showDescription: elements.showDescription()?.checked !== false,
         macros: {
             calories: elements.calories()?.value || '',
             protein: elements.protein()?.value || '',
@@ -1078,7 +1229,8 @@ function getPortionVariationSectionsForForm(recipe) {
         .map((section) => ({
             label: section.label || 'Portion Variations',
             icon: section.icon ?? '',
-            variations: Array.isArray(section.variations) ? section.variations : []
+            linkIconPosition: section.linkIconPosition === 'left' ? 'left' : 'right',
+            variations: Array.isArray(section.variations) ? section.variations.map(normalizePortionVariation) : []
         }))
         .filter((section) => section.label || section.icon || section.variations.length > 0);
 
@@ -1089,7 +1241,8 @@ function getPortionVariationSectionsForForm(recipe) {
     return [{
         label: recipe.portionVariationsLabel || 'Portion Variations',
         icon: recipe.portionVariationIcon || '',
-        variations: Array.isArray(recipe.portionVariations) ? recipe.portionVariations : []
+        linkIconPosition: 'right',
+        variations: Array.isArray(recipe.portionVariations) ? recipe.portionVariations.map(normalizePortionVariation) : []
     }];
 }
 
@@ -1099,6 +1252,7 @@ function getPortionVariationSectionsFromForm() {
             const labelInput = section.querySelector('.portion-variation-section-label');
             const label = ((labelInput?.value || '').trim() || `Portion Variations ${index + 1}`);
             const icon = section.querySelector('.portion-variation-section-icon')?.value ?? '';
+            const linkIconPosition = section.querySelector('.portion-variation-link-icon-position')?.checked ? 'left' : 'right';
             const variations = Array.from(section.querySelectorAll('.portion-variation-row'))
                 .map((row) => ({
                     label: row.querySelector('.portion-variation-label')?.value || '',
@@ -1107,13 +1261,14 @@ function getPortionVariationSectionsFromForm() {
                     carbs: row.querySelector('.portion-variation-carbs')?.value || '',
                     fat: row.querySelector('.portion-variation-fat')?.value || '',
                     fiber: row.querySelector('.portion-variation-fiber')?.value || '',
-                    url: row.querySelector('.portion-variation-url')?.value || ''
+                    url: row.querySelector('.portion-variation-url')?.value || '',
+                    showMacros: row.querySelector('.portion-variation-show-macros')?.checked !== false
                 }))
                 .filter((variation) =>
                     variation.label || variation.calories || variation.protein || variation.carbs || variation.fat || variation.fiber || variation.url
                 );
 
-            return { label, icon, variations };
+            return { label, icon, linkIconPosition, variations };
         })
         .filter((section) => section.label || section.icon || section.variations.length > 0);
 
@@ -1121,6 +1276,7 @@ function getPortionVariationSectionsFromForm() {
         return [{
             label: 'Portion Variations',
             icon: '',
+            linkIconPosition: 'right',
             variations: []
         }];
     }
@@ -1200,7 +1356,7 @@ function getInstructionSectionsFromForm() {
 }
 
 function parseDayMealPasteBlock(text) {
-    return String(text || '')
+    return stripFencedCodeBlockLines(text)
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
@@ -1239,7 +1395,7 @@ function handlePasteDayMeals() {
 }
 
 function parseIngredientPasteBlock(text) {
-    return String(text || '')
+    return stripFencedCodeBlockLines(text)
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
@@ -1253,7 +1409,7 @@ function parseIngredientPasteBlock(text) {
 }
 
 function parsePortionVariationPasteBlock(text) {
-    return String(text || '')
+    return stripFencedCodeBlockLines(text)
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
@@ -1266,10 +1422,18 @@ function parsePortionVariationPasteBlock(text) {
                 carbs: parts[3] || '',
                 fat: parts[4] || '',
                 fiber: parts[5] || '',
-                url: parts[6] || ''
+                url: parts[6] || '',
+                showMacros: parseBooleanFlag(parts[7], true)
             };
         })
         .filter((variation) => variation.label);
+}
+
+function stripFencedCodeBlockLines(text) {
+    return String(text || '')
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('```'))
+        .join('\n');
 }
 
 /**
@@ -1372,7 +1536,7 @@ function addIngredientRow(name = '', amount = '', container = null) {
     targetContainer.appendChild(row);
 }
 
-function addPortionVariationSectionEditor(label = '', icon = '', variations = [], isPrimary = false) {
+function addPortionVariationSectionEditor(label = '', icon = '', variations = [], isPrimary = false, linkIconPosition = 'right') {
     const container = elements.portionVariationSections();
     if (!container) return;
 
@@ -1388,9 +1552,13 @@ function addPortionVariationSectionEditor(label = '', icon = '', variations = []
                 <label>Variation Icon</label>
                 <select class="portion-variation-section-icon"></select>
             </div>
+            <label class="form-toggle portion-variation-link-icon-toggle">
+                <input type="checkbox" class="portion-variation-link-icon-position" ${linkIconPosition === 'left' ? 'checked' : ''}>
+                <span>Link icon left of text</span>
+            </label>
         </div>
         <div class="portion-variation-section-paste">
-            <textarea class="portion-variation-section-paste-input" rows="4" placeholder="Paste portion variations here, one per line:&#10;Caramel Fudge;190;15;11;7;5&#10;Chocolate Brownie;195;15;8;9;12"></textarea>
+            <textarea class="portion-variation-section-paste-input" rows="4" placeholder="Paste portion variations here, one per line:&#10;Caramel Fudge;190;15;11;7;5;https://example.com;yes&#10;Bundle Link;;;;;;https://example.com;no"></textarea>
             <div class="portion-variation-section-paste-actions">
                 <button type="button" class="btn-secondary btn-copy-portion-ai-prompt">Copy AI Prompt</button>
                 <button type="button" class="btn-secondary btn-portion-variation-paste">Paste Into This Set</button>
@@ -1410,6 +1578,7 @@ function addPortionVariationSectionEditor(label = '', icon = '', variations = []
     const iconSelect = section.querySelector('.portion-variation-section-icon');
     populateSinglePortionVariationIconSelect(iconSelect, icon);
     iconSelect.addEventListener('change', debounce(updateRecipeFromForm, 150));
+    section.querySelector('.portion-variation-link-icon-position')?.addEventListener('change', updateRecipeFromForm);
 
     section.querySelector('.btn-add-portion-inline')?.addEventListener('click', () => {
         addPortionVariationRow({}, section.querySelector('.portion-variation-section-rows'));
@@ -1421,7 +1590,7 @@ function addPortionVariationSectionEditor(label = '', icon = '', variations = []
 
 Please analyze the product information provided and output ONLY the structured data in this exact format:
 
-Label;Calories;Protein;Carbs;Fat;Fiber;URL
+Label;Calories;Protein;Carbs;Fat;Fiber;URL;Show Macros
 
 Each line represents one portion variation with:
 - Label: Portion size and product name (e.g., "1 bar (60g) - Caramel Fudge")
@@ -1431,19 +1600,22 @@ Each line represents one portion variation with:
 - Fat: Fat in grams (number only)
 - Fiber: Fiber in grams (number only)
 - URL: Purchase link (optional, can be left blank)
+- Show Macros: yes/no. Use "no" for link-only items that should not show macro details.
 
 IMPORTANT RULES:
 - One variation per line
 - Semicolon-separated values
 - Numbers only for macros (no units)
 - If a field is unknown, leave it blank but keep the semicolon
-- Do NOT add commentary, explanations, or markdown
-- Output plain text only
+- If Show Macros is omitted, it defaults to yes
+- Return the final portion variation rows inside one fenced code block using triple backticks
+- Do NOT put any commentary, explanations, or extra text outside the code block
+- The code block is required so semicolons, blank fields, and line breaks are preserved when pasted into the app
 
 Example output:
-1 bar (60g) - Caramel Fudge;190;15;11;7;5;https://example.com/caramel
-1 bar (60g) - Chocolate Brownie;195;15;8;9;12;https://example.com/chocolate
-1 bar (60g) - Peanut Butter;200;16;10;8;6;`;
+1 bar (60g) - Caramel Fudge;190;15;11;7;5;https://example.com/caramel;yes
+1 bar (60g) - Chocolate Brownie;195;15;8;9;12;https://example.com/chocolate;yes
+Purchase variety pack;;;;;;https://example.com/variety-pack;no`;
 
         navigator.clipboard.writeText(aiPrompt).then(() => {
             const btn = section.querySelector('.btn-copy-portion-ai-prompt');
@@ -1494,7 +1666,7 @@ function populateSinglePortionVariationIconSelect(select, selectedValue = '') {
         <option value="none">None</option>
     `;
 
-    AVAILABLE_MATERIALS.forEach((material) => {
+    AVAILABLE_PORTION_VARIATION_ICONS.forEach((material) => {
         const option = document.createElement('option');
         option.value = material.id;
         option.textContent = material.name;
@@ -1520,27 +1692,39 @@ function addPortionVariationRow(variation = {}, container = null) {
     const targetContainer = container || elements.portionVariationSections()?.querySelector('.portion-variation-section-editor:last-child .portion-variation-section-rows');
     if (!targetContainer) return;
 
+    const normalizedVariation = normalizePortionVariation(variation);
     const row = document.createElement('div');
     row.className = 'portion-variation-row';
     row.innerHTML = `
         <div class="portion-variation-main">
-            <input type="text" class="portion-variation-label" placeholder="Portion label, e.g. 1/2 cup (75 g)" value="${escapeHtml(variation.label || '')}">
+            <input type="text" class="portion-variation-label" placeholder="Portion label, e.g. 1/2 cup (75 g)" value="${escapeHtml(normalizedVariation.label || '')}">
             <button type="button" class="btn-remove" title="Remove">×</button>
         </div>
+        <label class="form-toggle portion-variation-macro-toggle">
+            <input type="checkbox" class="portion-variation-show-macros" ${normalizedVariation.showMacros ? 'checked' : ''}>
+            <span>Show macros</span>
+        </label>
         <div class="portion-variation-macros">
-            <input type="text" class="portion-variation-calories" placeholder="cal" value="${escapeHtml(variation.calories || '')}">
-            <input type="text" class="portion-variation-protein" placeholder="pro" value="${escapeHtml(variation.protein || '')}">
-            <input type="text" class="portion-variation-carbs" placeholder="carb" value="${escapeHtml(variation.carbs || '')}">
-            <input type="text" class="portion-variation-fat" placeholder="fat" value="${escapeHtml(variation.fat || '')}">
-            <input type="text" class="portion-variation-fiber" placeholder="fiber" value="${escapeHtml(variation.fiber || '')}">
+            <input type="text" class="portion-variation-calories" placeholder="cal" value="${escapeHtml(normalizedVariation.calories || '')}">
+            <input type="text" class="portion-variation-protein" placeholder="pro" value="${escapeHtml(normalizedVariation.protein || '')}">
+            <input type="text" class="portion-variation-carbs" placeholder="carb" value="${escapeHtml(normalizedVariation.carbs || '')}">
+            <input type="text" class="portion-variation-fat" placeholder="fat" value="${escapeHtml(normalizedVariation.fat || '')}">
+            <input type="text" class="portion-variation-fiber" placeholder="fiber" value="${escapeHtml(normalizedVariation.fiber || '')}">
         </div>
         <div class="portion-variation-link-row">
-            <input type="url" class="portion-variation-url" placeholder="Purchase URL (optional)" value="${escapeHtml(variation.url || '')}">
+            <input type="url" class="portion-variation-url" placeholder="Purchase URL (optional)" value="${escapeHtml(normalizedVariation.url || '')}">
         </div>
     `;
 
+    row.classList.toggle('portion-variation-row--macros-hidden', !normalizedVariation.showMacros);
+
     row.querySelectorAll('input').forEach((input) => {
         input.addEventListener('input', debounce(updateRecipeFromForm, 150));
+    });
+
+    row.querySelector('.portion-variation-show-macros')?.addEventListener('change', (event) => {
+        row.classList.toggle('portion-variation-row--macros-hidden', !event.target.checked);
+        updateRecipeFromForm();
     });
 
     row.querySelector('.btn-remove')?.addEventListener('click', () => {
@@ -1867,6 +2051,7 @@ function renderRecipePage() {
     `).join('');
 
     const heroHeight = isPrinterFriendly(recipe) ? 120 : (Number.parseInt(recipe.heroHeight, 10) || 309);
+    const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || 40;
     const heroImageHtml = createHeroImageMarkup(recipe);
 
     const macroValues = [
@@ -1877,6 +2062,7 @@ function renderRecipePage() {
     ];
     const hasMacroData = macroValues.some(value => String(value || '').trim() !== '');
     const shouldShowMacroBar = recipe.showMacroBar !== false && hasMacroData;
+    const shouldShowDescription = recipe.showDescription !== false;
     const macroBarHtml = hasMacroData ? `
         <span>${recipe.macros?.calories || '0'} CAL</span>
         <span class="macro-divider">|</span>
@@ -1894,7 +2080,7 @@ function renderRecipePage() {
             <div class="hero-section" style="height: ${heroHeight}px;">
                 ${heroImageHtml}
                 <div class="hero-overlay"></div>
-                <h1 class="recipe-title">${escapeHtml(recipe.title || 'Recipe Title')}</h1>
+                <h1 class="recipe-title" style="font-size: ${titleFontSize}px;">${escapeHtml(recipe.title || 'Recipe Title')}</h1>
             </div>
 
             <!-- Macro Bar -->
@@ -1907,9 +2093,11 @@ function renderRecipePage() {
             ` : ''}
 
             <!-- Description -->
+            ${shouldShowDescription ? `
             <div class="description-section">
                 <p class="description-text">${escapeHtml(recipe.description || 'Recipe description goes here...')}</p>
             </div>
+            ` : ''}
 
             <!-- Content Area -->
             <div class="content-area" data-materials-layout="${materialsLayout}">
@@ -1937,10 +2125,12 @@ function renderRecipePage() {
 
 function renderDayOfEatingPage(page, recipe) {
     const heroHeight = isPrinterFriendly(recipe) ? 120 : (Number.parseInt(recipe.heroHeight, 10) || 309);
+    const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || 40;
     const heroImageHtml = createHeroImageMarkup(recipe);
     const macroBarHtml = createMacroBarMarkup(recipe.macros);
     const hasMacroData = hasAnyMacroData(recipe.macros);
     const shouldShowMacroBar = recipe.showMacroBar !== false && hasMacroData;
+    const shouldShowDescription = recipe.showDescription !== false;
 
     // Helper function to format note text with bold before colon
     function formatNoteText(text) {
@@ -1984,7 +2174,7 @@ function renderDayOfEatingPage(page, recipe) {
             <div class="hero-section" style="height: ${heroHeight}px;">
                 ${heroImageHtml}
                 <div class="hero-overlay"></div>
-                <h1 class="recipe-title">${escapeHtml(recipe.title || 'Day of Eating')}</h1>
+                <h1 class="recipe-title" style="font-size: ${titleFontSize}px;">${escapeHtml(recipe.title || 'Day of Eating')}</h1>
             </div>
 
             ${shouldShowMacroBar ? `
@@ -1995,9 +2185,9 @@ function renderDayOfEatingPage(page, recipe) {
             </div>
             ` : ''}
 
-            <div class="description-section">
+            ${shouldShowDescription ? `<div class="description-section">
                 <p class="description-text">${escapeHtml(recipe.description || '')}</p>
-            </div>
+            </div>` : ''}
 
             <div class="content-area day-plan-content">
                 <div class="day-plan-grid" id="day-plan-grid">
@@ -2242,28 +2432,30 @@ function getPortionVariationIconSvg(selectedIconId = '') {
     if (selectedIconId === 'none') {
         return '';
     }
-    const selectedIcon = AVAILABLE_MATERIALS.find(material => material.id === selectedIconId);
+    const selectedIcon = AVAILABLE_PORTION_VARIATION_ICONS.find(material => material.id === selectedIconId);
     return selectedIcon?.svg || DEFAULT_PORTION_VARIATION_SVG;
 }
 
 function createPortionVariationsNode(section) {
     const iconSvg = getPortionVariationIconSvg(section.icon || '');
     const variations = section.variations || [];
+    const linkIconPosition = section.linkIconPosition === 'left' ? 'left' : 'right';
     const wrapper = document.createElement('div');
     wrapper.className = 'portion-variations-section portion-variations-section--flow';
     wrapper.innerHTML = `
         <h2 class="section-title">${escapeHtml(section.label || 'Portion Variations')}</h2>
         <div class="portion-variation-cards">
             ${variations.map((variation) => `
-                ${buildPortionVariationCardHtml(variation, iconSvg)}
+                ${buildPortionVariationCardHtml(variation, iconSvg, linkIconPosition)}
             `).join('')}
         </div>
     `;
     return wrapper;
 }
 
-function buildPortionVariationCardHtml(variation, iconSvg) {
+function buildPortionVariationCardHtml(variation, iconSvg, linkIconPosition = 'right') {
     const safeUrl = normalizeExternalUrl(variation.url || '');
+    const showMacros = variation.showMacros !== false;
     const linkIconHtml = safeUrl ? `
         <span class="portion-variation-card-link-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -2276,10 +2468,11 @@ function buildPortionVariationCardHtml(variation, iconSvg) {
     const contentHtml = `
         <div class="portion-variation-card-serving">
             ${iconSvg ? `<span class="portion-variation-card-icon">${iconSvg}</span>` : ''}
+            ${linkIconPosition === 'left' ? linkIconHtml : ''}
             <span class="portion-variation-card-label">${escapeHtml(variation.label || '')}</span>
-            ${linkIconHtml}
+            ${linkIconPosition === 'left' ? '' : linkIconHtml}
         </div>
-        <div class="portion-variation-card-macros">
+        ${showMacros ? `<div class="portion-variation-card-macros">
             <div class="portion-variation-card-macro">
                 <span class="portion-variation-card-value">${escapeHtml(variation.calories || '0')}</span>
                 <span class="portion-variation-card-unit">cal</span>
@@ -2300,19 +2493,20 @@ function buildPortionVariationCardHtml(variation, iconSvg) {
                 <span class="portion-variation-card-value">${escapeHtml(variation.fiber || '0')}</span>
                 <span class="portion-variation-card-unit">fiber</span>
             </div>
-        </div>
+        </div>` : ''}
     `;
+    const cardClass = `portion-variation-card${showMacros ? '' : ' portion-variation-card--no-macros'}`;
 
     if (safeUrl) {
         return `
-            <a class="portion-variation-card portion-variation-card--link" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">
+            <a class="${cardClass} portion-variation-card--link" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">
                 ${contentHtml}
             </a>
         `;
     }
 
     return `
-        <div class="portion-variation-card">
+        <div class="${cardClass}">
             ${contentHtml}
         </div>
     `;
@@ -2398,11 +2592,12 @@ function createDayMealsOverflowSection(titleText = '', options = {}) {
 
 function createContinuationPage(pageNumberText = '') {
     const pageNumberMarkup = pageNumberText ? `<span class="page-number">${escapeHtml(pageNumberText)}</span>` : '';
-    const heroHeight = Number.parseInt(currentRecipe.heroHeight, 10) || 309;
+    const printerFriendly = isPrinterFriendly(currentRecipe);
+    const heroHeight = printerFriendly ? 120 : (Number.parseInt(currentRecipe.heroHeight, 10) || 309);
     const heroImageHtml = createHeroImageMarkup(currentRecipe);
 
     return `
-        <div class="recipe-page recipe-page--continuation">
+        <div class="recipe-page recipe-page--continuation${printerFriendly ? ' printer-friendly-page' : ''}">
             <div class="hero-section hero-section--continuation" style="height: ${heroHeight}px;">
                 ${heroImageHtml}
                 <div class="hero-overlay"></div>
@@ -2868,6 +3063,10 @@ async function handleExportJpg() {
                 heroImage.replaceWith(heroImageExport);
             }
 
+            if (printerFriendly) {
+                clone.querySelectorAll('.hero-overlay').forEach((overlay) => overlay.remove());
+            }
+
             // Apply bold text styles and force light mode for export
             const styleTag = document.createElement('style');
             styleTag.textContent = `
@@ -2960,7 +3159,7 @@ async function handleExportJpg() {
                 cornerLogo.remove();
             }
             const heroSectionHeight = heroSection?.offsetHeight || 0;
-            const heroRect = heroSection ? {
+            const heroRect = heroSection && heroSectionHeight > 0 ? {
                 x: 0,
                 y: 0,
                 width: heroSection.offsetWidth * scaleX,
@@ -2973,7 +3172,7 @@ async function handleExportJpg() {
                 ? Math.max(0, macroBar.offsetTop * scaleRatio)
                 : null;
 
-            const heroOverlayCanvas = heroSection
+            const heroOverlayCanvas = !printerFriendly && heroSection
                 ? await createHeroOverlayCanvas(heroSection, scaleRatio)
                 : null;
 
@@ -3114,7 +3313,7 @@ function parseMasterPaste(text) {
         serves: ''
     };
 
-    const lines = text.split('\n');
+    const lines = stripFencedCodeBlockLines(text).split('\n');
     let currentSection = null;
     let currentTable = null;
     let textBlockCount = 0;
@@ -3187,6 +3386,7 @@ function parseMasterPaste(text) {
             currentPortionVariationSection = {
                 label: labelMatch?.[1]?.trim() || 'Portion Variations',
                 icon: '',
+                linkIconPosition: 'right',
                 variations: []
             };
             result.portionVariationSections.push(currentPortionVariationSection);
@@ -3321,7 +3521,7 @@ function parseMasterPaste(text) {
             result.macros.carbs = parts[8] || '';
             result.macros.fat = parts[9] || '';
             result.materials = parseMaterialsField(parts[10] || '');
-            result.portionVariationIcon = parts[11] || '';
+            result.portionVariationIcon = matchPortionVariationIconByName(parts[11] || '');
 
             // Auto-generate servings labels
             if (result.serves) {
@@ -3367,7 +3567,8 @@ function parseMasterPaste(text) {
                     carbs: parts[3] || '',
                     fat: parts[4] || '',
                     fiber: parts[5] || '',
-                    url: parts[6] || ''
+                    url: parts[6] || '',
+                    showMacros: parseBooleanFlag(parts[7], true)
                 });
             }
         } else if (currentSection === 'DAY_MEALS') {
@@ -3542,13 +3743,37 @@ function matchMaterialsByName(names) {
     return matchedIds;
 }
 
-function getExportTitle() {
-    const title = (currentRecipe.title || '').trim() || 'Recipe';
-    if (!isPrinterFriendly(currentRecipe)) {
-        return title;
+function matchPortionVariationIconByName(name) {
+    const normalizedRequested = normalizeMaterialName(name);
+    if (!normalizedRequested) {
+        return '';
     }
 
-    return / - Printer Friendly$/i.test(title) ? title : `${title} - Printer Friendly`;
+    const exactMatch = AVAILABLE_PORTION_VARIATION_ICONS.find(icon =>
+        icon.id === name || normalizeMaterialName(icon.name) === normalizedRequested
+    );
+
+    const fuzzyMatch = exactMatch || AVAILABLE_PORTION_VARIATION_ICONS.find(icon => {
+        const normalizedIconName = normalizeMaterialName(icon.name);
+        return normalizedIconName.includes(normalizedRequested) || normalizedRequested.includes(normalizedIconName);
+    });
+
+    return fuzzyMatch?.id || '';
+}
+
+function getExportTitle() {
+    const title = (currentRecipe.title || '').trim() || 'Recipe';
+    const suffixes = [];
+
+    if (isPrinterFriendly(currentRecipe) && !/(^| - )Printer Friendly( - |$)/i.test(title)) {
+        suffixes.push('Printer Friendly');
+    }
+
+    if (currentRecipe.showMacroBar === false && !/(^| - )no macros( - |$)/i.test(title)) {
+        suffixes.push('no macros');
+    }
+
+    return [title, ...suffixes].join(' - ');
 }
 
 /**
@@ -3684,8 +3909,10 @@ IMPORTANT RULES:
 - For a step that needs checkbox sub-items, put the parent step on its own line, then put each checkbox item immediately below it as: - [ ] Checkbox item text
 - Checkbox item lines must always start with "- [ ]" and must directly follow the parent direction step they belong to
 - Use checkbox items for ingredient add-in lists, checklist-style substeps, or grouped items within a single step
-- Do NOT add commentary, explanations, or markdown
-- Output plain text only
+- Return the final structured recipe inside one fenced code block using triple backticks
+- Do NOT put any commentary, explanations, or extra text outside the code block
+- Do NOT use markdown inside the code block except checkbox lines exactly like "- [ ] Checkbox item text"
+- The code block is required so checkbox lines and spacing are preserved when pasted into the app
 - If a field is unknown, leave it blank but keep the semicolon
 
 Example output:
@@ -3768,11 +3995,11 @@ Highlight text;
 Highlight text;
 
 ::PORTION_VARIATIONS Brand or Group Name::
-Label;Calories;Protein;Carbs;Fat;Fiber;URL
-Label;Calories;Protein;Carbs;Fat;Fiber;URL
+Label;Calories;Protein;Carbs;Fat;Fiber;URL;Show Macros
+Label;Calories;Protein;Carbs;Fat;Fiber;URL;Show Macros
 
 ::PORTION_VARIATIONS Another Brand or Group Name::
-Label;Calories;Protein;Carbs;Fat;Fiber;URL
+Label;Calories;Protein;Carbs;Fat;Fiber;URL;Show Macros
 
 ::DIRECTIONS Ways to Enjoy;bulleted;auto::
 Bullet point text
@@ -3786,7 +4013,10 @@ Step with checkbox items
 Step text
 
 IMPORTANT RULES:
-- Output plain text only. No markdown. No commentary.
+- Return the final structured output inside one fenced code block using triple backticks
+- Do NOT put any commentary, explanations, or extra text outside the code block
+- Do NOT use markdown inside the code block except checkbox lines exactly like "- [ ] Checkbox item text"
+- The code block is required so checkbox lines and spacing are preserved when pasted into the app
 - Use EXACT section headers.
 - META must be semicolon-separated.
 - If macros are unknown, use 0.
@@ -3801,8 +4031,9 @@ IMPORTANT RULES:
 - Use the INGREDIENTS section for Nutrition Highlights when making info pages.
 - For Nutrition Highlights, put each highlight on its own line with a trailing semicolon.
 - Use one ::PORTION_VARIATIONS ...:: block per brand/group when needed.
-- Each portion variation row format is: Label;Calories;Protein;Carbs;Fat;Fiber;URL
+- Each portion variation row format is: Label;Calories;Protein;Carbs;Fat;Fiber;URL;Show Macros
 - Include URL when there is a product purchase page. Leave blank if not available.
+- Show Macros is optional and defaults to yes. Use "no" for link-only rows that should not show macro details.
 - Each ::DIRECTIONS ...:: header format is: ::DIRECTIONS Label;step style;start mode::
 - step style must be either numbered or bulleted
 - start mode must be auto, force-right-column, or keep-with-first-step
@@ -3828,11 +4059,12 @@ Convenient shelf-stable snack option;
 Can vary significantly in fiber and fat content;
 
 ::PORTION_VARIATIONS Misfits::
-Caramel Fudge;190;15;11;7;5;https://example.com/caramel-fudge
-Chocolate Brownie;195;15;8;9;12;https://example.com/chocolate-brownie
+Caramel Fudge;190;15;11;7;5;https://example.com/caramel-fudge;yes
+Chocolate Brownie;195;15;8;9;12;https://example.com/chocolate-brownie;yes
 
 ::PORTION_VARIATIONS No Cow::
-Peanut Butter Chocolate Chip;190;20;7;5;19;https://example.com/pb-choc-chip
+Peanut Butter Chocolate Chip;190;20;7;5;19;https://example.com/pb-choc-chip;yes
+Variety Pack;;;;;;https://example.com/variety-pack;no
 
 ::DIRECTIONS Ways to Enjoy;bulleted;auto::
 Eat as a grab-and-go snack
@@ -3863,7 +4095,9 @@ IMPORTANT:
 - Infer meal label, meal name, portion note, and meal macros from the screenshots/data provided
 - Calculate or estimate daily totals when they are not explicitly given
 - Do NOT output image files or image URLs for meal thumbnails. The user will add thumbnails manually in the app later
-- Output plain text only. No markdown. No explanations
+- Return the final structured output inside one fenced code block using triple backticks
+- Do NOT put any commentary, explanations, or extra text outside the code block
+- The code block is required so line breaks and spacing are preserved when pasted into the app
 
 ::META::
 Page Title;Day of Eating;;1 Day;;;Total Calories;Total Protein;Total Carbs;Total Fat;
@@ -3965,18 +4199,18 @@ Adjust portions based on your goals
 }
 
 function handleCopyDayMealsPrompt() {
-    const instructions = `Analyze the meal screenshots or meal data I provide and return ONLY plain text meal rows in this exact format:
+    const instructions = `Analyze the meal screenshots or meal data I provide and return ONLY meal rows in this exact format:
 
 Meal Label;Meal Name;Portion Note;Calories;Protein;Carbs;Fat
 
 Rules:
 - Output one meal per line
-- No markdown
+- Return the final meal rows inside one fenced code block using triple backticks
 - No bullets
 - No numbering
-- No code fences
-- No explanation before or after
+- No explanation before or after the code block
 - Keep the semicolon structure exactly the same
+- The code block is required so line breaks and spacing are preserved when pasted into the app
 - Meal Label examples: Breakfast, Lunch, Dinner, Snack, Mid-Morning Snack, Afternoon Snack, Evening Snack
 - Portion Note should be short, like "1 serving", "1 bowl", "1 smoothie", "1 plate", "1 bar", or "1 cup"
 - Use numbers only for Calories, Protein, Carbs, and Fat
@@ -4022,6 +4256,51 @@ function handlePrint() {
 
     // Trigger print dialog
     window.print();
+}
+
+/**
+ * Handle editable PDF export through the Node PDFKit endpoint
+ */
+async function handleExportEditablePdf() {
+    const button = elements.btnExportEditablePdf();
+    const originalText = button?.textContent || 'Export Editable PDF';
+
+    if (button) {
+        button.textContent = 'Exporting...';
+        button.disabled = true;
+    }
+
+    try {
+        const response = await fetch('/export-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(currentRecipe)
+        });
+
+        if (!response.ok) {
+            const message = await response.text();
+            throw new Error(message || 'Editable PDF export failed.');
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        link.href = url;
+        link.download = `${getExportTitle()}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Editable PDF export error:', error);
+        alert('Error exporting editable PDF. Make sure the Node server is running.');
+    } finally {
+        if (button) {
+            button.textContent = originalText;
+            button.disabled = false;
+        }
+    }
 }
 
 /**
@@ -4088,12 +4367,6 @@ function updateZoom() {
     const wrapper = page.closest('.recipe-page-wrapper');
     const { width: pageWidth, height: pageHeight } = getRecipePageDimensions();
     const container = elements.previewContainer();
-    const previousCenterRatio = container && wrapper
-        ? {
-            x: ((container.clientWidth / 2) - previewPanX) / Math.max(wrapper.offsetWidth, 1),
-            y: ((container.clientHeight / 2) - previewPanY) / Math.max(wrapper.offsetHeight, 1)
-        }
-        : null;
 
     elements.zoomLevelDisplay().textContent = `${zoomLevel}%`;
     page.style.transform = `scale(${scale})`;
@@ -4105,9 +4378,9 @@ function updateZoom() {
         wrapper.style.height = `${pageHeight * scale}px`;
     }
 
-    if (container && wrapper && previousCenterRatio) {
-        previewPanX = (container.clientWidth / 2) - (wrapper.offsetWidth * previousCenterRatio.x);
-        previewPanY = (container.clientHeight / 2) - (wrapper.offsetHeight * previousCenterRatio.y);
+    if (container && wrapper) {
+        previewPanX = (container.clientWidth - wrapper.offsetWidth) / 2;
+        previewPanY = (container.clientHeight - wrapper.offsetHeight) / 2;
         applyPreviewPan();
     }
 }
@@ -4129,12 +4402,21 @@ function centerPreviewWithBehavior(behavior = 'auto') {
 
     previewPanX += deltaX;
     previewPanY += deltaY;
-    applyPreviewPan();
+    applyPreviewPan(behavior === 'smooth');
 }
 
-function applyPreviewPan() {
+function applyPreviewPan(animate = false) {
     const wrapper = elements.recipePage()?.closest('.recipe-page-wrapper');
     if (!wrapper) return;
+
+    if (animate) {
+        wrapper.classList.add('is-centering');
+        window.setTimeout(() => {
+            wrapper.classList.remove('is-centering');
+        }, 560);
+    } else {
+        wrapper.classList.remove('is-centering');
+    }
 
     wrapper.style.transform = `translate(${previewPanX}px, ${previewPanY}px)`;
 }
