@@ -864,6 +864,7 @@ body {
 }
 
 .instruction-section-editor-meta,
+.ingredient-section-editor-meta,
 .ingredient-section-paste,
 .portion-variation-section-paste,
 .portion-variation-section-editor-meta {
@@ -885,6 +886,7 @@ body {
 }
 
 .instruction-section-control,
+.ingredient-section-control,
 .portion-variation-section-control {
     display: flex;
     flex-direction: column;
@@ -893,6 +895,7 @@ body {
 }
 
 .instruction-section-editor-meta label,
+.ingredient-section-editor-meta label,
 .ingredient-section-paste label,
 .portion-variation-section-paste label,
 .portion-variation-section-editor-meta label,
@@ -1278,6 +1281,7 @@ body {
 
 .form-group label,
 .instruction-section-editor-meta label,
+.ingredient-section-editor-meta label,
 .ingredient-section-paste label,
 .portion-variation-section-paste label,
 .portion-variation-section-editor-meta label,
@@ -1762,6 +1766,8 @@ body {
 
 .printer-friendly-page .recipe-title {
     color: #222222;
+    left: 80px;
+    right: 80px;
 }
 
 .printer-friendly-page .macro-bar-content {

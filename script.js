@@ -84,6 +84,7 @@ const EMPTY_RECIPE = {
     ingredientSections: [],
     instructionsLabel: "Instructions for 1 Serving",
     instructionsStartMode: "force-right-column",
+    showDirectionsContinuedHeader: true,
     materialsLayout: "column",
     materials: [],
     ingredients: [],
@@ -169,6 +170,7 @@ function normalizeRecipe(recipe = {}) {
     normalized.ingredientSections = normalized.ingredientSections
         .map((section) => ({
             label: section.label || EMPTY_RECIPE.servingsLabel,
+            startMode: section.startMode === 'force-right-column' ? 'force-right-column' : 'auto',
             ingredients: Array.isArray(section.ingredients) ? section.ingredients : []
         }))
         .filter((section) => section.label || section.ingredients.length > 0);
@@ -179,6 +181,7 @@ function normalizeRecipe(recipe = {}) {
     )) {
         normalized.ingredientSections = [{
             label: normalized.servingsLabel || EMPTY_RECIPE.servingsLabel,
+            startMode: 'auto',
             ingredients: normalized.ingredients
         }];
     }
@@ -305,6 +308,7 @@ const elements = {
     addIngredientSection: () => document.getElementById('add-ingredient-section'),
     instructionsLabel: () => document.getElementById('instructions-label'),
     instructionsStartMode: () => document.getElementById('instructions-start-mode'),
+    showDirectionsContinuedHeader: () => document.getElementById('show-directions-continued-header'),
     instructionsList: () => document.getElementById('instructions-list'),
     addInstruction: () => document.getElementById('add-instruction'),
     addInstructionSection: () => document.getElementById('add-instruction-section'),
@@ -751,6 +755,7 @@ function initializeFormListeners() {
     // Materials layout
     elements.materialsLayout()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
     elements.instructionsStartMode()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
+    elements.showDirectionsContinuedHeader()?.addEventListener('change', updateRecipeFromForm);
     elements.showMacroBar()?.addEventListener('change', updateRecipeFromForm);
     elements.showDescription()?.addEventListener('change', updateRecipeFromForm);
 
@@ -901,6 +906,9 @@ function loadRecipeToForm(recipe) {
     if (elements.instructionsStartMode()) {
         elements.instructionsStartMode().value = recipe.instructionsStartMode || 'force-right-column';
     }
+    if (elements.showDirectionsContinuedHeader()) {
+        elements.showDirectionsContinuedHeader().checked = recipe.showDirectionsContinuedHeader !== false;
+    }
     elements.materialsLayout().value = recipe.materialsLayout || 'column';
     elements.dayHighlightsTitle().value = recipe.dayHighlightsTitle || 'Nutrition Highlights';
     elements.dayTipsTitle().value = recipe.dayTipsTitle || 'Tips for Success';
@@ -957,7 +965,8 @@ function loadRecipeToForm(recipe) {
         addIngredientSectionEditor(
             section.label,
             section.ingredients,
-            index === 0
+            index === 0,
+            section.startMode || 'auto'
         );
     });
 
@@ -1037,6 +1046,7 @@ function updateRecipeFromForm() {
         servingsLabel: primaryIngredientSection.label || 'Ingredients for 1 Serving',
         instructionsLabel: elements.instructionsLabel()?.value || 'Instructions for 1 Serving',
         instructionsStartMode: instructionSections[0]?.startMode || elements.instructionsStartMode()?.value || 'force-right-column',
+        showDirectionsContinuedHeader: elements.showDirectionsContinuedHeader()?.checked !== false,
         materialsLayout: elements.materialsLayout()?.value || 'column',
         materials: getSelectedMaterials(),
         ingredients: primaryIngredientSection.ingredients || [],
@@ -1178,6 +1188,7 @@ function getIngredientSectionsForForm(recipe) {
     const normalizedSections = (recipe.ingredientSections || [])
         .map((section) => ({
             label: section.label || 'Ingredients for 1 Serving',
+            startMode: section.startMode === 'force-right-column' ? 'force-right-column' : 'auto',
             ingredients: Array.isArray(section.ingredients) ? section.ingredients : []
         }))
         .filter((section) => section.label || section.ingredients.length > 0);
@@ -1188,6 +1199,7 @@ function getIngredientSectionsForForm(recipe) {
 
     return [{
         label: recipe.servingsLabel || 'Ingredients for 1 Serving',
+        startMode: 'auto',
         ingredients: recipe.ingredients || []
     }];
 }
@@ -1199,6 +1211,7 @@ function getIngredientSectionsFromForm() {
             const label = index === 0
                 ? (elements.servingsLabel()?.value || 'Ingredients for 1 Serving')
                 : ((labelInput?.value || '').trim() || `Ingredients Section ${index + 1}`);
+            const startMode = section.querySelector('.ingredient-section-start-mode')?.value || 'auto';
             const ingredients = Array.from(section.querySelectorAll('.ingredient-row'))
                 .map((row) => ({
                     name: row.querySelector('.ingredient-name')?.value || '',
@@ -1206,13 +1219,14 @@ function getIngredientSectionsFromForm() {
                 }))
                 .filter((ingredient) => ingredient.name || ingredient.amount);
 
-            return { label, ingredients };
+            return { label, startMode, ingredients };
         })
         .filter((section) => section.label || section.ingredients.length > 0);
 
     if (sections.length === 0) {
         return [{
             label: elements.servingsLabel()?.value || 'Ingredients for 1 Serving',
+            startMode: 'auto',
             ingredients: []
         }];
     }
@@ -1439,7 +1453,7 @@ function stripFencedCodeBlockLines(text) {
 /**
  * Add a new ingredient row to the form
  */
-function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = false) {
+function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = false, startMode = 'auto') {
     const container = elements.ingredientsList();
     if (!container) return;
 
@@ -1449,6 +1463,15 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
         <div class="ingredient-section-editor-header">
             <input type="text" class="ingredient-section-label" placeholder="Ingredient set label" value="${escapeHtml(label || 'Ingredients for 1 Serving')}">
             ${isPrimary ? '' : '<button type="button" class="btn-remove" title="Remove Section">×</button>'}
+        </div>
+        <div class="ingredient-section-editor-meta">
+            <div class="ingredient-section-control">
+                <label>Ingredients Start</label>
+                <select class="ingredient-section-start-mode">
+                    <option value="auto" ${startMode === 'auto' ? 'selected' : ''}>Auto</option>
+                    <option value="force-right-column" ${startMode === 'force-right-column' ? 'selected' : ''}>Force right column</option>
+                </select>
+            </div>
         </div>
         <div class="ingredient-section-paste">
             <textarea class="ingredient-section-paste-input" rows="4" placeholder="Paste ingredients here, one per line:&#10;Chia seeds;1/2 cup (80 g)&#10;Vanilla extract;1 tsp (4 g)"></textarea>
@@ -1467,6 +1490,8 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
     } else {
         labelInput.addEventListener('input', debounce(updateRecipeFromForm, 150));
     }
+
+    section.querySelector('.ingredient-section-start-mode')?.addEventListener('change', debounce(updateRecipeFromForm, 150));
 
     section.querySelector('.btn-add-ingredient-inline')?.addEventListener('click', () => {
         addIngredientRow('', '', section.querySelector('.ingredient-section-rows'));
@@ -1507,7 +1532,7 @@ function addIngredientRowToLastSection(name = '', amount = '') {
     let lastSectionRows = elements.ingredientsList()?.querySelector('.ingredient-section-editor:last-child .ingredient-section-rows');
 
     if (!lastSectionRows) {
-        addIngredientSectionEditor(elements.servingsLabel()?.value || 'Ingredients for 1 Serving', [], true);
+        addIngredientSectionEditor(elements.servingsLabel()?.value || 'Ingredients for 1 Serving', [], true, 'auto');
         lastSectionRows = elements.ingredientsList()?.querySelector('.ingredient-section-editor:last-child .ingredient-section-rows');
     }
 
@@ -1776,6 +1801,7 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
                 <select class="instruction-section-start-mode">
                     <option value="auto" ${startMode === 'auto' ? 'selected' : ''}>Auto</option>
                     <option value="force-right-column" ${startMode === 'force-right-column' ? 'selected' : ''}>Force right column</option>
+                    <option value="force-next-page" ${startMode === 'force-next-page' ? 'selected' : ''}>Force next page</option>
                     <option value="keep-with-first-step" ${startMode === 'keep-with-first-step' ? 'selected' : ''}>Move to next column if header would orphan</option>
                 </select>
             </div>
@@ -2733,10 +2759,11 @@ function paginateRecipeFlow(noteHtml = '') {
     }
 
     const instructionContinuationHeadersAdded = new Set();
+    let instructionFlowStarted = false;
 
     function ensureInstructionContinuationHeader() {
         const slot = getCurrentSlot();
-        if (!isContinuationSlot(slot) || slot.columnIndex !== 0) {
+        if (currentRecipe.showDirectionsContinuedHeader === false || !instructionFlowStarted || !isContinuationSlot(slot) || slot.columnIndex !== 0 || slot.element.children.length > 0) {
             return;
         }
 
@@ -2762,6 +2789,7 @@ function paginateRecipeFlow(noteHtml = '') {
         }
 
         slot.element.appendChild(node);
+        instructionFlowStarted = true;
     }
 
     const ingredientSections = getIngredientSectionsForForm(currentRecipe)
@@ -2785,7 +2813,20 @@ function paginateRecipeFlow(noteHtml = '') {
         placeNode(() => createPortionVariationsNode(section));
     });
 
+    function applyIngredientStartMode(startMode) {
+        if (startMode !== 'force-right-column') {
+            return;
+        }
+
+        const slot = getCurrentSlot();
+        if (slot.columnIndex === 0 && slot.element.children.length > 0) {
+            advanceSlot();
+        }
+    }
+
     ingredientSections.forEach((section) => {
+        applyIngredientStartMode(section.startMode || 'auto');
+
         placeNode(() => {
             const title = document.createElement('h2');
             title.className = 'section-title flow-section-title';
@@ -2799,6 +2840,15 @@ function paginateRecipeFlow(noteHtml = '') {
     });
 
     function applyInstructionStartMode(sectionLabel, sectionSteps, startMode, stepStyle = 'numbered') {
+        if (startMode === 'force-next-page') {
+            const startingPageIndex = getCurrentSlot().pageIndex;
+            let slot = getCurrentSlot();
+            while (slot.pageIndex <= startingPageIndex || slot.columnIndex !== 0) {
+                slot = advanceSlot();
+            }
+            return;
+        }
+
         if (startMode === 'force-right-column') {
             if (currentSlotIndex === 0 && slot1.children.length > 0) {
                 advanceSlot();
@@ -3360,6 +3410,7 @@ function parseMasterPaste(text) {
             const labelMatch = line.match(/^::INGREDIENTS(?:\s+(.+?))?::$/);
             currentIngredientSection = {
                 label: labelMatch?.[1]?.trim() || result.servingsLabel || 'Ingredients for 1 Serving',
+                startMode: 'auto',
                 ingredients: []
             };
             result.ingredientSections.push(currentIngredientSection);
@@ -3494,6 +3545,7 @@ function parseMasterPaste(text) {
                 } else {
                     currentIngredientSection = {
                         label: tableName,
+                        startMode: 'auto',
                         ingredients: []
                     };
                     result.ingredientSections.push(currentIngredientSection);
@@ -3629,6 +3681,7 @@ function parseMasterPaste(text) {
     if (result.ingredientSections.length === 0 && result.ingredients.length > 0) {
         result.ingredientSections = [{
             label: result.servingsLabel || 'Ingredients for 1 Serving',
+            startMode: 'auto',
             ingredients: result.ingredients
         }];
     }
@@ -4036,7 +4089,8 @@ IMPORTANT RULES:
 - Show Macros is optional and defaults to yes. Use "no" for link-only rows that should not show macro details.
 - Each ::DIRECTIONS ...:: header format is: ::DIRECTIONS Label;step style;start mode::
 - step style must be either numbered or bulleted
-- start mode must be auto, force-right-column, or keep-with-first-step
+- start mode must be auto, force-right-column, force-next-page, or keep-with-first-step
+- Use force-next-page when the directions should start at the top of the next page
 - For a direction step that needs checkbox sub-items, put the parent step on its own line, then put each checkbox item immediately below it as: - [ ] Checkbox item text
 - Checkbox item lines must always start with "- [ ]" and must directly follow the parent direction step they belong to
 - If a field is unknown, leave it blank but keep delimiters intact
