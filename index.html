@@ -30,6 +30,11 @@
             </div>
 
             <form id="recipe-form" class="recipe-form">
+                <div class="recipe-storage-actions" aria-label="Recipe storage actions">
+                    <button type="button" id="btn-save-json" class="segmented-control-button">Save Recipe</button>
+                    <button type="button" id="btn-load-json" class="segmented-control-button">Load Recipe</button>
+                </div>
+
                 <!-- Master Paste Section -->
                 <section class="form-section master-paste-section" data-section-key="masterPaste">
                     <h2>Master Paste</h2>
@@ -91,6 +96,7 @@
                                 <span>Click to upload image</span>
                             </div>
                             <img id="image-preview-thumb" class="image-preview-thumb" alt="Preview">
+                            <button type="button" id="btn-remove-hero-image" class="btn-remove-hero-image" aria-label="Remove hero image">×</button>
                         </div>
                         <div class="image-controls" id="image-controls">
                             <div class="image-control-row">
@@ -295,10 +301,6 @@
                         <button type="button" id="btn-export-editable-pdf" class="btn-primary">Export Editable PDF</button>
                         <button type="button" id="btn-export-jpg" class="btn-primary">Export JPG</button>
                     </div>
-                    <div class="form-actions-row">
-                        <button type="button" id="btn-save-json" class="btn-secondary">Save Recipe</button>
-                        <button type="button" id="btn-load-json" class="btn-secondary">Load Recipe</button>
-                    </div>
                     <input type="file" id="json-file-input" accept=".json" hidden>
                     <button type="button" id="btn-clear" class="btn-danger">Clear All</button>
                 </div>
@@ -312,6 +314,8 @@
             <div class="preview-header">
                 <h2>Live Preview</h2>
                 <div class="preview-controls">
+                    <button type="button" id="btn-save-json-preview" class="btn-preview-secondary">Save</button>
+                    <button type="button" id="btn-load-json-preview" class="btn-preview-secondary">Load</button>
                     <button type="button" id="btn-export-jpg-preview" class="btn-preview-export">Export JPG</button>
                     <button type="button" id="btn-zoom-out" class="btn-zoom">−</button>
                     <span id="zoom-level">100%</span>
@@ -346,6 +350,23 @@
             </div>
             <div class="equipment-modal-footer">
                 <button type="button" id="btn-save-equipment" class="btn-primary">Save Selection</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Recipe Overlay -->
+    <div class="load-recipe-overlay" id="load-recipe-overlay">
+        <div class="load-recipe-modal">
+            <div class="equipment-modal-header">
+                <h3>Load Recipe</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-load-recipe">&times;</button>
+            </div>
+            <div class="load-recipe-body">
+                <div class="load-recipe-section-title">Recent Recipes</div>
+                <div id="recent-recipes-list" class="recent-recipes-list">
+                    <!-- Recent recipes will be populated by JS -->
+                </div>
+                <button type="button" id="btn-load-from-computer" class="btn-secondary btn-full-width">Load from computer</button>
             </div>
         </div>
     </div>

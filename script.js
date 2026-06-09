@@ -98,6 +98,7 @@ const EMPTY_RECIPE = {
 };
 
 const SECTION_SETTINGS_STORAGE_KEY = 'tvgRecipePageGenerator.sectionVisibility';
+const RECENT_RECIPES_STORAGE_KEY = 'tvgRecipePageGenerator.recentRecipes';
 const SECTION_VISIBILITY_DEFAULTS = [
     { key: 'masterPaste', label: 'Master Paste', visible: true },
     { key: 'basicInformation', label: 'Basic Information', visible: true },
@@ -294,6 +295,7 @@ const elements = {
     heroImage: () => document.getElementById('hero-image'),
     imageUploadArea: () => document.getElementById('image-upload-area'),
     imagePreviewThumb: () => document.getElementById('image-preview-thumb'),
+    btnRemoveHeroImage: () => document.getElementById('btn-remove-hero-image'),
     uploadPlaceholder: () => document.getElementById('upload-placeholder'),
     imageControls: () => document.getElementById('image-controls'),
     imageScale: () => document.getElementById('image-scale'),
@@ -356,8 +358,14 @@ const elements = {
     btnExportEditablePdf: () => document.getElementById('btn-export-editable-pdf'),
     btnPrint: () => document.getElementById('btn-print'),
     btnSaveJson: () => document.getElementById('btn-save-json'),
+    btnSaveJsonPreview: () => document.getElementById('btn-save-json-preview'),
     btnLoadJson: () => document.getElementById('btn-load-json'),
+    btnLoadJsonPreview: () => document.getElementById('btn-load-json-preview'),
     jsonFileInput: () => document.getElementById('json-file-input'),
+    loadRecipeOverlay: () => document.getElementById('load-recipe-overlay'),
+    recentRecipesList: () => document.getElementById('recent-recipes-list'),
+    btnCloseLoadRecipe: () => document.getElementById('btn-close-load-recipe'),
+    btnLoadFromComputer: () => document.getElementById('btn-load-from-computer'),
     btnClear: () => document.getElementById('btn-clear'),
     btnZoomIn: () => document.getElementById('btn-zoom-in'),
     btnZoomOut: () => document.getElementById('btn-zoom-out'),
@@ -442,6 +450,100 @@ function getSectionVisibilitySettings() {
 
 function saveSectionVisibilitySettings(settings) {
     localStorage.setItem(SECTION_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function getRecentRecipes() {
+    try {
+        const recents = JSON.parse(localStorage.getItem(RECENT_RECIPES_STORAGE_KEY) || '[]');
+        return Array.isArray(recents) ? recents.slice(0, 5) : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function saveRecentRecipe(recipe) {
+    const normalizedRecipe = normalizeRecipe(recipe);
+    const title = (normalizedRecipe.title || 'Untitled Recipe').trim();
+    const savedAt = new Date().toISOString();
+    const id = `${slugify(title || 'recipe')}-${Date.now()}`;
+    const existing = getRecentRecipes().filter((item) => {
+        const itemTitle = (item.recipe?.title || item.title || '').trim();
+        return itemTitle.toLowerCase() !== title.toLowerCase();
+    });
+    const nextRecents = [{ id, title, savedAt, recipe: normalizedRecipe }, ...existing].slice(0, 5);
+
+    try {
+        localStorage.setItem(RECENT_RECIPES_STORAGE_KEY, JSON.stringify(nextRecents));
+    } catch (error) {
+        console.warn('Unable to save recent recipe. Browser storage may be full.', error);
+    }
+}
+
+function loadRecipeObject(recipe) {
+    const normalized = normalizeRecipe(recipe);
+    currentRecipe = normalized;
+    loadRecipeToForm(normalized);
+    renderRecipePage();
+}
+
+function formatRecentRecipeDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return 'Recently saved';
+    }
+
+    return date.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
+function renderRecentRecipes() {
+    const list = elements.recentRecipesList();
+    if (!list) return;
+
+    const recents = getRecentRecipes();
+
+    if (recents.length === 0) {
+        list.innerHTML = '<div class="recent-recipes-empty">No recent recipes yet.</div>';
+        return;
+    }
+
+    list.innerHTML = recents.map((item, index) => {
+        const title = item.title || item.recipe?.title || 'Untitled Recipe';
+        const savedAt = formatRecentRecipeDate(item.savedAt);
+
+        return `
+            <button type="button" class="recent-recipe-item" data-recent-recipe-index="${index}">
+                <span class="recent-recipe-title">${escapeHtml(title)}</span>
+                <span class="recent-recipe-meta">${escapeHtml(savedAt)}</span>
+            </button>
+        `;
+    }).join('');
+}
+
+function openLoadRecipeOverlay() {
+    renderRecentRecipes();
+    elements.loadRecipeOverlay()?.classList.add('active');
+}
+
+function closeLoadRecipeOverlay() {
+    elements.loadRecipeOverlay()?.classList.remove('active');
+}
+
+function handleRecentRecipeClick(event) {
+    const item = event.target.closest('[data-recent-recipe-index]');
+    if (!item) return;
+
+    const index = Number(item.dataset.recentRecipeIndex);
+    const recent = getRecentRecipes()[index];
+    if (!recent?.recipe) return;
+
+    loadRecipeObject(recent.recipe);
+    saveRecentRecipe(recent.recipe);
+    closeLoadRecipeOverlay();
 }
 
 function applySectionVisibilitySettings(settings = getSectionVisibilitySettings()) {
@@ -870,11 +972,9 @@ function applyPageStyleSelection(style = 'standard') {
         });
         elements.heroHeight().value = String(printerHeroHeight);
         elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
-        elements.showCornerLogo().checked = false;
     } else {
         elements.heroHeight().value = '309';
         elements.heroHeightValue().textContent = '309px';
-        elements.showCornerLogo().checked = true;
     }
 }
 
@@ -922,6 +1022,12 @@ function initializeFormListeners() {
     // Image upload
     elements.imageUploadArea()?.addEventListener('click', () => {
         elements.heroImage()?.click();
+    });
+
+    elements.btnRemoveHeroImage()?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeHeroImage();
     });
 
     elements.heroImage()?.addEventListener('change', handleImageUpload);
@@ -1051,13 +1157,28 @@ function initializeButtonListeners() {
 
     // Save JSON button
     elements.btnSaveJson()?.addEventListener('click', handleSaveJson);
+    elements.btnSaveJsonPreview()?.addEventListener('click', handleSaveJson);
 
     // Load JSON button
-    elements.btnLoadJson()?.addEventListener('click', () => {
-        elements.jsonFileInput()?.click();
-    });
+    const openLoadRecipe = () => {
+        openLoadRecipeOverlay();
+    };
+
+    elements.btnLoadJson()?.addEventListener('click', openLoadRecipe);
+    elements.btnLoadJsonPreview()?.addEventListener('click', openLoadRecipe);
 
     elements.jsonFileInput()?.addEventListener('change', handleLoadJson);
+    elements.btnCloseLoadRecipe()?.addEventListener('click', closeLoadRecipeOverlay);
+    elements.btnLoadFromComputer()?.addEventListener('click', () => {
+        closeLoadRecipeOverlay();
+        elements.jsonFileInput()?.click();
+    });
+    elements.recentRecipesList()?.addEventListener('click', handleRecentRecipeClick);
+    elements.loadRecipeOverlay()?.addEventListener('click', (event) => {
+        if (event.target === elements.loadRecipeOverlay()) {
+            closeLoadRecipeOverlay();
+        }
+    });
 
     // Clear button
     elements.btnClear()?.addEventListener('click', handleClear);
@@ -1107,7 +1228,7 @@ function loadRecipeToForm(recipe) {
     elements.showDescription().checked = recipe.showDescription !== false;
     elements.description().value = recipe.description || '';
     elements.pageNumber().value = recipe.pageNumber || '';
-    elements.showCornerLogo().checked = !isPrinterFriendly(recipe) && recipe.showCornerLogo === true;
+    elements.showCornerLogo().checked = recipe.showCornerLogo === true;
     elements.showMacroBar().checked = recipe.showMacroBar !== false;
     elements.calories().value = recipe.macros?.calories || '';
     elements.protein().value = recipe.macros?.protein || '';
@@ -1151,6 +1272,8 @@ function loadRecipeToForm(recipe) {
         elements.imagePosX().value = imgSettings.posX;
         elements.imagePosY().value = imgSettings.posY;
     } else {
+        elements.imagePreviewThumb()?.removeAttribute('src');
+        elements.heroImage().value = '';
         elements.imageUploadArea().classList.remove('has-image');
         elements.imageControls()?.classList.remove('visible');
     }
@@ -1246,7 +1369,7 @@ function updateRecipeFromForm() {
             posX: parseInt(elements.imagePosX()?.value) || 50,
             posY: parseInt(elements.imagePosY()?.value) || 50
         },
-        showCornerLogo: elements.pageStyle()?.value === 'printer-friendly' ? false : elements.showCornerLogo()?.checked === true,
+        showCornerLogo: elements.showCornerLogo()?.checked === true,
         showMacroBar: elements.showMacroBar()?.checked !== false,
         showDescription: elements.showDescription()?.checked !== false,
         macros: {
@@ -2292,6 +2415,37 @@ function handleImageUpload(event) {
     reader.readAsDataURL(file);
 }
 
+function removeHeroImage() {
+    currentRecipe.image = '';
+    currentRecipe.imageSettings = { scale: 100, posX: 50, posY: 50 };
+
+    if (elements.heroImage()) {
+        elements.heroImage().value = '';
+    }
+
+    if (elements.imagePreviewThumb()) {
+        elements.imagePreviewThumb().removeAttribute('src');
+    }
+
+    elements.imageUploadArea()?.classList.remove('has-image');
+    elements.imageControls()?.classList.remove('visible');
+
+    if (elements.imageScale()) {
+        elements.imageScale().value = 100;
+        elements.imageScaleValue().textContent = '100%';
+    }
+
+    if (elements.imagePosX()) {
+        elements.imagePosX().value = 50;
+    }
+
+    if (elements.imagePosY()) {
+        elements.imagePosY().value = 50;
+    }
+
+    updateRecipeFromForm();
+}
+
 // ================================================
 // RECIPE PAGE RENDERING
 // ================================================
@@ -2574,8 +2728,9 @@ function createHeroImageMarkup(recipe) {
         : recipe.image
         ? `<div class="hero-image-layer" role="img" aria-label="${escapeHtml(recipe.title)}" style="background-image: url('${recipe.image}'); background-position: ${imgSettings.posX}% ${imgSettings.posY}%; transform: scale(${imgSettings.scale / 100});"></div>`
         : `<div class="hero-placeholder">No image uploaded</div>`;
+    const cornerLogoSrc = isPrintFriendly ? 'logo-grayscale.png' : 'logo.png';
     const logoHtml = recipe.showCornerLogo === true
-        ? `<div class="hero-corner-logo"><img src="logo.png" alt="The Vegan Gym"></div>`
+        ? `<div class="hero-corner-logo"><img src="${cornerLogoSrc}" alt="The Vegan Gym"></div>`
         : '';
 
     return `${imageHtml}${logoHtml}`;
@@ -3589,7 +3744,7 @@ async function handleExportJpg() {
 
             if (cornerLogoRect && currentRecipe.showCornerLogo === true) {
                 try {
-                    const cornerLogoImage = await loadImageElement('logo.png');
+                    const cornerLogoImage = await loadImageElement(printerFriendly ? 'logo-grayscale.png' : 'logo.png');
                     drawCornerLogoToCanvas(ctx, cornerLogoImage, cornerLogoRect, { printerFriendly });
                 } catch (cornerLogoError) {
                     console.warn('Unable to redraw corner logo at export resolution.', cornerLogoError);
@@ -4685,6 +4840,8 @@ async function handleExportEditablePdf() {
  * Handle saving recipe as JSON
  */
 function handleSaveJson() {
+    saveRecentRecipe(currentRecipe);
+
     const dataStr = JSON.stringify(currentRecipe, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -4712,6 +4869,7 @@ function handleLoadJson(event) {
             currentRecipe = recipe;
             loadRecipeToForm(recipe);
             renderRecipePage();
+            saveRecentRecipe(recipe);
         } catch (error) {
             alert('Error loading JSON file. Please ensure it is a valid recipe file.');
             console.error('JSON parse error:', error);
@@ -5039,11 +5197,11 @@ function drawCornerLogoToCanvas(ctx, img, rect, options = {}) {
     ctx.lineTo(rect.x + rect.width, rect.y);
     ctx.lineTo(rect.x + rect.width, rect.y + rect.height);
     ctx.closePath();
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = options.printerFriendly ? '#ffffff' : '#000000';
     ctx.fill();
     ctx.clip();
     ctx.globalAlpha = 1;
-    ctx.filter = options.printerFriendly ? 'grayscale(1) brightness(3) contrast(2)' : 'none';
+    ctx.filter = 'none';
     ctx.drawImage(img, logoX, logoY, logoWidth, logoHeight);
     ctx.restore();
 }
