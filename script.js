@@ -51,6 +51,7 @@ const EMPTY_RECIPE = {
     pageStyle: "standard",
     title: "",
     titleFontSize: 40,
+    printerTitleTopPadding: 70,
     image: "",
     heroHeight: 309,
     imageSettings: {
@@ -91,8 +92,23 @@ const EMPTY_RECIPE = {
     instructionSections: [],
     instructions: [],
     notes: [],
+    pageBottomMargin: 0,
     pageNumber: ""
 };
+
+const SECTION_SETTINGS_STORAGE_KEY = 'tvgRecipePageGenerator.sectionVisibility';
+const SECTION_VISIBILITY_DEFAULTS = [
+    { key: 'masterPaste', label: 'Master Paste', visible: true },
+    { key: 'basicInformation', label: 'Basic Information', visible: true },
+    { key: 'nutritionInformation', label: 'Nutrition Information', visible: true },
+    { key: 'description', label: 'Description', visible: true },
+    { key: 'portionVariations', label: 'Portion Variations', visible: false },
+    { key: 'materialsEquipment', label: 'Materials/Equipment', visible: true },
+    { key: 'ingredients', label: 'Ingredients', visible: true },
+    { key: 'instructions', label: 'Instructions', visible: true },
+    { key: 'notes', label: 'Notes/Callouts', visible: true },
+    { key: 'pageLayout', label: 'Page Layout', visible: false }
+];
 
 // ================================================
 // STATE MANAGEMENT
@@ -105,6 +121,8 @@ let currentRecipe = { ...EMPTY_RECIPE };
 let zoomLevel = 100;
 let previewPanX = 0;
 let previewPanY = 0;
+let isBottomMarginGuideVisible = false;
+let bottomMarginGuideTimer = null;
 
 function normalizeRecipe(recipe = {}) {
     const normalized = {
@@ -257,11 +275,17 @@ const elements = {
     // Form inputs
     masterPaste: () => document.getElementById('master-paste'),
     masterPasteStatus: () => document.getElementById('master-paste-status'),
+    btnSectionSettings: () => document.getElementById('btn-section-settings'),
+    sectionSettingsPanel: () => document.getElementById('section-settings-panel'),
+    sectionSettingsList: () => document.getElementById('section-settings-list'),
     pageType: () => document.getElementById('page-type'),
     pageStyle: () => document.getElementById('page-style'),
+    pageStyleButtons: () => Array.from(document.querySelectorAll('[data-page-style]')),
     title: () => document.getElementById('title'),
     titleFontSize: () => document.getElementById('title-font-size'),
     titleFontSizeValue: () => document.getElementById('title-font-size-value'),
+    printerTitleTopPadding: () => document.getElementById('printer-title-top-padding'),
+    printerTitleTopPaddingValue: () => document.getElementById('printer-title-top-padding-value'),
     heroImage: () => document.getElementById('hero-image'),
     imageUploadArea: () => document.getElementById('image-upload-area'),
     imagePreviewThumb: () => document.getElementById('image-preview-thumb'),
@@ -314,6 +338,8 @@ const elements = {
     addInstructionSection: () => document.getElementById('add-instruction-section'),
     notesList: () => document.getElementById('notes-list'),
     addNote: () => document.getElementById('add-note'),
+    pageBottomMargin: () => document.getElementById('page-bottom-margin'),
+    pageBottomMarginValue: () => document.getElementById('page-bottom-margin-value'),
 
     // Buttons
     btnFillAll: () => document.getElementById('btn-fill-all'),
@@ -347,6 +373,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadIconsDatabase();
     populatePortionVariationIconOptions();
     initializeCollapsibleSections();
+    initializeSectionSettings();
     initializeMaterialsSelector();
     initializePreviewPanning();
     initializeFormListeners();
@@ -394,6 +421,78 @@ function initializeCollapsibleSections() {
         });
 
         section.dataset.accordionInitialized = 'true';
+    });
+}
+
+function getSectionVisibilitySettings() {
+    const defaults = Object.fromEntries(SECTION_VISIBILITY_DEFAULTS.map((section) => [section.key, section.visible]));
+
+    try {
+        const saved = JSON.parse(localStorage.getItem(SECTION_SETTINGS_STORAGE_KEY) || '{}');
+        return { ...defaults, ...saved };
+    } catch (error) {
+        return defaults;
+    }
+}
+
+function saveSectionVisibilitySettings(settings) {
+    localStorage.setItem(SECTION_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function applySectionVisibilitySettings(settings = getSectionVisibilitySettings()) {
+    SECTION_VISIBILITY_DEFAULTS.forEach((sectionConfig) => {
+        const section = document.querySelector(`[data-section-key="${sectionConfig.key}"]`);
+        if (!section) return;
+
+        section.hidden = settings[sectionConfig.key] === false;
+    });
+}
+
+function renderSectionSettingsList(settings = getSectionVisibilitySettings()) {
+    const list = elements.sectionSettingsList();
+    if (!list) return;
+
+    list.innerHTML = SECTION_VISIBILITY_DEFAULTS.map((sectionConfig) => `
+        <label class="form-toggle section-settings-toggle">
+            <input type="checkbox" data-section-setting="${sectionConfig.key}" ${settings[sectionConfig.key] !== false ? 'checked' : ''}>
+            <span>${escapeHtml(sectionConfig.label)}</span>
+        </label>
+    `).join('');
+
+    list.querySelectorAll('[data-section-setting]').forEach((input) => {
+        input.addEventListener('change', () => {
+            const updatedSettings = getSectionVisibilitySettings();
+            updatedSettings[input.dataset.sectionSetting] = input.checked;
+            saveSectionVisibilitySettings(updatedSettings);
+            applySectionVisibilitySettings(updatedSettings);
+        });
+    });
+}
+
+function initializeSectionSettings() {
+    const button = elements.btnSectionSettings();
+    const panel = elements.sectionSettingsPanel();
+    if (!button || !panel) return;
+
+    const settings = getSectionVisibilitySettings();
+    renderSectionSettingsList(settings);
+    applySectionVisibilitySettings(settings);
+
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const isOpen = panel.hidden;
+        panel.hidden = !isOpen;
+        button.setAttribute('aria-expanded', String(isOpen));
+    });
+
+    panel.addEventListener('click', (event) => {
+        event.stopPropagation();
+    });
+
+    document.addEventListener('click', () => {
+        if (panel.hidden) return;
+        panel.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
     });
 }
 
@@ -470,6 +569,28 @@ function initializePreviewPanning() {
             event.preventDefault();
         }
     });
+
+    container.addEventListener('wheel', (event) => {
+        if (event.ctrlKey || event.metaKey) {
+            return;
+        }
+
+        event.preventDefault();
+        container.focus({ preventScroll: true });
+
+        const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+            ? 16
+            : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+                ? container.clientHeight
+                : 1;
+        const deltaX = event.shiftKey && Math.abs(event.deltaX) < Math.abs(event.deltaY)
+            ? event.deltaY
+            : event.deltaX;
+
+        previewPanX -= deltaX * unit;
+        previewPanY -= event.deltaY * unit;
+        applyPreviewPan();
+    }, { passive: false });
 
     window.addEventListener('keydown', (event) => {
         if (event.code !== 'Space' || event.repeat || !canUseSpacePan()) return;
@@ -720,6 +841,35 @@ function updateSelectedMaterialsPreview() {
     }
 }
 
+function updatePageStyleButtons(style = elements.pageStyle()?.value || 'standard') {
+    elements.pageStyleButtons().forEach((button) => {
+        const isActive = button.dataset.pageStyle === style;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', String(isActive));
+    });
+}
+
+function applyPageStyleSelection(style = 'standard') {
+    if (elements.pageStyle()) {
+        elements.pageStyle().value = style;
+    }
+
+    updatePageStyleButtons(style);
+
+    if (style === 'printer-friendly') {
+        const printerHeroHeight = getPrinterFriendlyHeroHeight({
+            printerTitleTopPadding: elements.printerTitleTopPadding()?.value
+        });
+        elements.heroHeight().value = String(printerHeroHeight);
+        elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
+        elements.showCornerLogo().checked = false;
+    } else {
+        elements.heroHeight().value = '309';
+        elements.heroHeightValue().textContent = '309px';
+        elements.showCornerLogo().checked = true;
+    }
+}
+
 /**
  * Initialize form input listeners for live preview
  */
@@ -735,20 +885,16 @@ function initializeFormListeners() {
 
     elements.dayHighlights()?.addEventListener('input', debounce(updateRecipeFromForm, 150));
     elements.dayTips()?.addEventListener('input', debounce(updateRecipeFromForm, 150));
-    elements.pageType()?.addEventListener('change', () => {
-        updatePageTypeVisibility(elements.pageType().value);
-        updateRecipeFromForm();
+    elements.pageType().value = 'recipe';
+    updatePageTypeVisibility('recipe');
+    elements.pageStyleButtons().forEach((button) => {
+        button.addEventListener('click', () => {
+            applyPageStyleSelection(button.dataset.pageStyle || 'standard');
+            updateRecipeFromForm();
+        });
     });
     elements.pageStyle()?.addEventListener('change', () => {
-        if (elements.pageStyle().value === 'printer-friendly') {
-            elements.heroHeight().value = '120';
-            elements.heroHeightValue().textContent = '120px';
-            elements.showCornerLogo().checked = false;
-        } else {
-            elements.heroHeight().value = '309';
-            elements.heroHeightValue().textContent = '309px';
-            elements.showCornerLogo().checked = true;
-        }
+        applyPageStyleSelection(elements.pageStyle().value || 'standard');
         updateRecipeFromForm();
     });
 
@@ -758,6 +904,12 @@ function initializeFormListeners() {
     elements.showDirectionsContinuedHeader()?.addEventListener('change', updateRecipeFromForm);
     elements.showMacroBar()?.addEventListener('change', updateRecipeFromForm);
     elements.showDescription()?.addEventListener('change', updateRecipeFromForm);
+    elements.pageBottomMargin()?.addEventListener('input', () => {
+        const value = getPageBottomMargin({ pageBottomMargin: elements.pageBottomMargin().value });
+        updatePageBottomMarginDisplay(value);
+        showBottomMarginGuide();
+        updateRecipeFromForm();
+    });
 
     // Image upload
     elements.imageUploadArea()?.addEventListener('click', () => {
@@ -782,6 +934,17 @@ function initializeFormListeners() {
     elements.titleFontSize()?.addEventListener('input', () => {
         const value = elements.titleFontSize().value;
         elements.titleFontSizeValue().textContent = `${value}px`;
+        updateRecipeFromForm();
+    });
+
+    elements.printerTitleTopPadding()?.addEventListener('input', () => {
+        const value = getPrinterTitleTopPadding({ printerTitleTopPadding: elements.printerTitleTopPadding().value });
+        updatePrinterTitleTopPaddingDisplay(value);
+        if (elements.pageStyle()?.value === 'printer-friendly') {
+            const printerHeroHeight = getPrinterFriendlyHeroHeight({ printerTitleTopPadding: value });
+            elements.heroHeight().value = String(printerHeroHeight);
+            elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
+        }
         updateRecipeFromForm();
     });
 
@@ -886,12 +1049,20 @@ function initializeButtonListeners() {
  */
 function loadRecipeToForm(recipe) {
     recipe = normalizeRecipe(recipe);
-    elements.pageType().value = recipe.pageType || 'recipe';
-    elements.pageStyle().value = recipe.pageStyle || 'standard';
+    elements.pageType().value = 'recipe';
+    if (elements.pageStyle()) {
+        elements.pageStyle().value = recipe.pageStyle || 'standard';
+    }
+    updatePageStyleButtons(recipe.pageStyle || 'standard');
     elements.title().value = recipe.title || '';
     const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || 40;
     elements.titleFontSize().value = titleFontSize;
     elements.titleFontSizeValue().textContent = `${titleFontSize}px`;
+    const printerTitleTopPadding = getPrinterTitleTopPadding(recipe);
+    if (elements.printerTitleTopPadding()) {
+        elements.printerTitleTopPadding().value = printerTitleTopPadding;
+    }
+    updatePrinterTitleTopPaddingDisplay(printerTitleTopPadding);
     elements.showDescription().checked = recipe.showDescription !== false;
     elements.description().value = recipe.description || '';
     elements.pageNumber().value = recipe.pageNumber || '';
@@ -909,6 +1080,11 @@ function loadRecipeToForm(recipe) {
     if (elements.showDirectionsContinuedHeader()) {
         elements.showDirectionsContinuedHeader().checked = recipe.showDirectionsContinuedHeader !== false;
     }
+    const pageBottomMargin = getPageBottomMargin(recipe);
+    if (elements.pageBottomMargin()) {
+        elements.pageBottomMargin().value = pageBottomMargin;
+    }
+    updatePageBottomMarginDisplay(pageBottomMargin);
     elements.materialsLayout().value = recipe.materialsLayout || 'column';
     elements.dayHighlightsTitle().value = recipe.dayHighlightsTitle || 'Nutrition Highlights';
     elements.dayTipsTitle().value = recipe.dayTipsTitle || 'Tips for Success';
@@ -917,10 +1093,10 @@ function loadRecipeToForm(recipe) {
     elements.dayTotalsTitle().value = recipe.dayTotalsTitle || 'Daily Totals';
     elements.dayHighlights().value = (recipe.dayHighlights || []).join('\n');
     elements.dayTips().value = (recipe.dayTips || []).join('\n');
-    const heroHeightValue = isPrinterFriendly(recipe) ? 120 : (recipe.heroHeight || 309);
+    const heroHeightValue = isPrinterFriendly(recipe) ? getPrinterFriendlyHeroHeight(recipe) : (recipe.heroHeight || 309);
     elements.heroHeight().value = heroHeightValue;
     elements.heroHeightValue().textContent = `${heroHeightValue}px`;
-    updatePageTypeVisibility(recipe.pageType || 'recipe');
+    updatePageTypeVisibility('recipe');
 
     // Load image if present
     if (recipe.image) {
@@ -1010,12 +1186,15 @@ function updateRecipeFromForm() {
     const primaryIngredientSection = ingredientSections[0] || { label: 'Ingredients for 1 Serving', ingredients: [] };
 
     currentRecipe = {
-        pageType: elements.pageType()?.value || 'recipe',
+        pageType: 'recipe',
         pageStyle: elements.pageStyle()?.value || 'standard',
         title: elements.title()?.value || '',
         titleFontSize: parseInt(elements.titleFontSize()?.value, 10) || 40,
+        printerTitleTopPadding: getPrinterTitleTopPadding({ printerTitleTopPadding: elements.printerTitleTopPadding()?.value }),
         image: elements.imagePreviewThumb()?.src || '',
-        heroHeight: elements.pageStyle()?.value === 'printer-friendly' ? 120 : (parseInt(elements.heroHeight()?.value, 10) || 309),
+        heroHeight: elements.pageStyle()?.value === 'printer-friendly'
+            ? getPrinterFriendlyHeroHeight({ printerTitleTopPadding: elements.printerTitleTopPadding()?.value })
+            : (parseInt(elements.heroHeight()?.value, 10) || 309),
         imageSettings: {
             scale: parseInt(elements.imageScale()?.value) || 100,
             posX: parseInt(elements.imagePosX()?.value) || 50,
@@ -1054,6 +1233,7 @@ function updateRecipeFromForm() {
         instructionSections,
         instructions: instructionSections[0]?.steps || getInstructionsFromForm(),
         notes: getNotesFromForm(),
+        pageBottomMargin: getPageBottomMargin({ pageBottomMargin: elements.pageBottomMargin()?.value }),
         pageNumber: elements.pageNumber()?.value || ''
     };
 
@@ -1085,6 +1265,49 @@ function parseNumericValue(value) {
     const normalized = String(value || '').replace(/,/g, '').trim();
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getPageBottomMargin(recipe = currentRecipe) {
+    const parsed = Number.parseInt(recipe?.pageBottomMargin, 10);
+    if (!Number.isFinite(parsed)) {
+        return 0;
+    }
+    return Math.max(0, Math.min(200, parsed));
+}
+
+function getPrinterTitleTopPadding(recipe = currentRecipe) {
+    const parsed = Number.parseInt(recipe?.printerTitleTopPadding, 10);
+    if (!Number.isFinite(parsed)) {
+        return 70;
+    }
+    return Math.max(0, Math.min(120, parsed));
+}
+
+function updatePrinterTitleTopPaddingDisplay(value = getPrinterTitleTopPadding()) {
+    if (elements.printerTitleTopPaddingValue()) {
+        elements.printerTitleTopPaddingValue().textContent = `${value}px`;
+    }
+}
+
+function getPrinterFriendlyHeroHeight(recipe = currentRecipe) {
+    return 100 + getPrinterTitleTopPadding(recipe);
+}
+
+function updatePageBottomMarginDisplay(value = getPageBottomMargin()) {
+    if (elements.pageBottomMarginValue()) {
+        elements.pageBottomMarginValue().textContent = `${value}px`;
+    }
+}
+
+function showBottomMarginGuide() {
+    isBottomMarginGuideVisible = true;
+    elements.recipePage()?.classList.add('show-bottom-margin-guide');
+
+    window.clearTimeout(bottomMarginGuideTimer);
+    bottomMarginGuideTimer = window.setTimeout(() => {
+        isBottomMarginGuideVisible = false;
+        elements.recipePage()?.classList.remove('show-bottom-margin-guide');
+    }, 1400);
 }
 
 function updatePageTypeVisibility(pageType = 'recipe') {
@@ -2018,7 +2241,7 @@ function handleImageUpload(event) {
 function renderRecipePage() {
     const page = elements.recipePage();
     const recipe = currentRecipe;
-    page.className = 'recipe-page-stack';
+    page.className = `recipe-page-stack${isBottomMarginGuideVisible ? ' show-bottom-margin-guide' : ''}`;
 
     if ((recipe.pageType || 'recipe') === 'day-of-eating') {
         renderDayOfEatingPage(page, recipe);
@@ -2076,8 +2299,9 @@ function renderRecipePage() {
         </div>
     `).join('');
 
-    const heroHeight = isPrinterFriendly(recipe) ? 120 : (Number.parseInt(recipe.heroHeight, 10) || 309);
+    const heroHeight = isPrinterFriendly(recipe) ? getPrinterFriendlyHeroHeight(recipe) : (Number.parseInt(recipe.heroHeight, 10) || 309);
     const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || 40;
+    const printerTitleTopPadding = getPrinterTitleTopPadding(recipe);
     const heroImageHtml = createHeroImageMarkup(recipe);
 
     const macroValues = [
@@ -2106,7 +2330,7 @@ function renderRecipePage() {
             <div class="hero-section" style="height: ${heroHeight}px;">
                 ${heroImageHtml}
                 <div class="hero-overlay"></div>
-                <h1 class="recipe-title" style="font-size: ${titleFontSize}px;">${escapeHtml(recipe.title || 'Recipe Title')}</h1>
+                <h1 class="recipe-title" style="font-size: ${titleFontSize}px; --printer-title-top-padding: ${printerTitleTopPadding}px;">${escapeHtml(recipe.title || 'Recipe Title')}</h1>
             </div>
 
             <!-- Macro Bar -->
@@ -2136,6 +2360,7 @@ function renderRecipePage() {
             </div>
 
             <!-- Page Footer -->
+            <div class="page-bottom-margin-guide" aria-hidden="true"></div>
             <div class="page-footer">
                 <span class="page-number">${escapeHtml(recipe.pageNumber || '')}</span>
             </div>
@@ -2150,8 +2375,9 @@ function renderRecipePage() {
 }
 
 function renderDayOfEatingPage(page, recipe) {
-    const heroHeight = isPrinterFriendly(recipe) ? 120 : (Number.parseInt(recipe.heroHeight, 10) || 309);
+    const heroHeight = isPrinterFriendly(recipe) ? getPrinterFriendlyHeroHeight(recipe) : (Number.parseInt(recipe.heroHeight, 10) || 309);
     const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || 40;
+    const printerTitleTopPadding = getPrinterTitleTopPadding(recipe);
     const heroImageHtml = createHeroImageMarkup(recipe);
     const macroBarHtml = createMacroBarMarkup(recipe.macros);
     const hasMacroData = hasAnyMacroData(recipe.macros);
@@ -2200,7 +2426,7 @@ function renderDayOfEatingPage(page, recipe) {
             <div class="hero-section" style="height: ${heroHeight}px;">
                 ${heroImageHtml}
                 <div class="hero-overlay"></div>
-                <h1 class="recipe-title" style="font-size: ${titleFontSize}px;">${escapeHtml(recipe.title || 'Day of Eating')}</h1>
+                <h1 class="recipe-title" style="font-size: ${titleFontSize}px; --printer-title-top-padding: ${printerTitleTopPadding}px;">${escapeHtml(recipe.title || 'Day of Eating')}</h1>
             </div>
 
             ${shouldShowMacroBar ? `
@@ -2258,6 +2484,7 @@ function renderDayOfEatingPage(page, recipe) {
                 ` : ''}
             </div>
 
+            <div class="page-bottom-margin-guide" aria-hidden="true"></div>
             <div class="page-footer">
                 <span class="page-number">${escapeHtml(recipe.pageNumber || '')}</span>
             </div>
@@ -2619,7 +2846,7 @@ function createDayMealsOverflowSection(titleText = '', options = {}) {
 function createContinuationPage(pageNumberText = '') {
     const pageNumberMarkup = pageNumberText ? `<span class="page-number">${escapeHtml(pageNumberText)}</span>` : '';
     const printerFriendly = isPrinterFriendly(currentRecipe);
-    const heroHeight = printerFriendly ? 120 : (Number.parseInt(currentRecipe.heroHeight, 10) || 309);
+    const heroHeight = printerFriendly ? getPrinterFriendlyHeroHeight(currentRecipe) : (Number.parseInt(currentRecipe.heroHeight, 10) || 309);
     const heroImageHtml = createHeroImageMarkup(currentRecipe);
 
     return `
@@ -2634,6 +2861,7 @@ function createContinuationPage(pageNumberText = '') {
                     <div class="flow-column" data-flow-slot="continuation-right"></div>
                 </div>
             </div>
+            <div class="page-bottom-margin-guide" aria-hidden="true"></div>
             <div class="page-footer">
                 ${pageNumberMarkup}
             </div>
@@ -2668,6 +2896,26 @@ function canFitNodeGroup(slot, maxHeight, nodes) {
     return fits;
 }
 
+function getPageContentCutoffTop(page, fallbackFooter, bottomMargin = getPageBottomMargin()) {
+    const footerTop = fallbackFooter?.offsetTop ?? page?.offsetHeight ?? 0;
+    return Math.max(0, footerTop - bottomMargin);
+}
+
+function getFlowSlotHeight(page, grid, fallbackFooter, bottomMargin = getPageBottomMargin()) {
+    const cutoffTop = getPageContentCutoffTop(page, fallbackFooter, bottomMargin);
+    return Math.max(0, cutoffTop - (grid?.offsetTop || 0));
+}
+
+function updateBottomMarginGuidePosition(page, fallbackFooter, bottomMargin = getPageBottomMargin()) {
+    if (!page) {
+        return;
+    }
+
+    const cutoffTop = getPageContentCutoffTop(page, fallbackFooter, bottomMargin);
+    const guideBottom = Math.max(0, (page.offsetHeight || 0) - cutoffTop);
+    page.style.setProperty('--page-bottom-margin-guide-bottom', `${guideBottom}px`);
+}
+
 function paginateRecipeFlow(noteHtml = '') {
     const pageStack = elements.recipePage();
     const primaryPage = pageStack?.querySelector('.page-primary');
@@ -2685,7 +2933,10 @@ function paginateRecipeFlow(noteHtml = '') {
     slot2.innerHTML = '';
     continuationPages.innerHTML = '';
 
-    const primarySlotHeight = Math.max(0, footer.offsetTop - primaryGrid.offsetTop);
+    const pageBottomMargin = getPageBottomMargin();
+    updateBottomMarginGuidePosition(primaryPage, footer, pageBottomMargin);
+
+    const primarySlotHeight = getFlowSlotHeight(primaryPage, primaryGrid, footer, pageBottomMargin);
 
     slot1.style.maxHeight = `${primarySlotHeight}px`;
     slot2.style.maxHeight = `${primarySlotHeight}px`;
@@ -2714,7 +2965,8 @@ function paginateRecipeFlow(noteHtml = '') {
         }
 
         const continuationGrid = continuationPage.querySelector('.page-flow-grid');
-        const continuationHeight = Math.max(0, continuationFooter.offsetTop - continuationGrid.offsetTop);
+        updateBottomMarginGuidePosition(continuationPage, continuationFooter, pageBottomMargin);
+        const continuationHeight = getFlowSlotHeight(continuationPage, continuationGrid, continuationFooter, pageBottomMargin);
 
         continuationLeftSlot.style.maxHeight = `${continuationHeight}px`;
         continuationRightSlot.style.maxHeight = `${continuationHeight}px`;
@@ -2906,10 +3158,10 @@ function paginateDayPlanFlow() {
     rightColumn.querySelectorAll('.day-meals-overflow-section').forEach((section) => section.remove());
     grid.classList.remove('day-plan-grid--meal-overflow');
 
-    const primaryMaxHeight = Math.max(
-        0,
-        ((totalsSection?.offsetTop ?? footer.offsetTop) - grid.offsetTop)
-    );
+    const pageBottomMargin = getPageBottomMargin();
+    const primaryFallback = totalsSection || footer;
+    updateBottomMarginGuidePosition(primaryPage, primaryFallback, pageBottomMargin);
+    const primaryMaxHeight = getFlowSlotHeight(primaryPage, grid, primaryFallback, pageBottomMargin);
 
     leftColumn.style.maxHeight = `${primaryMaxHeight}px`;
     rightColumn.style.maxHeight = `${primaryMaxHeight}px`;
@@ -2951,7 +3203,8 @@ function paginateDayPlanFlow() {
             return;
         }
 
-        const continuationMaxHeight = Math.max(0, continuationFooter.offsetTop - continuationGrid.offsetTop);
+        updateBottomMarginGuidePosition(continuationPage, continuationFooter, pageBottomMargin);
+        const continuationMaxHeight = getFlowSlotHeight(continuationPage, continuationGrid, continuationFooter, pageBottomMargin);
         continuationLeftSlot.style.maxHeight = `${continuationMaxHeight}px`;
         continuationRightSlot.style.maxHeight = `${continuationMaxHeight}px`;
 
@@ -3094,6 +3347,7 @@ async function handleExportJpg() {
             clone.style.position = 'relative';
             clone.style.margin = '0';
             clone.style.boxShadow = 'none';
+            clone.querySelectorAll('.page-bottom-margin-guide').forEach((guide) => guide.remove());
 
             // Fix hero image for export. html2canvas is unreliable with object-fit on img tags.
             const heroImage = clone.querySelector('.hero-image, .hero-image-layer');
@@ -4297,6 +4551,7 @@ function handlePrint() {
     // Clone the recipe page for printing
     const printPage = elements.printPage();
     printPage.innerHTML = elements.recipePage().innerHTML;
+    printPage.querySelectorAll('.page-bottom-margin-guide').forEach((guide) => guide.remove());
 
     const previousTitle = document.title;
     document.title = getExportTitle();

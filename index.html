@@ -16,13 +16,22 @@
         <!-- ===================== -->
         <aside class="editor-panel">
             <div class="editor-header">
-                <h1>TVG Recipe Page Generator</h1>
+                <div class="editor-header-main">
+                    <h1>TVG Recipe Page Generator</h1>
+                    <button type="button" id="btn-section-settings" class="btn-section-settings" aria-label="Section settings" aria-expanded="false">
+                        <span aria-hidden="true">⚙</span>
+                    </button>
+                    <div id="section-settings-panel" class="section-settings-panel" hidden>
+                        <div class="section-settings-title">Settings</div>
+                        <div id="section-settings-list" class="section-settings-list"></div>
+                    </div>
+                </div>
                 <p>Enter recipe details to generate a formatted page</p>
             </div>
 
             <form id="recipe-form" class="recipe-form">
                 <!-- Master Paste Section -->
-                <section class="form-section master-paste-section">
+                <section class="form-section master-paste-section" data-section-key="masterPaste">
                     <h2>Master Paste</h2>
                     <div class="form-group">
                         <label for="master-paste">Paste Recipe Data</label>
@@ -31,30 +40,23 @@
                     <div class="master-paste-actions">
                         <button type="button" id="btn-fill-all" class="btn-primary">Fill All</button>
                         <button type="button" id="btn-copy-ai-instructions" class="btn-secondary">Copy AI Instructions</button>
-                        <button type="button" id="btn-copy-ai-info-instructions" class="btn-secondary">Copy Info AI Prompt</button>
-                        <button type="button" id="btn-copy-ai-day-instructions" class="btn-secondary">Copy Day AI Prompt</button>
                     </div>
                     <div id="master-paste-status" class="master-paste-status"></div>
                 </section>
 
                 <!-- Basic Info Section -->
-                <section class="form-section">
+                <section class="form-section" data-section-key="basicInformation">
                     <h2>Basic Information</h2>
 
-                    <div class="form-group">
-                        <label for="page-type">Page Type</label>
-                        <select id="page-type" name="pageType">
-                            <option value="recipe">Recipe</option>
-                            <option value="day-of-eating">Day of Eating</option>
-                        </select>
-                    </div>
+                    <input type="hidden" id="page-type" name="pageType" value="recipe">
 
                     <div class="form-group">
-                        <label for="page-style">Style</label>
-                        <select id="page-style" name="pageStyle">
-                            <option value="standard">Standard</option>
-                            <option value="printer-friendly">Printer Friendly</option>
-                        </select>
+                        <label>Style</label>
+                        <input type="hidden" id="page-style" name="pageStyle" value="standard">
+                        <div class="segmented-control" role="group" aria-label="Style">
+                            <button type="button" class="segmented-control-button is-active" data-page-style="standard">Standard</button>
+                            <button type="button" class="segmented-control-button" data-page-style="printer-friendly">Printer Friendly</button>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -66,6 +68,12 @@
                         <label for="title-font-size">Title Font Size</label>
                         <input type="range" id="title-font-size" min="24" max="64" value="40">
                         <span id="title-font-size-value">40px</span>
+                    </div>
+
+                    <div class="image-control-row">
+                        <label for="printer-title-top-padding">Printer Title Top Padding</label>
+                        <input type="range" id="printer-title-top-padding" min="0" max="120" step="1" value="70">
+                        <span id="printer-title-top-padding-value">70px</span>
                     </div>
 
                     <div class="form-group">
@@ -111,7 +119,7 @@
                 </section>
 
                 <!-- Macros Section -->
-                <section class="form-section">
+                <section class="form-section" data-section-key="nutritionInformation">
                     <h2>Nutrition Information</h2>
                     <label class="form-toggle">
                         <input type="checkbox" id="show-macro-bar" name="showMacroBar" checked>
@@ -138,7 +146,7 @@
                 </section>
 
                 <!-- Description Section -->
-                <section class="form-section">
+                <section class="form-section" data-section-key="description">
                     <h2>Description</h2>
                     <label class="form-toggle">
                         <input type="checkbox" id="show-description" name="showDescription" checked>
@@ -150,7 +158,7 @@
                     </div>
                 </section>
 
-                <section class="form-section day-plan-only">
+                <section class="form-section day-plan-only" data-section-key="meals">
                     <h2>Meals</h2>
                     <div class="form-group">
                         <label for="day-meals-paste">Meal Card Paste</label>
@@ -165,7 +173,7 @@
                     <button type="button" id="add-day-meal" class="btn-add">+ Add Meal</button>
                 </section>
 
-                <section class="form-section day-plan-only">
+                <section class="form-section day-plan-only" data-section-key="dayHighlights">
                     <h2>Day Highlights</h2>
                     <div class="form-group">
                         <label for="day-highlights-title">Nutrition Highlights Title</label>
@@ -197,7 +205,7 @@
                     </div>
                 </section>
 
-                <section class="form-section recipe-only">
+                <section class="form-section recipe-only" data-section-key="portionVariations">
                     <h2>Portion Variations (Optional)</h2>
                     <div id="portion-variation-sections" class="portion-variation-sections">
                         <!-- Portion variation set editors will be added dynamically -->
@@ -206,7 +214,7 @@
                 </section>
 
                 <!-- Materials Section -->
-                <section class="form-section recipe-only">
+                <section class="form-section recipe-only" data-section-key="materialsEquipment">
                     <h2>Materials/Equipment</h2>
                     <div class="form-group">
                         <label for="materials-layout">Materials Layout</label>
@@ -225,7 +233,7 @@
                 </section>
 
                 <!-- Ingredients Section -->
-                <section class="form-section recipe-only">
+                <section class="form-section recipe-only" data-section-key="ingredients">
                     <h2>Ingredients</h2>
                     <div class="form-group">
                         <label for="servings-label">Servings Label</label>
@@ -238,7 +246,7 @@
                 </section>
 
                 <!-- Instructions Section -->
-                <section class="form-section recipe-only">
+                <section class="form-section recipe-only" data-section-key="instructions">
                     <h2>Instructions</h2>
                     <div class="form-group">
                         <label for="instructions-label">Instructions Label</label>
@@ -256,11 +264,22 @@
                 </section>
 
                 <!-- Notes Section -->
-                <section class="form-section">
+                <section class="form-section" data-section-key="notes">
                     <h2>Notes/Callouts (Optional)</h2>
                     <p class="form-hint">Add text before a colon to make it bold (e.g., "Note:" or "Prep Tip:")</p>
                     <div id="notes-list"></div>
                     <button type="button" id="add-note" class="btn-add">+ Add Note</button>
+                </section>
+
+                <!-- Page Layout Section -->
+                <section class="form-section" data-section-key="pageLayout">
+                    <h2>Page Layout</h2>
+                    <div class="image-control-row">
+                        <label for="page-bottom-margin">Bottom Margin</label>
+                        <input type="range" id="page-bottom-margin" min="0" max="200" step="5" value="0">
+                        <span id="page-bottom-margin-value">0px</span>
+                    </div>
+                    <p class="form-hint">Adds extra bottom clearance before content flows to the next column or page.</p>
                 </section>
 
                 <!-- Action Buttons -->
