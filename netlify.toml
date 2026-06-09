@@ -1,0 +1,7 @@
+[functions]
+included_files = ["equipment/*.svg"]
+
+[[redirects]]
+from = "/api/icons"
+to = "/.netlify/functions/icons"
+status = 200

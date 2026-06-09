@@ -31,8 +31,48 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    if (req.method === 'GET' && req.url.split('?')[0] === '/api/icons') {
+        handleIconsList(req, res);
+        return;
+    }
+
     serveStaticFile(req, res);
 });
+
+function handleIconsList(req, res) {
+    const iconsDir = path.join(__dirname, 'equipment');
+
+    fs.readdir(iconsDir, { withFileTypes: true }, (err, entries) => {
+        if (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unable to read equipment folder' }));
+            return;
+        }
+
+        const icons = entries
+            .filter((entry) => entry.isFile() && path.extname(entry.name).toLowerCase() === '.svg')
+            .map((entry) => {
+                const baseName = path.basename(entry.name, '.svg');
+                return {
+                    id: slugify(baseName),
+                    name: titleizeIconName(baseName),
+                    path: `/equipment/${encodeURIComponent(entry.name)}`
+                };
+            })
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ icons }));
+    });
+}
+
+function titleizeIconName(value) {
+    return String(value || '')
+        .replace(/[-_]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 function serveStaticFile(req, res) {
     const requestPath = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);

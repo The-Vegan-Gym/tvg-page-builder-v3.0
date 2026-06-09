@@ -27,15 +27,6 @@ const FALLBACK_EQUIPMENT_SVG = `<svg width="48" height="48" viewBox="0 0 48 48" 
 <path d="M24 16V32" stroke="black" stroke-width="2" stroke-linecap="round"/>
 </svg>`;
 
-const WHISK_EQUIPMENT_SVG = `<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M33.5 9.5C35.1569 7.84315 37.8431 7.84315 39.5 9.5C41.1569 11.1569 41.1569 13.8431 39.5 15.5L30 25" stroke="black" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M18 30L30 18" stroke="black" stroke-width="2.2" stroke-linecap="round"/>
-<path d="M15.5 17.5C17.9 19.4 20.1 21.6 22 24" stroke="black" stroke-width="2.2" stroke-linecap="round"/>
-<path d="M12 21C14.8 22.8 17.2 25.2 19 28" stroke="black" stroke-width="2.2" stroke-linecap="round"/>
-<path d="M10 25C12.5 26.4 14.6 28.5 16 31" stroke="black" stroke-width="2.2" stroke-linecap="round"/>
-<path d="M18 30L22 34C23.8 35.8 23.8 38.7 22 40.5C20.2 42.3 17.3 42.3 15.5 40.5L7.5 32.5C5.7 30.7 5.7 27.8 7.5 26C9.3 24.2 12.2 24.2 14 26L18 30Z" stroke="black" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
-
 const DEFAULT_PORTION_VARIATION_SVG = `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M7 16.5C7 22.5751 11.9249 27.5 18 27.5H23.5C27.6421 27.5 31 24.1421 31 20V16.5H7Z" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M7.5 16.5C5.567 16.5 4 14.933 4 13C4 11.067 5.567 9.5 7.5 9.5H20.5C21.8807 9.5 23.1818 10.1348 24.0271 11.2204L25.5 13.1111L29 14" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -722,39 +713,120 @@ function initializePreviewPanning() {
 }
 
 /**
- * Load icons from the JSON database
+ * Load icons from the equipment folder, falling back to the legacy JSON database
  */
 async function loadIconsDatabase() {
+    try {
+        AVAILABLE_MATERIALS = await loadIconsFromFolder();
+        console.log(`Loaded ${AVAILABLE_MATERIALS.length} equipment icons from equipment folder`);
+    } catch (error) {
+        console.warn('Unable to load equipment folder through /api/icons. Trying static icon manifest.', error);
+        try {
+            AVAILABLE_MATERIALS = await loadIconsFromManifest();
+            console.log(`Loaded ${AVAILABLE_MATERIALS.length} equipment icons from equipment manifest`);
+        } catch (manifestError) {
+            console.warn('Unable to load equipment manifest. Falling back to icons-database.json.', manifestError);
+            AVAILABLE_MATERIALS = await loadIconsFromDatabase();
+        }
+    }
+
+    const customIcons = await loadCustomPortionVariationIcons();
+    AVAILABLE_PORTION_VARIATION_ICONS = dedupeIconsById([
+        ...customIcons,
+        ...AVAILABLE_MATERIALS
+    ]);
+}
+
+async function loadIconsFromFolder() {
+    const response = await fetch('/api/icons');
+    if (!response.ok) {
+        throw new Error('Unable to list equipment folder');
+    }
+
+    const data = await response.json();
+    const icons = Array.isArray(data.icons) ? data.icons : [];
+
+    return loadIconSvgEntries(icons);
+}
+
+async function loadIconsFromManifest() {
+    const response = await fetch('equipment/icons-manifest.json');
+    if (!response.ok) {
+        throw new Error('Unable to load equipment manifest');
+    }
+
+    const data = await response.json();
+    const icons = Array.isArray(data.icons) ? data.icons : [];
+
+    return loadIconSvgEntries(icons);
+}
+
+async function loadIconSvgEntries(icons) {
+    if (icons.length === 0) {
+        throw new Error('Icon list did not return any SVG files');
+    }
+
+    const loadedIcons = await Promise.all(icons.map(async (icon) => {
+        try {
+            const iconResponse = await fetch(icon.path);
+            if (!iconResponse.ok) {
+                throw new Error(`Unable to load ${icon.path}`);
+            }
+
+            const svg = await iconResponse.text();
+            return {
+                id: icon.id || slugify(icon.name),
+                name: icon.name || titleizeFileName(icon.path),
+                svg: getSafeEquipmentSvg({ name: icon.name, svg: sanitizeInlineSvg(svg) })
+            };
+        } catch (error) {
+            console.warn(`Unable to load equipment icon "${icon.name || icon.path}".`, error);
+            return null;
+        }
+    }));
+
+    return loadedIcons.filter(Boolean);
+}
+
+async function loadIconsFromDatabase() {
     try {
         const response = await fetch('icons-database.json');
         const data = await response.json();
 
-        // Convert equipment array to AVAILABLE_MATERIALS format
-        AVAILABLE_MATERIALS = data.equipment.map(item => ({
+        return data.equipment.map(item => ({
             id: slugify(item.name),
             name: item.name,
             svg: getSafeEquipmentSvg(item)
         }));
-
-        console.log(`Loaded ${AVAILABLE_MATERIALS.length} equipment icons`);
     } catch (error) {
         console.error('Error loading icons database:', error);
-        // Fallback to empty array if loading fails
-        AVAILABLE_MATERIALS = [];
+        return [];
     }
+}
 
-    const customIcons = await loadCustomPortionVariationIcons();
-    AVAILABLE_PORTION_VARIATION_ICONS = [
-        ...customIcons,
-        ...AVAILABLE_MATERIALS
-    ];
+function dedupeIconsById(icons) {
+    const seen = new Set();
+    return icons.filter((icon) => {
+        if (!icon?.id || seen.has(icon.id)) {
+            return false;
+        }
+
+        seen.add(icon.id);
+        return true;
+    });
+}
+
+function titleizeFileName(value) {
+    const fileName = String(value || '').split('/').pop() || '';
+    return fileName
+        .replace(/\.svg$/i, '')
+        .replace(/[-_]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function getSafeEquipmentSvg(item) {
-    if (normalizeMaterialName(item?.name) === 'whisk') {
-        return WHISK_EQUIPMENT_SVG;
-    }
-
     const svg = item?.svg || '';
 
     if (!svg.trim()) {
@@ -944,9 +1016,78 @@ function updateSelectedMaterialsPreview() {
         preview.innerHTML = materials.map(materialId => {
             const material = AVAILABLE_MATERIALS.find(m => m.id === materialId);
             if (!material) return '';
-            return `<div class="selected-material-item" title="${material.name}">${material.svg}</div>`;
+            return `
+                <div class="selected-material-item" title="${material.name}" draggable="true" data-material-id="${material.id}">
+                    ${material.svg}
+                </div>
+            `;
         }).join('');
+        initializeSelectedMaterialsDrag();
     }
+}
+
+function initializeSelectedMaterialsDrag() {
+    const preview = elements.selectedMaterialsPreview();
+    if (!preview) return;
+
+    let draggedId = '';
+
+    preview.querySelectorAll('.selected-material-item').forEach((item) => {
+        item.addEventListener('dragstart', (event) => {
+            draggedId = item.dataset.materialId || '';
+            item.classList.add('is-dragging');
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', draggedId);
+        });
+
+        item.addEventListener('dragend', () => {
+            item.classList.remove('is-dragging');
+            preview.querySelectorAll('.selected-material-item.is-drag-over').forEach((overItem) => {
+                overItem.classList.remove('is-drag-over');
+            });
+            draggedId = '';
+        });
+
+        item.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            if ((item.dataset.materialId || '') !== draggedId) {
+                item.classList.add('is-drag-over');
+            }
+        });
+
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('is-drag-over');
+        });
+
+        item.addEventListener('drop', (event) => {
+            event.preventDefault();
+            item.classList.remove('is-drag-over');
+
+            const sourceId = event.dataTransfer.getData('text/plain') || draggedId;
+            const targetId = item.dataset.materialId || '';
+            reorderSelectedMaterial(sourceId, targetId);
+        });
+    });
+}
+
+function reorderSelectedMaterial(sourceId, targetId) {
+    if (!sourceId || !targetId || sourceId === targetId) {
+        return;
+    }
+
+    const materials = [...(currentRecipe.materials || [])];
+    const sourceIndex = materials.indexOf(sourceId);
+    const targetIndex = materials.indexOf(targetId);
+
+    if (sourceIndex === -1 || targetIndex === -1) {
+        return;
+    }
+
+    const [moved] = materials.splice(sourceIndex, 1);
+    materials.splice(targetIndex, 0, moved);
+    currentRecipe.materials = materials;
+    updateSelectedMaterialsPreview();
+    renderRecipePage();
 }
 
 function updatePageStyleButtons(style = elements.pageStyle()?.value || 'standard') {

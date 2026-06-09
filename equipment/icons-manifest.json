@@ -1,0 +1,204 @@
+{
+  "icons": [
+    {
+      "id": "air-fryer",
+      "name": "Air Fryer",
+      "path": "equipment/Air-fryer.svg"
+    },
+    {
+      "id": "aluminum-foil",
+      "name": "Aluminum Foil",
+      "path": "equipment/Aluminum-foil.svg"
+    },
+    {
+      "id": "baking-pan",
+      "name": "Baking Pan",
+      "path": "equipment/Baking-pan.svg"
+    },
+    {
+      "id": "baking-sheet",
+      "name": "Baking Sheet",
+      "path": "equipment/Baking-sheet.svg"
+    },
+    {
+      "id": "blender",
+      "name": "Blender",
+      "path": "equipment/Blender.svg"
+    },
+    {
+      "id": "bowl",
+      "name": "Bowl",
+      "path": "equipment/Bowl.svg"
+    },
+    {
+      "id": "can-opener",
+      "name": "Can Opener",
+      "path": "equipment/Can-opener.svg"
+    },
+    {
+      "id": "containers",
+      "name": "Containers",
+      "path": "equipment/Containers.svg"
+    },
+    {
+      "id": "cutting-board-and-knife",
+      "name": "Cutting Board And Knife",
+      "path": "equipment/Cutting-board-and-knife.svg"
+    },
+    {
+      "id": "dry-measuring-cups",
+      "name": "Dry Measuring Cups",
+      "path": "equipment/Dry-measuring-cups.svg"
+    },
+    {
+      "id": "food-processor",
+      "name": "Food Processor",
+      "path": "equipment/Food-processor.svg"
+    },
+    {
+      "id": "food-scale",
+      "name": "Food Scale",
+      "path": "equipment/Food-scale.svg"
+    },
+    {
+      "id": "freezer-bag",
+      "name": "Freezer Bag",
+      "path": "equipment/Freezer-bag.svg"
+    },
+    {
+      "id": "grater",
+      "name": "Grater",
+      "path": "equipment/Grater.svg"
+    },
+    {
+      "id": "large-mixing-bowl",
+      "name": "Large Mixing Bowl",
+      "path": "equipment/Large-mixing-bowl.svg"
+    },
+    {
+      "id": "large-strainer",
+      "name": "Large Strainer",
+      "path": "equipment/Large-strainer.svg"
+    },
+    {
+      "id": "liquid-measuring-cup",
+      "name": "Liquid Measuring Cup",
+      "path": "equipment/Liquid-measuring-cup.svg"
+    },
+    {
+      "id": "mason-jars",
+      "name": "Mason Jars",
+      "path": "equipment/Mason-jars.svg"
+    },
+    {
+      "id": "measuring-spoons",
+      "name": "Measuring Spoons",
+      "path": "equipment/Measuring-spoons.svg"
+    },
+    {
+      "id": "milk-frother",
+      "name": "Milk Frother",
+      "path": "equipment/Milk-frother.svg"
+    },
+    {
+      "id": "muffin-sheet",
+      "name": "Muffin Sheet",
+      "path": "equipment/Muffin-sheet.svg"
+    },
+    {
+      "id": "multicooker",
+      "name": "Multicooker",
+      "path": "equipment/Multicooker.svg"
+    },
+    {
+      "id": "pan",
+      "name": "Pan",
+      "path": "equipment/Pan.svg"
+    },
+    {
+      "id": "pan-with-lid",
+      "name": "Pan With Lid",
+      "path": "equipment/Pan-with-lid.svg"
+    },
+    {
+      "id": "paper-towels",
+      "name": "Paper Towels",
+      "path": "equipment/Paper-towels.svg"
+    },
+    {
+      "id": "parchment-paper",
+      "name": "Parchment Paper",
+      "path": "equipment/Parchment-paper.svg"
+    },
+    {
+      "id": "peeler",
+      "name": "Peeler",
+      "path": "equipment/Peeler.svg"
+    },
+    {
+      "id": "pot",
+      "name": "Pot",
+      "path": "equipment/Pot.svg"
+    },
+    {
+      "id": "potato-masher",
+      "name": "Potato Masher",
+      "path": "equipment/Potato-Masher.svg"
+    },
+    {
+      "id": "scissors",
+      "name": "Scissors",
+      "path": "equipment/Scissors.svg"
+    },
+    {
+      "id": "serving-spoon",
+      "name": "Serving Spoon",
+      "path": "equipment/Serving-spoon.svg"
+    },
+    {
+      "id": "slow-cooker",
+      "name": "Slow Cooker",
+      "path": "equipment/Slow-cooker.svg"
+    },
+    {
+      "id": "small-strainer",
+      "name": "Small Strainer",
+      "path": "equipment/Small-strainer.svg"
+    },
+    {
+      "id": "spatula",
+      "name": "Spatula",
+      "path": "equipment/Spatula.svg"
+    },
+    {
+      "id": "steamer-basket",
+      "name": "Steamer Basket",
+      "path": "equipment/Steamer-basket.svg"
+    },
+    {
+      "id": "toaster",
+      "name": "Toaster",
+      "path": "equipment/Toaster.svg"
+    },
+    {
+      "id": "tongues",
+      "name": "Tongues",
+      "path": "equipment/Tongues.svg"
+    },
+    {
+      "id": "whisk",
+      "name": "Whisk",
+      "path": "equipment/Whisk.svg"
+    },
+    {
+      "id": "wok",
+      "name": "Wok",
+      "path": "equipment/Wok.svg"
+    },
+    {
+      "id": "wooden-spoon",
+      "name": "Wooden Spoon",
+      "path": "equipment/Wooden-spoon.svg"
+    }
+  ]
+}

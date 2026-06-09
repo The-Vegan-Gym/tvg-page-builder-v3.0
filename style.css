@@ -712,9 +712,11 @@ body {
     padding: var(--spacing-md);
     border: 1px solid var(--color-gray-300);
     border-radius: var(--radius-md);
-    min-height: 60px;
+    min-height: 104px;
     margin-bottom: var(--spacing-md);
     background: var(--color-gray-100);
+    align-content: flex-start;
+    align-items: flex-start;
 }
 
 .selected-materials-preview .no-materials-text {
@@ -729,19 +731,35 @@ body {
 }
 
 .selected-material-item {
-    width: 40px;
-    height: 40px;
+    width: 52px;
+    height: 52px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--color-white);
     border: 1px solid var(--color-gray-300);
     border-radius: var(--radius-sm);
+    cursor: grab;
+    transition: border-color 0.2s, background 0.2s, opacity 0.2s, transform 0.2s;
+}
+
+.selected-material-item:active {
+    cursor: grabbing;
 }
 
 .selected-material-item svg {
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
+}
+
+.selected-material-item.is-dragging {
+    opacity: 0.45;
+    transform: scale(0.96);
+}
+
+.selected-material-item.is-drag-over {
+    border-color: var(--color-primary);
+    background: rgba(66, 213, 59, 0.12);
 }
 
 .selected-material-item svg,
@@ -1714,6 +1732,11 @@ body {
 .selected-material-item {
     background: #0f1318;
     border-color: #303943;
+}
+
+.selected-material-item.is-drag-over {
+    background: rgba(66, 213, 59, 0.12);
+    border-color: var(--color-primary);
 }
 
 .btn-select-equipment {
