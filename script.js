@@ -52,6 +52,7 @@ const EMPTY_RECIPE = {
     title: "",
     titleFontSize: 40,
     printerTitleTopPadding: 70,
+    printerTitleMacroSpacing: 18,
     image: "",
     heroHeight: 309,
     imageSettings: {
@@ -123,6 +124,8 @@ let previewPanX = 0;
 let previewPanY = 0;
 let isBottomMarginGuideVisible = false;
 let bottomMarginGuideTimer = null;
+let previewAutoCenterFrame = null;
+let previewAutoCenterTimer = null;
 
 function normalizeRecipe(recipe = {}) {
     const normalized = {
@@ -286,6 +289,8 @@ const elements = {
     titleFontSizeValue: () => document.getElementById('title-font-size-value'),
     printerTitleTopPadding: () => document.getElementById('printer-title-top-padding'),
     printerTitleTopPaddingValue: () => document.getElementById('printer-title-top-padding-value'),
+    printerTitleMacroSpacing: () => document.getElementById('printer-title-macro-spacing'),
+    printerTitleMacroSpacingValue: () => document.getElementById('printer-title-macro-spacing-value'),
     heroImage: () => document.getElementById('hero-image'),
     imageUploadArea: () => document.getElementById('image-upload-area'),
     imagePreviewThumb: () => document.getElementById('image-preview-thumb'),
@@ -590,6 +595,7 @@ function initializePreviewPanning() {
         previewPanX -= deltaX * unit;
         previewPanY -= event.deltaY * unit;
         applyPreviewPan();
+        schedulePreviewAutoCenterIfOutOfView();
     }, { passive: false });
 
     window.addEventListener('keydown', (event) => {
@@ -858,7 +864,9 @@ function applyPageStyleSelection(style = 'standard') {
 
     if (style === 'printer-friendly') {
         const printerHeroHeight = getPrinterFriendlyHeroHeight({
-            printerTitleTopPadding: elements.printerTitleTopPadding()?.value
+            printerTitleTopPadding: elements.printerTitleTopPadding()?.value,
+            printerTitleMacroSpacing: elements.printerTitleMacroSpacing()?.value,
+            titleFontSize: elements.titleFontSize()?.value
         });
         elements.heroHeight().value = String(printerHeroHeight);
         elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
@@ -934,6 +942,15 @@ function initializeFormListeners() {
     elements.titleFontSize()?.addEventListener('input', () => {
         const value = elements.titleFontSize().value;
         elements.titleFontSizeValue().textContent = `${value}px`;
+        if (elements.pageStyle()?.value === 'printer-friendly') {
+            const printerHeroHeight = getPrinterFriendlyHeroHeight({
+                printerTitleTopPadding: elements.printerTitleTopPadding()?.value,
+                printerTitleMacroSpacing: elements.printerTitleMacroSpacing()?.value,
+                titleFontSize: value
+            });
+            elements.heroHeight().value = String(printerHeroHeight);
+            elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
+        }
         updateRecipeFromForm();
     });
 
@@ -941,7 +958,26 @@ function initializeFormListeners() {
         const value = getPrinterTitleTopPadding({ printerTitleTopPadding: elements.printerTitleTopPadding().value });
         updatePrinterTitleTopPaddingDisplay(value);
         if (elements.pageStyle()?.value === 'printer-friendly') {
-            const printerHeroHeight = getPrinterFriendlyHeroHeight({ printerTitleTopPadding: value });
+            const printerHeroHeight = getPrinterFriendlyHeroHeight({
+                printerTitleTopPadding: value,
+                printerTitleMacroSpacing: elements.printerTitleMacroSpacing()?.value,
+                titleFontSize: elements.titleFontSize()?.value
+            });
+            elements.heroHeight().value = String(printerHeroHeight);
+            elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
+        }
+        updateRecipeFromForm();
+    });
+
+    elements.printerTitleMacroSpacing()?.addEventListener('input', () => {
+        const value = getPrinterTitleMacroSpacing({ printerTitleMacroSpacing: elements.printerTitleMacroSpacing().value });
+        updatePrinterTitleMacroSpacingDisplay(value);
+        if (elements.pageStyle()?.value === 'printer-friendly') {
+            const printerHeroHeight = getPrinterFriendlyHeroHeight({
+                printerTitleTopPadding: elements.printerTitleTopPadding()?.value,
+                printerTitleMacroSpacing: value,
+                titleFontSize: elements.titleFontSize()?.value
+            });
             elements.heroHeight().value = String(printerHeroHeight);
             elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
         }
@@ -1063,6 +1099,11 @@ function loadRecipeToForm(recipe) {
         elements.printerTitleTopPadding().value = printerTitleTopPadding;
     }
     updatePrinterTitleTopPaddingDisplay(printerTitleTopPadding);
+    const printerTitleMacroSpacing = getPrinterTitleMacroSpacing(recipe);
+    if (elements.printerTitleMacroSpacing()) {
+        elements.printerTitleMacroSpacing().value = printerTitleMacroSpacing;
+    }
+    updatePrinterTitleMacroSpacingDisplay(printerTitleMacroSpacing);
     elements.showDescription().checked = recipe.showDescription !== false;
     elements.description().value = recipe.description || '';
     elements.pageNumber().value = recipe.pageNumber || '';
@@ -1191,9 +1232,14 @@ function updateRecipeFromForm() {
         title: elements.title()?.value || '',
         titleFontSize: parseInt(elements.titleFontSize()?.value, 10) || 40,
         printerTitleTopPadding: getPrinterTitleTopPadding({ printerTitleTopPadding: elements.printerTitleTopPadding()?.value }),
+        printerTitleMacroSpacing: getPrinterTitleMacroSpacing({ printerTitleMacroSpacing: elements.printerTitleMacroSpacing()?.value }),
         image: elements.imagePreviewThumb()?.src || '',
         heroHeight: elements.pageStyle()?.value === 'printer-friendly'
-            ? getPrinterFriendlyHeroHeight({ printerTitleTopPadding: elements.printerTitleTopPadding()?.value })
+            ? getPrinterFriendlyHeroHeight({
+                printerTitleTopPadding: elements.printerTitleTopPadding()?.value,
+                printerTitleMacroSpacing: elements.printerTitleMacroSpacing()?.value,
+                titleFontSize: elements.titleFontSize()?.value
+            })
             : (parseInt(elements.heroHeight()?.value, 10) || 309),
         imageSettings: {
             scale: parseInt(elements.imageScale()?.value) || 100,
@@ -1289,8 +1335,23 @@ function updatePrinterTitleTopPaddingDisplay(value = getPrinterTitleTopPadding()
     }
 }
 
+function getPrinterTitleMacroSpacing(recipe = currentRecipe) {
+    const parsed = Number.parseInt(recipe?.printerTitleMacroSpacing, 10);
+    if (!Number.isFinite(parsed)) {
+        return 18;
+    }
+    return Math.max(0, Math.min(80, parsed));
+}
+
+function updatePrinterTitleMacroSpacingDisplay(value = getPrinterTitleMacroSpacing()) {
+    if (elements.printerTitleMacroSpacingValue()) {
+        elements.printerTitleMacroSpacingValue().textContent = `${value}px`;
+    }
+}
+
 function getPrinterFriendlyHeroHeight(recipe = currentRecipe) {
-    return 100 + getPrinterTitleTopPadding(recipe);
+    const titleFontSize = Number.parseInt(recipe?.titleFontSize, 10) || 40;
+    return getPrinterTitleTopPadding(recipe) + Math.ceil(titleFontSize * 1.1) + getPrinterTitleMacroSpacing(recipe);
 }
 
 function updatePageBottomMarginDisplay(value = getPageBottomMargin()) {
@@ -2302,6 +2363,10 @@ function renderRecipePage() {
     const heroHeight = isPrinterFriendly(recipe) ? getPrinterFriendlyHeroHeight(recipe) : (Number.parseInt(recipe.heroHeight, 10) || 309);
     const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || 40;
     const printerTitleTopPadding = getPrinterTitleTopPadding(recipe);
+    const printerTitleMacroSpacing = getPrinterTitleMacroSpacing(recipe);
+    const heroStyle = isPrinterFriendly(recipe)
+        ? `--printer-title-top-padding: ${printerTitleTopPadding}px; --printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`
+        : `height: ${heroHeight}px;`;
     const heroImageHtml = createHeroImageMarkup(recipe);
 
     const macroValues = [
@@ -2327,10 +2392,10 @@ function renderRecipePage() {
     page.innerHTML = `
         <div class="recipe-page page-primary${isPrinterFriendly(recipe) ? ' printer-friendly-page' : ''}">
             <!-- Hero Section -->
-            <div class="hero-section" style="height: ${heroHeight}px;">
+            <div class="hero-section" style="${heroStyle}">
                 ${heroImageHtml}
                 <div class="hero-overlay"></div>
-                <h1 class="recipe-title" style="font-size: ${titleFontSize}px; --printer-title-top-padding: ${printerTitleTopPadding}px;">${escapeHtml(recipe.title || 'Recipe Title')}</h1>
+                <h1 class="recipe-title" style="font-size: ${titleFontSize}px;">${escapeHtml(recipe.title || 'Recipe Title')}</h1>
             </div>
 
             <!-- Macro Bar -->
@@ -2378,6 +2443,10 @@ function renderDayOfEatingPage(page, recipe) {
     const heroHeight = isPrinterFriendly(recipe) ? getPrinterFriendlyHeroHeight(recipe) : (Number.parseInt(recipe.heroHeight, 10) || 309);
     const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || 40;
     const printerTitleTopPadding = getPrinterTitleTopPadding(recipe);
+    const printerTitleMacroSpacing = getPrinterTitleMacroSpacing(recipe);
+    const heroStyle = isPrinterFriendly(recipe)
+        ? `--printer-title-top-padding: ${printerTitleTopPadding}px; --printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`
+        : `height: ${heroHeight}px;`;
     const heroImageHtml = createHeroImageMarkup(recipe);
     const macroBarHtml = createMacroBarMarkup(recipe.macros);
     const hasMacroData = hasAnyMacroData(recipe.macros);
@@ -2423,10 +2492,10 @@ function renderDayOfEatingPage(page, recipe) {
 
     page.innerHTML = `
         <div class="recipe-page page-primary day-plan-page${isPrinterFriendly(recipe) ? ' printer-friendly-page' : ''}">
-            <div class="hero-section" style="height: ${heroHeight}px;">
+            <div class="hero-section" style="${heroStyle}">
                 ${heroImageHtml}
                 <div class="hero-overlay"></div>
-                <h1 class="recipe-title" style="font-size: ${titleFontSize}px; --printer-title-top-padding: ${printerTitleTopPadding}px;">${escapeHtml(recipe.title || 'Day of Eating')}</h1>
+                <h1 class="recipe-title" style="font-size: ${titleFontSize}px;">${escapeHtml(recipe.title || 'Day of Eating')}</h1>
             </div>
 
             ${shouldShowMacroBar ? `
@@ -4712,6 +4781,54 @@ function centerPreviewWithBehavior(behavior = 'auto') {
     previewPanX += deltaX;
     previewPanY += deltaY;
     applyPreviewPan(behavior === 'smooth');
+}
+
+function hasVisiblePreviewPage(overscrollAllowance = 180) {
+    const container = elements.previewContainer();
+    const pageStack = elements.recipePage();
+    if (!container || !pageStack) return true;
+
+    const containerRect = container.getBoundingClientRect();
+    const allowedRect = {
+        left: containerRect.left - overscrollAllowance,
+        right: containerRect.right + overscrollAllowance,
+        top: containerRect.top - overscrollAllowance,
+        bottom: containerRect.bottom + overscrollAllowance
+    };
+    const pages = Array.from(pageStack.querySelectorAll('.recipe-page'));
+
+    return pages.some((page) => {
+        const rect = page.getBoundingClientRect();
+        const visibleWidth = Math.min(rect.right, allowedRect.right) - Math.max(rect.left, allowedRect.left);
+        const visibleHeight = Math.min(rect.bottom, allowedRect.bottom) - Math.max(rect.top, allowedRect.top);
+
+        return visibleWidth > 0 && visibleHeight > 0;
+    });
+}
+
+function schedulePreviewAutoCenterIfOutOfView() {
+    if (previewAutoCenterFrame !== null) {
+        window.cancelAnimationFrame(previewAutoCenterFrame);
+    }
+
+    if (previewAutoCenterTimer !== null) {
+        window.clearTimeout(previewAutoCenterTimer);
+        previewAutoCenterTimer = null;
+    }
+
+    previewAutoCenterFrame = window.requestAnimationFrame(() => {
+        previewAutoCenterFrame = null;
+
+        if (!hasVisiblePreviewPage()) {
+            previewAutoCenterTimer = window.setTimeout(() => {
+                previewAutoCenterTimer = null;
+
+                if (!hasVisiblePreviewPage()) {
+                    centerPreviewWithBehavior('smooth');
+                }
+            }, 750);
+        }
+    });
 }
 
 function applyPreviewPan(animate = false) {

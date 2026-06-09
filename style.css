@@ -1980,16 +1980,34 @@ body {
     filter: grayscale(1) brightness(3) contrast(2);
 }
 
+.page-primary.printer-friendly-page .hero-section:not(.hero-section--continuation) {
+    height: auto;
+    padding-top: var(--printer-title-top-padding, 70px);
+    padding-bottom: var(--printer-title-macro-spacing, 18px);
+    overflow: visible;
+}
+
+.page-primary.printer-friendly-page .hero-print-background {
+    display: none;
+}
+
 .printer-friendly-page .recipe-title {
     color: #222222;
-    top: var(--printer-title-top-padding, 70px);
+    top: auto;
     bottom: auto;
     left: var(--spacing-50);
     right: var(--spacing-50);
 }
 
+.page-primary.printer-friendly-page .recipe-title {
+    position: relative;
+    left: auto;
+    right: auto;
+    margin: 0 var(--spacing-50);
+}
+
 .printer-friendly-page .macro-bar {
-    margin-top: var(--spacing-12);
+    margin-top: 0;
 }
 
 .printer-friendly-page .macro-bar-content {
