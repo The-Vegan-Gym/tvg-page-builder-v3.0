@@ -284,6 +284,7 @@ body {
 
 .form-group input[type="text"],
 .form-group input[type="number"],
+.form-group input[type="url"],
 .form-group select,
 .form-group textarea,
 .instruction-checkbox-item input,
@@ -584,6 +585,10 @@ body {
 
 .image-upload-area.has-image {
     padding: var(--spacing-sm);
+}
+
+.hero-image-url-input {
+    margin-top: var(--spacing-sm);
 }
 
 .upload-placeholder {
@@ -1619,6 +1624,7 @@ body {
 
 .form-group input[type="text"],
 .form-group input[type="number"],
+.form-group input[type="url"],
 .form-group select,
 .form-group textarea,
 .instruction-checkbox-item input,
@@ -2053,6 +2059,13 @@ body {
     transition: transform 0.2s;
 }
 
+.recipe-page-stack > #continuation-pages {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    width: var(--page-width);
+}
+
 .recipe-page {
     width: var(--page-width);
     height: var(--page-height);
@@ -2404,6 +2417,13 @@ body {
     align-items: center;
 }
 
+.materials-section[data-materials-auto-spacing="false"] .materials-icons {
+    display: flex;
+    width: auto;
+    gap: 12px;
+    justify-content: flex-start;
+}
+
 .materials-section--flow .material-icon-item {
     width: 44px;
     height: 44px;
@@ -2457,6 +2477,10 @@ body {
 .content-area[data-materials-layout="full-width"] .materials-icons {
     width: 100%;
     justify-content: flex-start;
+}
+
+.content-area[data-materials-layout="full-width"] .materials-section[data-materials-auto-spacing="false"] .materials-icons {
+    width: auto;
 }
 
 /* Column materials stay constrained */
@@ -2582,7 +2606,7 @@ body {
 .instruction-text {
     font-size: 12px;
     line-height: 1.5;
-    color: var(--color-gray-800);
+    color: #000000;
     font-weight: 500;
 }
 
@@ -2603,13 +2627,13 @@ body {
 
 .checkbox-box {
     font-size: 16px;
-    color: var(--color-gray-600);
+    color: #000000;
     flex-shrink: 0;
     margin-top: -1px;
 }
 
 .checkbox-text {
-    color: var(--color-gray-700);
+    color: #000000;
     font-weight: 500;
 }
 
@@ -2745,6 +2769,10 @@ body {
         transform: none !important;
     }
 
+    .recipe-page-stack > #continuation-pages {
+        gap: 0;
+    }
+
     /* Ensure images print */
     .hero-image {
         -webkit-print-color-adjust: exact;
@@ -2820,14 +2848,14 @@ body {
 
     .print-only .description-text,
     .print-only .ingredient-name-cell,
-    .print-only .ingredient-amount-cell,
-    .print-only .instruction-text,
-    .print-only .checkbox-text {
+    .print-only .ingredient-amount-cell {
         color: #424242 !important;
     }
 
+    .print-only .instruction-text,
+    .print-only .checkbox-text,
     .print-only .checkbox-box {
-        color: #757575 !important;
+        color: #000000 !important;
     }
 
     .print-only .section-title {

@@ -79,6 +79,7 @@ const EMPTY_RECIPE = {
     instructionsStartMode: "force-right-column",
     showDirectionsContinuedHeader: true,
     materialsLayout: "column",
+    materialsAutoSpacing: true,
     materials: [],
     ingredients: [],
     instructionSections: [],
@@ -284,6 +285,7 @@ const elements = {
     printerTitleMacroSpacing: () => document.getElementById('printer-title-macro-spacing'),
     printerTitleMacroSpacingValue: () => document.getElementById('printer-title-macro-spacing-value'),
     heroImage: () => document.getElementById('hero-image'),
+    heroImageUrl: () => document.getElementById('hero-image-url'),
     imageUploadArea: () => document.getElementById('image-upload-area'),
     imagePreviewThumb: () => document.getElementById('image-preview-thumb'),
     btnRemoveHeroImage: () => document.getElementById('btn-remove-hero-image'),
@@ -319,6 +321,7 @@ const elements = {
     portionVariationSections: () => document.getElementById('portion-variation-sections'),
     addPortionVariationSection: () => document.getElementById('add-portion-variation-section'),
     materialsLayout: () => document.getElementById('materials-layout'),
+    materialsAutoSpacing: () => document.getElementById('materials-auto-spacing'),
     selectedMaterialsPreview: () => document.getElementById('selected-materials-preview'),
     btnSelectEquipment: () => document.getElementById('btn-select-equipment'),
     equipmentOverlay: () => document.getElementById('equipment-overlay'),
@@ -1149,6 +1152,7 @@ function initializeFormListeners() {
 
     // Materials layout
     elements.materialsLayout()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
+    elements.materialsAutoSpacing()?.addEventListener('change', updateRecipeFromForm);
     elements.instructionsStartMode()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
     elements.showDirectionsContinuedHeader()?.addEventListener('change', updateRecipeFromForm);
     elements.showMacroBar()?.addEventListener('change', updateRecipeFromForm);
@@ -1172,6 +1176,8 @@ function initializeFormListeners() {
     });
 
     elements.heroImage()?.addEventListener('change', handleImageUpload);
+    elements.heroImageUrl()?.addEventListener('change', handleHeroImageUrlInput);
+    elements.imagePreviewThumb()?.addEventListener('error', handleHeroImageLoadError);
 
     // Image controls
     elements.imageScale()?.addEventListener('input', () => {
@@ -1389,6 +1395,9 @@ function loadRecipeToForm(recipe) {
     }
     updatePageBottomMarginDisplay(pageBottomMargin);
     elements.materialsLayout().value = recipe.materialsLayout || 'column';
+    if (elements.materialsAutoSpacing()) {
+        elements.materialsAutoSpacing().checked = recipe.materialsAutoSpacing !== false;
+    }
     elements.dayHighlightsTitle().value = recipe.dayHighlightsTitle || 'Nutrition Highlights';
     elements.dayTipsTitle().value = recipe.dayTipsTitle || 'Tips for Success';
     elements.dayMealsTitle().value = recipe.dayMealsTitle || 'Meals';
@@ -1404,6 +1413,9 @@ function loadRecipeToForm(recipe) {
     // Load image if present
     if (recipe.image) {
         elements.imagePreviewThumb().src = recipe.image;
+        if (elements.heroImageUrl()) {
+            elements.heroImageUrl().value = isRemoteImageUrl(recipe.image) ? recipe.image : '';
+        }
         elements.imageUploadArea().classList.add('has-image');
         elements.imageControls()?.classList.add('visible');
         // Load image settings
@@ -1415,6 +1427,9 @@ function loadRecipeToForm(recipe) {
     } else {
         elements.imagePreviewThumb()?.removeAttribute('src');
         elements.heroImage().value = '';
+        if (elements.heroImageUrl()) {
+            elements.heroImageUrl().value = '';
+        }
         elements.imageUploadArea().classList.remove('has-image');
         elements.imageControls()?.classList.remove('visible');
     }
@@ -1497,7 +1512,7 @@ function updateRecipeFromForm() {
         titleFontSize: parseInt(elements.titleFontSize()?.value, 10) || 40,
         printerTitleTopPadding: getPrinterTitleTopPadding({ printerTitleTopPadding: elements.printerTitleTopPadding()?.value }),
         printerTitleMacroSpacing: getPrinterTitleMacroSpacing({ printerTitleMacroSpacing: elements.printerTitleMacroSpacing()?.value }),
-        image: elements.imagePreviewThumb()?.src || '',
+        image: getHeroImageValue(),
         heroHeight: elements.pageStyle()?.value === 'printer-friendly'
             ? getPrinterFriendlyHeroHeight({
                 printerTitleTopPadding: elements.printerTitleTopPadding()?.value,
@@ -1537,6 +1552,7 @@ function updateRecipeFromForm() {
         instructionsStartMode: instructionSections[0]?.startMode || elements.instructionsStartMode()?.value || 'force-right-column',
         showDirectionsContinuedHeader: elements.showDirectionsContinuedHeader()?.checked !== false,
         materialsLayout: elements.materialsLayout()?.value || 'column',
+        materialsAutoSpacing: elements.materialsAutoSpacing()?.checked !== false,
         materials: getSelectedMaterials(),
         ingredients: primaryIngredientSection.ingredients || [],
         ingredientSections,
@@ -2022,7 +2038,7 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
             </div>
         </div>
         <div class="ingredient-section-paste">
-            <textarea class="ingredient-section-paste-input" rows="4" placeholder="Paste ingredients here, one per line:&#10;Chia seeds;1/2 cup (80 g)&#10;Vanilla extract;1 tsp (4 g)"></textarea>
+            <textarea class="ingredient-section-paste-input" rows="4" placeholder="Paste ingredients here, one per line:&#10;Chia seeds;½ cup (80 g)&#10;Vanilla extract;1 tsp (4 g)"></textarea>
             <button type="button" class="btn-secondary btn-ingredient-paste">Paste Into This Set</button>
         </div>
         <div class="ingredient-section-rows"></div>
@@ -2270,7 +2286,7 @@ function addPortionVariationRow(variation = {}, container = null) {
     row.className = 'portion-variation-row';
     row.innerHTML = `
         <div class="portion-variation-main">
-            <input type="text" class="portion-variation-label" placeholder="Portion label, e.g. 1/2 cup (75 g)" value="${escapeHtml(normalizedVariation.label || '')}">
+            <input type="text" class="portion-variation-label" placeholder="Portion label, e.g. ½ cup (75 g)" value="${escapeHtml(normalizedVariation.label || '')}">
             <button type="button" class="btn-remove" title="Remove">×</button>
         </div>
         <label class="form-toggle portion-variation-macro-toggle">
@@ -2541,19 +2557,78 @@ function handleImageUpload(event) {
     const reader = new FileReader();
     reader.onload = (e) => {
         const imageData = e.target.result;
-        elements.imagePreviewThumb().src = imageData;
-        elements.imageUploadArea().classList.add('has-image');
-        elements.imageControls()?.classList.add('visible');
-        currentRecipe.image = imageData;
-        // Reset image settings for new image
-        currentRecipe.imageSettings = { scale: 100, posX: 50, posY: 50 };
-        elements.imageScale().value = 100;
-        elements.imageScaleValue().textContent = '100%';
-        elements.imagePosX().value = 50;
-        elements.imagePosY().value = 50;
-        renderRecipePage();
+        if (elements.heroImageUrl()) {
+            elements.heroImageUrl().value = '';
+        }
+        setHeroImageSource(imageData);
     };
     reader.readAsDataURL(file);
+}
+
+function handleHeroImageUrlInput() {
+    const url = elements.heroImageUrl()?.value.trim() || '';
+
+    if (!url) {
+        removeHeroImage();
+        return;
+    }
+
+    if (!isRemoteImageUrl(url)) {
+        alert('Please enter a valid image URL that starts with http:// or https://');
+        return;
+    }
+
+    if (elements.heroImage()) {
+        elements.heroImage().value = '';
+    }
+
+    setHeroImageSource(url);
+}
+
+function handleHeroImageLoadError() {
+    const url = elements.heroImageUrl()?.value.trim() || '';
+    if (!url) return;
+
+    alert('Unable to load that image URL. Try a direct image link that allows browser access.');
+    removeHeroImage();
+}
+
+function setHeroImageSource(imageSource) {
+    if (!imageSource) return;
+
+    elements.imagePreviewThumb().src = imageSource;
+    elements.imageUploadArea().classList.add('has-image');
+    elements.imageControls()?.classList.add('visible');
+    currentRecipe.image = imageSource;
+    currentRecipe.imageSettings = { scale: 100, posX: 50, posY: 50 };
+
+    if (elements.imageScale()) {
+        elements.imageScale().value = 100;
+        elements.imageScaleValue().textContent = '100%';
+    }
+
+    if (elements.imagePosX()) {
+        elements.imagePosX().value = 50;
+    }
+
+    if (elements.imagePosY()) {
+        elements.imagePosY().value = 50;
+    }
+
+    renderRecipePage();
+}
+
+function getHeroImageValue() {
+    const url = elements.heroImageUrl()?.value.trim() || '';
+    if (isRemoteImageUrl(url)) {
+        return url;
+    }
+
+    return elements.imagePreviewThumb()?.getAttribute('src') || '';
+}
+
+function isRemoteImageUrl(value = '') {
+    return /^https?:\/\/\S+$/i.test(String(value).trim());
 }
 
 function removeHeroImage() {
@@ -2562,6 +2637,10 @@ function removeHeroImage() {
 
     if (elements.heroImage()) {
         elements.heroImage().value = '';
+    }
+
+    if (elements.heroImageUrl()) {
+        elements.heroImageUrl().value = '';
     }
 
     if (elements.imagePreviewThumb()) {
@@ -2606,6 +2685,7 @@ function renderRecipePage() {
 
     // Build materials HTML
     const materialsLayout = recipe.materialsLayout || 'column';
+    const materialsAutoSpacing = recipe.materialsAutoSpacing !== false;
     const materialsHtml = recipe.materials?.map(materialId => {
         const material = AVAILABLE_MATERIALS.find(m => m.id === materialId);
         if (!material) return '';
@@ -2614,7 +2694,7 @@ function renderRecipePage() {
 
     // Materials section HTML
     const materialsSection = materialsHtml ? `
-        <div class="materials-section">
+        <div class="materials-section" data-materials-auto-spacing="${materialsAutoSpacing ? 'true' : 'false'}">
             <h2 class="section-title">Materials</h2>
             <div class="materials-icons">
                 ${materialsHtml}
@@ -3034,9 +3114,10 @@ function createIngredientNode(ingredient) {
     return item;
 }
 
-function createMaterialsNode(materialsHtml) {
+function createMaterialsNode(materialsHtml, autoSpacing = true) {
     const wrapper = document.createElement('div');
     wrapper.className = 'materials-section materials-section--flow';
+    wrapper.dataset.materialsAutoSpacing = autoSpacing ? 'true' : 'false';
     wrapper.innerHTML = `
         <h2 class="section-title">Materials</h2>
         <div class="materials-icons">
@@ -3416,6 +3497,7 @@ function paginateRecipeFlow(noteHtml = '') {
     const instructionSections = getInstructionSectionsForForm(currentRecipe)
         .filter(section => section.steps.length > 0);
     const materialsLayout = currentRecipe.materialsLayout || 'column';
+    const materialsAutoSpacing = currentRecipe.materialsAutoSpacing !== false;
     const materialsHtml = (currentRecipe.materials || []).map((materialId) => {
         const material = AVAILABLE_MATERIALS.find(m => m.id === materialId);
         if (!material) return '';
@@ -3423,7 +3505,7 @@ function paginateRecipeFlow(noteHtml = '') {
     }).join('');
 
     if (materialsLayout === 'column' && materialsHtml) {
-        placeNode(() => createMaterialsNode(materialsHtml));
+        placeNode(() => createMaterialsNode(materialsHtml, materialsAutoSpacing));
     }
 
     portionVariationSections.forEach((section) => {
@@ -3759,7 +3841,7 @@ async function handleExportJpg() {
                 .ingredient-item { border-bottom-color: #E0E0E0 !important; }
                 .instruction-number { background: #b2b2b2 !important; color: #000000 !important; }
                 .instructions-header { background: #000000 !important; color: #ffffff !important; }
-                .instruction-text { color: #424242 !important; }
+                .instruction-text, .checkbox-text, .checkbox-box { color: #000000 !important; }
                 .note-callout { background: #dbdbdb !important; }
                 .note-text { color: #616161 !important; }
                 .page-number { color: #424242 !important; }
@@ -4573,6 +4655,10 @@ IMPORTANT RULES:
   - For note callouts, put the note label on the first line, usually "Note:" or "Tip:"
   - Text before a colon (:) in notes will appear bold (e.g., "Note:" or "Tip:")
 - Ingredient rows: Name;Amount (semicolon-separated)
+- Always write teaspoon/tablespoon abbreviations in lowercase: "tsp" and "tbsp" only. Never use "Tsp", "Tbsp", "TSP", or "TBSP".
+- All ingredient amounts and checkbox ingredient amounts MUST use single-character small fraction glyphs, never slash fractions or decimals when a common fraction exists.
+- Required fraction conversions: 1/2 = ½, 1/4 = ¼, 3/4 = ¾, 1/3 = ⅓, 2/3 = ⅔, 1/8 = ⅛, 3/8 = ⅜, 5/8 = ⅝, 7/8 = ⅞.
+- Write mixed amounts with the whole number directly before the glyph: use "1½ tsp", not "1.5 tsp" or "1 1/2 tsp"; use "½ cup", not "1/2 cup".
 - If the recipe/image/data contains 2 or more ingredient groups or components, you MUST preserve them as separate ingredient sets using ::TABLE Name::
 - Examples of separate ingredient sets: smoothie + topping, salad + dressing, bowl + sauce, crust + filling, marinade + main recipe
 - Do NOT flatten multiple ingredient groups into one list when the source clearly separates them
@@ -4606,8 +4692,8 @@ This recipe is naturally gluten-free and soy-free when using appropriate ingredi
 ::INGREDIENTS::
 Firm tofu;14 oz
 Nutritional yeast;2 tbsp
-Turmeric;1/2 tsp
-Salt;1/4 tsp
+Turmeric;½ tsp
+Salt;¼ tsp
 
 Example with 2 ingredient sets:
 
@@ -4816,6 +4902,9 @@ RULES:
 - Meal row format must be exactly:
   Meal Label;Meal Name;Portion Note;Calories;Protein;Carbs;Fat
 - Use numbers only for calories/protein/carbs/fat, without units
+- Portion notes MUST use single-character small fraction glyphs, never slash fractions or decimals when a common fraction exists.
+- Required fraction conversions: 1/2 = ½, 1/4 = ¼, 3/4 = ¾, 1/3 = ⅓, 2/3 = ⅔, 1/8 = ⅛, 3/8 = ⅜, 5/8 = ⅝, 7/8 = ⅞.
+- Write mixed amounts with the whole number directly before the glyph: use "1½ oz", not "1.5 oz" or "1 1/2 oz".
 - DAY_HIGHLIGHTS: one highlight per line
 - DAY_TIPS: one tip per line
 - DAY_TOTALS: one line only in this exact order:
@@ -4839,7 +4928,7 @@ This is a sample day of eating. Nutritional needs vary based on the individual.
 Breakfast;Green Maca Smoothie;1 smoothie;516;24;64;26
 Mid-Morning Snack;Raspberries;1 bowl;63;1;16;0
 Lunch;Black Bean Cowboy Caviar;1 serving;418;20;70;10
-Afternoon Snack;Almonds;1.5 oz;246;9;9;21
+Afternoon Snack;Almonds;1½ oz;246;9;9;21
 Dinner;Grilled Chicken & Quinoa Bowl;1 bowl;507;62;39;8
 Evening Snack;Chia Seed Blackberry Pudding;1 serving;92;7;25;2
 
@@ -4886,6 +4975,9 @@ Rules:
 - The code block is required so line breaks and spacing are preserved when pasted into the app
 - Meal Label examples: Breakfast, Lunch, Dinner, Snack, Mid-Morning Snack, Afternoon Snack, Evening Snack
 - Portion Note should be short, like "1 serving", "1 bowl", "1 smoothie", "1 plate", "1 bar", or "1 cup"
+- Portion notes MUST use single-character small fraction glyphs, never slash fractions or decimals when a common fraction exists.
+- Required fraction conversions: 1/2 = ½, 1/4 = ¼, 3/4 = ¾, 1/3 = ⅓, 2/3 = ⅔, 1/8 = ⅛, 3/8 = ⅜, 5/8 = ⅝, 7/8 = ⅞.
+- Write mixed amounts with the whole number directly before the glyph: use "1½ oz", not "1.5 oz" or "1 1/2 oz".
 - Use numbers only for Calories, Protein, Carbs, and Fat
 - If a value is unclear, make the best reasonable estimate from the screenshot and context
 

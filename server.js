@@ -116,8 +116,8 @@ function handlePdfExport(req, res) {
             });
 
             doc.pipe(res);
-            drawRecipePdf(doc, normalizeRecipe(recipe));
-            doc.end();
+            return drawRecipePdf(doc, normalizeRecipe(recipe))
+                .then(() => doc.end());
         })
         .catch((error) => {
             console.error('PDF export error:', error);
@@ -164,7 +164,7 @@ function normalizeRecipe(recipe = {}) {
     };
 }
 
-function drawRecipePdf(doc, recipe) {
+async function drawRecipePdf(doc, recipe) {
     const layout = {
         marginX: 50,
         y: 0,
@@ -173,7 +173,7 @@ function drawRecipePdf(doc, recipe) {
     };
     layout.columnWidth = (PAGE_WIDTH - (layout.marginX * 2) - layout.columnGap) / 2;
 
-    drawHero(doc, recipe, layout);
+    await drawHero(doc, recipe, layout);
     drawMacroBar(doc, recipe, layout);
     drawDescription(doc, recipe, layout);
 
@@ -190,7 +190,7 @@ function drawRecipePdf(doc, recipe) {
     drawPageNumber(doc, recipe);
 }
 
-function drawHero(doc, recipe, layout) {
+async function drawHero(doc, recipe, layout) {
     const isPrinterFriendly = recipe.pageStyle === 'printer-friendly';
     const heroHeight = isPrinterFriendly ? 120 : (Number.parseInt(recipe.heroHeight, 10) || 309);
     const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || (isPrinterFriendly ? 28 : 40);
@@ -199,7 +199,7 @@ function drawHero(doc, recipe, layout) {
     doc.rect(0, 0, PAGE_WIDTH, heroHeight).fill(isPrinterFriendly ? '#ffffff' : '#efefef');
 
     if (!isPrinterFriendly && recipe.image) {
-        const imageBuffer = dataUrlToBuffer(recipe.image);
+        const imageBuffer = await imageSourceToBuffer(recipe.image);
         if (imageBuffer) {
             try {
                 drawCoverImage(doc, imageBuffer, 0, 0, PAGE_WIDTH, heroHeight, recipe.imageSettings);
@@ -418,6 +418,36 @@ function hasMacroData(macros = {}) {
 function dataUrlToBuffer(dataUrl) {
     const match = String(dataUrl || '').match(/^data:image\/(?:png|jpeg|jpg);base64,(.+)$/);
     return match ? Buffer.from(match[1], 'base64') : null;
+}
+
+async function imageSourceToBuffer(source) {
+    const dataBuffer = dataUrlToBuffer(source);
+    if (dataBuffer) {
+        return dataBuffer;
+    }
+
+    const value = String(source || '').trim();
+    if (!/^https?:\/\//i.test(value)) {
+        return null;
+    }
+
+    try {
+        const response = await fetch(value);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!/^image\/(?:png|jpe?g)/i.test(contentType)) {
+            console.warn(`Remote hero image is not a JPG or PNG: ${contentType || 'unknown content type'}`);
+            return null;
+        }
+
+        return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+        console.warn('Unable to load remote hero image for editable PDF:', error.message);
+        return null;
+    }
 }
 
 function drawCoverImage(doc, imageBuffer, x, y, width, height, imageSettings = {}) {

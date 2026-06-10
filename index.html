@@ -98,6 +98,7 @@
                             <img id="image-preview-thumb" class="image-preview-thumb" alt="Preview">
                             <button type="button" id="btn-remove-hero-image" class="btn-remove-hero-image" aria-label="Remove hero image">×</button>
                         </div>
+                        <input type="url" id="hero-image-url" class="hero-image-url-input" name="heroImageUrl" placeholder="Paste image URL...">
                         <div class="image-controls" id="image-controls">
                             <div class="image-control-row">
                                 <label for="image-scale">Zoom</label>
@@ -236,6 +237,10 @@
                         </select>
                         <p class="form-hint">Column keeps materials on the left side with ingredients</p>
                     </div>
+                    <label class="form-toggle">
+                        <input type="checkbox" id="materials-auto-spacing" name="materialsAutoSpacing" checked>
+                        <span>Auto-space equipment icons</span>
+                    </label>
                     <div class="selected-materials-preview" id="selected-materials-preview">
                         <span class="no-materials-text">No equipment selected</span>
                     </div>
