@@ -15,32 +15,116 @@
         <!-- EDITOR PANEL (LEFT)   -->
         <!-- ===================== -->
         <aside class="editor-panel">
-            <div class="editor-header">
-                <div class="editor-header-main">
-                    <h1>TVG Recipe Page Generator</h1>
-                    <button type="button" id="btn-section-settings" class="btn-section-settings" aria-label="Section settings" aria-expanded="false">
-                        <span aria-hidden="true">⚙</span>
+            <div class="editor-body">
+                <nav id="editor-section-nav" class="editor-section-nav" aria-label="Editor sections">
+                    <button type="button" class="editor-section-nav-button is-active" data-section-target="masterPaste" aria-label="Master paste">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/link.svg" alt="">
+                        </span>
+                        <span>Paste</span>
                     </button>
-                    <div id="section-settings-panel" class="section-settings-panel" hidden>
-                        <div class="section-settings-title">Settings</div>
-                        <div id="section-settings-list" class="section-settings-list"></div>
-                    </div>
+                    <button type="button" class="editor-section-nav-button" data-section-target="basicInformation" aria-label="Basic information">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/info.svg" alt="">
+                        </span>
+                        <span>Info</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button" data-section-target="heroImage" aria-label="Image">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/image.svg" alt="">
+                        </span>
+                        <span>Image</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button" data-section-target="nutritionInformation" aria-label="Nutrition">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/nutrition.svg" alt="">
+                        </span>
+                        <span>Nutrition</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button" data-section-target="portionVariations" aria-label="Portion variations">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/link.svg" alt="">
+                        </span>
+                        <span>Portions</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button" data-section-target="materialsEquipment" aria-label="Equipment">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="equipment/Measuring-spoons.svg" alt="">
+                        </span>
+                        <span>Equipment</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button" data-section-target="ingredients" aria-label="Ingredients">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/ingredients.svg" alt="">
+                        </span>
+                        <span>Ingredients</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button" data-section-target="instructions" aria-label="Steps">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/steps.svg" alt="">
+                        </span>
+                        <span>Steps</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button" data-section-target="notes" aria-label="Notes">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/notes.svg" alt="">
+                        </span>
+                        <span>Notes</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button day-plan-only" data-section-target="meals" aria-label="Meals">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/cart.svg" alt="">
+                        </span>
+                        <span>Meals</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button day-plan-only" data-section-target="dayHighlights" aria-label="Highlights">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/Alert.svg" alt="">
+                        </span>
+                        <span>Highlights</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button" data-section-target="pageLayout" aria-label="Layout">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/layout.svg" alt="">
+                        </span>
+                        <span>Layout</span>
+                    </button>
+                    <button type="button" class="editor-section-nav-button" data-section-target="export" aria-label="Export">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/export.svg" alt="">
+                        </span>
+                        <span>Export</span>
+                    </button>
+                    <button type="button" id="btn-section-settings" class="editor-section-nav-button editor-section-settings-button" aria-label="Section settings" aria-expanded="false">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/settings.svg" alt="">
+                        </span>
+                        <span>Settings</span>
+                    </button>
+                </nav>
+                <div id="section-settings-panel" class="section-settings-panel" hidden>
+                    <div class="section-settings-title">Settings</div>
+                    <div id="section-settings-list" class="section-settings-list"></div>
                 </div>
-                <p>Enter recipe details to generate a formatted page</p>
-            </div>
 
-            <form id="recipe-form" class="recipe-form">
-                <div class="recipe-storage-actions" aria-label="Recipe storage actions">
-                    <button type="button" id="btn-save-json" class="segmented-control-button">Save Recipe</button>
-                    <button type="button" id="btn-load-json" class="segmented-control-button">Load Recipe</button>
-                </div>
-
+                <form id="recipe-form" class="recipe-form">
                 <!-- Master Paste Section -->
                 <section class="form-section master-paste-section" data-section-key="masterPaste">
-                    <h2>Master Paste</h2>
+                    <div class="section-heading-with-action">
+                        <h2>Master Paste</h2>
+                        <button type="button" id="btn-master-paste-info" class="section-info-button" aria-label="About Master Paste" aria-expanded="false">
+                            <img src="Icons/info.svg" alt="">
+                        </button>
+                    </div>
+                    <div id="master-paste-info-panel" class="section-info-panel" hidden>
+                        <button type="button" id="btn-close-master-paste-info" class="section-info-close" aria-label="Close Master Paste info">&times;</button>
+                        <h3>Master Paste</h3>
+                        <p>Paste structured recipe text here to fill the main recipe fields at once, including title, image details, macros, ingredients, instructions, equipment, and notes.</p>
+                        <p>Use Copy AI Instructions to get a format that can be filled by an AI assistant, then paste the result here and click Fill All.</p>
+                    </div>
                     <div class="form-group">
                         <label for="master-paste">Paste Recipe Data</label>
-                        <textarea id="master-paste" name="masterPaste" rows="8" placeholder="Paste structured recipe data here..."></textarea>
+                        <textarea id="master-paste" name="masterPaste" rows="18" placeholder="Paste structured recipe data here..."></textarea>
                     </div>
                     <div class="master-paste-actions">
                         <button type="button" id="btn-fill-all" class="btn-primary">Fill All</button>
@@ -56,37 +140,24 @@
                     <input type="hidden" id="page-type" name="pageType" value="recipe">
 
                     <div class="form-group">
-                        <label>Style</label>
-                        <input type="hidden" id="page-style" name="pageStyle" value="standard">
-                        <div class="segmented-control" role="group" aria-label="Style">
-                            <button type="button" class="segmented-control-button is-active" data-page-style="standard">Standard</button>
-                            <button type="button" class="segmented-control-button" data-page-style="printer-friendly">Printer Friendly</button>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
                         <label for="title">Recipe Title</label>
                         <input type="text" id="title" name="title" placeholder="e.g., Edamame Avocado Toast">
                     </div>
 
-                    <div class="image-control-row">
-                        <label for="title-font-size">Title Font Size</label>
-                        <input type="range" id="title-font-size" min="24" max="64" value="40">
-                        <span id="title-font-size-value">40px</span>
+                    <label class="form-toggle">
+                        <input type="checkbox" id="show-description" name="showDescription" checked>
+                        <span>Show description</span>
+                    </label>
+                    <div class="form-group">
+                        <label for="description">Description Text</label>
+                        <textarea id="description" name="description" rows="3" placeholder="A short description of the recipe..."></textarea>
                     </div>
 
-                    <div class="image-control-row">
-                        <label for="printer-title-top-padding">Printer Title Top Padding</label>
-                        <input type="range" id="printer-title-top-padding" min="0" max="120" step="1" value="70">
-                        <span id="printer-title-top-padding-value">70px</span>
-                    </div>
+                </section>
 
-                    <div class="image-control-row">
-                        <label for="printer-title-macro-spacing">Title to Macro Spacing</label>
-                        <input type="range" id="printer-title-macro-spacing" min="0" max="80" step="1" value="18">
-                        <span id="printer-title-macro-spacing-value">18px</span>
-                    </div>
-
+                <!-- Image Section -->
+                <section class="form-section" data-section-key="heroImage">
+                    <h2>Image</h2>
                     <div class="form-group">
                         <label for="hero-image">Hero Image</label>
                         <div class="image-upload-area" id="image-upload-area">
@@ -98,36 +169,39 @@
                             <img id="image-preview-thumb" class="image-preview-thumb" alt="Preview">
                             <button type="button" id="btn-remove-hero-image" class="btn-remove-hero-image" aria-label="Remove hero image">×</button>
                         </div>
-                        <input type="url" id="hero-image-url" class="hero-image-url-input" name="heroImageUrl" placeholder="Paste image URL...">
                         <div class="image-controls" id="image-controls">
                             <div class="image-control-row">
                                 <label for="image-scale">Zoom</label>
-                                <input type="range" id="image-scale" min="0" max="300" value="100">
-                                <span id="image-scale-value">100%</span>
+                                <input type="range" id="image-scale" min="0" max="200" value="100" disabled>
+                                <div class="slider-value-field">
+                                    <input type="number" id="image-scale-value" min="0" max="200" value="100" disabled aria-label="Zoom value">
+                                    <span>%</span>
+                                </div>
                             </div>
                             <div class="image-control-row">
                                 <label for="hero-height">Hero Height</label>
-                                <input type="range" id="hero-height" min="180" max="420" value="309">
-                                <span id="hero-height-value">309px</span>
+                                <input type="range" id="hero-height" min="198" max="420" value="309" disabled>
+                                <div class="slider-value-field">
+                                    <input type="number" id="hero-height-value" min="198" max="420" value="309" disabled aria-label="Hero height value">
+                                    <span>px</span>
+                                </div>
                             </div>
                             <div class="image-control-row">
                                 <label for="image-pos-x">Position X</label>
-                                <input type="range" id="image-pos-x" min="0" max="100" value="50">
+                                <input type="range" id="image-pos-x" min="0" max="100" value="50" disabled>
+                                <input type="number" id="image-pos-x-value" class="slider-value-input" min="0" max="100" value="50" disabled aria-label="Position X value">
                             </div>
                             <div class="image-control-row">
                                 <label for="image-pos-y">Position Y</label>
-                                <input type="range" id="image-pos-y" min="0" max="500" value="50">
+                                <input type="range" id="image-pos-y" min="0" max="100" value="50" disabled>
+                                <input type="number" id="image-pos-y-value" class="slider-value-input" min="0" max="100" value="50" disabled aria-label="Position Y value">
                             </div>
+                            <button type="button" id="btn-reset-image-controls" class="btn-secondary image-reset-defaults" disabled>Reset to Defaults</button>
                         </div>
                         <label class="form-toggle image-corner-logo-toggle">
-                            <input type="checkbox" id="show-corner-logo" name="showCornerLogo">
+                            <input type="checkbox" id="show-corner-logo" name="showCornerLogo" checked>
                             <span>Show corner logo</span>
                         </label>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="page-number">Page Number</label>
-                        <input type="text" id="page-number" name="pageNumber" placeholder="e.g., 14">
                     </div>
                 </section>
 
@@ -138,6 +212,10 @@
                         <input type="checkbox" id="show-macro-bar" name="showMacroBar" checked>
                         <span>Show Macro Bar</span>
                     </label>
+                    <div class="form-group">
+                        <label for="macro-bar-prefix">Info Before Macros</label>
+                        <input type="text" id="macro-bar-prefix" name="macroBarPrefix" placeholder="e.g., Per bite:">
+                    </div>
                     <div class="macro-inputs">
                         <div class="form-group">
                             <label for="calories">Calories</label>
@@ -155,19 +233,6 @@
                             <label for="fat">Fat (g)</label>
                             <input type="text" id="fat" name="fat" placeholder="18">
                         </div>
-                    </div>
-                </section>
-
-                <!-- Description Section -->
-                <section class="form-section" data-section-key="description">
-                    <h2>Description</h2>
-                    <label class="form-toggle">
-                        <input type="checkbox" id="show-description" name="showDescription" checked>
-                        <span>Show description</span>
-                    </label>
-                    <div class="form-group">
-                        <label for="description">Description Text</label>
-                        <textarea id="description" name="description" rows="3" placeholder="A short description of the recipe..."></textarea>
                     </div>
                 </section>
 
@@ -229,16 +294,21 @@
                 <!-- Materials Section -->
                 <section class="form-section recipe-only" data-section-key="materialsEquipment">
                     <h2>Materials/Equipment</h2>
+                    <label class="form-toggle">
+                        <input type="checkbox" id="show-materials" name="showMaterials" checked>
+                        <span>Show equipment</span>
+                    </label>
                     <div class="form-group">
-                        <label for="materials-layout">Materials Layout</label>
-                        <select id="materials-layout" name="materialsLayout">
-                            <option value="full-width">Full Width - Spans Entire Page</option>
-                            <option value="column" selected>Column - Left Side Only</option>
-                        </select>
+                        <label>Materials Layout</label>
+                        <input type="hidden" id="materials-layout" name="materialsLayout" value="column">
+                        <div class="segmented-control" role="group" aria-label="Materials layout">
+                            <button type="button" class="segmented-control-button" data-materials-layout="full-width">Full Width</button>
+                            <button type="button" class="segmented-control-button is-active" data-materials-layout="column">Column</button>
+                        </div>
                         <p class="form-hint">Column keeps materials on the left side with ingredients</p>
                     </div>
                     <label class="form-toggle">
-                        <input type="checkbox" id="materials-auto-spacing" name="materialsAutoSpacing" checked>
+                        <input type="checkbox" id="materials-auto-spacing" name="materialsAutoSpacing">
                         <span>Auto-space equipment icons</span>
                     </label>
                     <div class="selected-materials-preview" id="selected-materials-preview">
@@ -252,10 +322,6 @@
                 <!-- Ingredients Section -->
                 <section class="form-section recipe-only" data-section-key="ingredients">
                     <h2>Ingredients</h2>
-                    <div class="form-group">
-                        <label for="servings-label">Servings Label</label>
-                        <input type="text" id="servings-label" name="servingsLabel" placeholder="e.g., Ingredients for 1 Serving">
-                    </div>
                     <div id="ingredients-list" class="ingredients-list">
                         <!-- Ingredient set editors will be added dynamically -->
                     </div>
@@ -265,18 +331,14 @@
                 <!-- Instructions Section -->
                 <section class="form-section recipe-only" data-section-key="instructions">
                     <h2>Instructions</h2>
-                    <div class="form-group">
-                        <label for="instructions-label">Instructions Label</label>
-                        <input type="text" id="instructions-label" name="instructionsLabel" placeholder="e.g., Instructions for 1 Serving">
-                    </div>
+                    <input type="hidden" id="instructions-label" name="instructionsLabel">
                     <label class="form-toggle">
-                        <input type="checkbox" id="show-directions-continued-header" name="showDirectionsContinuedHeader" checked>
+                        <input type="checkbox" id="show-directions-continued-header" name="showDirectionsContinuedHeader">
                         <span>Show Directions Continued Header</span>
                     </label>
                     <div id="instructions-list" class="instructions-list">
                         <!-- Instruction rows will be added dynamically -->
                     </div>
-                    <button type="button" id="add-instruction" class="btn-add">+ Add Step</button>
                     <button type="button" id="add-instruction-section" class="btn-add">+ Add Instruction Set</button>
                 </section>
 
@@ -291,25 +353,69 @@
                 <!-- Page Layout Section -->
                 <section class="form-section" data-section-key="pageLayout">
                     <h2>Page Layout</h2>
-                    <div class="image-control-row">
-                        <label for="page-bottom-margin">Bottom Margin</label>
-                        <input type="range" id="page-bottom-margin" min="0" max="200" step="5" value="0">
-                        <span id="page-bottom-margin-value">0px</span>
+                    <div class="form-group">
+                        <label>Style</label>
+                        <input type="hidden" id="page-style" name="pageStyle" value="standard">
+                        <div class="segmented-control" role="group" aria-label="Style">
+                            <button type="button" class="segmented-control-button is-active" data-page-style="standard">Standard</button>
+                            <button type="button" class="segmented-control-button" data-page-style="printer-friendly">Printer Friendly</button>
+                        </div>
                     </div>
-                    <p class="form-hint">Adds extra bottom clearance before content flows to the next column or page.</p>
+                    <div class="form-group">
+                        <label for="page-number">Page Number</label>
+                        <input type="text" id="page-number" name="pageNumber" placeholder="e.g., 14">
+                    </div>
+                    <div class="layout-control-group">
+                        <div class="image-control-row">
+                            <label for="title-font-size">Title Font Size</label>
+                            <input type="range" id="title-font-size" min="24" max="64" value="40">
+                            <span id="title-font-size-value">40px</span>
+                        </div>
+                        <p class="form-hint">Adjusts the recipe title size in the page header.</p>
+                    </div>
+                    <div class="layout-control-group">
+                        <div class="image-control-row">
+                            <label for="printer-title-top-padding">Printer Title Top Padding</label>
+                            <input type="range" id="printer-title-top-padding" min="0" max="120" step="1" value="70">
+                            <span id="printer-title-top-padding-value">70px</span>
+                        </div>
+                        <p class="form-hint">Sets the top space above the title on printer-friendly pages.</p>
+                    </div>
+                    <div class="layout-control-group">
+                        <div class="image-control-row">
+                            <label for="printer-title-macro-spacing">Title to Macro Spacing</label>
+                            <input type="range" id="printer-title-macro-spacing" min="0" max="80" step="1" value="18">
+                            <span id="printer-title-macro-spacing-value">18px</span>
+                        </div>
+                        <p class="form-hint">Controls the gap between the title and macro bar on printer-friendly pages.</p>
+                    </div>
+                    <div class="layout-control-group">
+                        <div class="image-control-row">
+                            <label for="page-bottom-margin">Bottom Margin</label>
+                            <input type="range" id="page-bottom-margin" min="0" max="200" step="5" value="0">
+                            <span id="page-bottom-margin-value">0px</span>
+                        </div>
+                        <p class="form-hint">Adds extra bottom clearance before content flows to the next column or page.</p>
+                    </div>
+                </section>
+
+                <section class="form-section" data-section-key="export">
+                    <h2>Export</h2>
+                    <div class="export-actions">
+                        <button type="button" id="btn-export-all" class="btn-primary">Export All</button>
+                        <button type="button" id="btn-print" class="btn-primary" hidden>Export PDF</button>
+                        <button type="button" id="btn-export-editable-pdf" class="btn-primary" hidden>Export Editable PDF</button>
+                        <button type="button" id="btn-export-jpg" class="btn-primary">Export JPG</button>
+                    </div>
                 </section>
 
                 <!-- Action Buttons -->
                 <div class="form-actions">
-                    <div class="form-actions-stack">
-                        <button type="button" id="btn-print" class="btn-primary">Export PDF</button>
-                        <button type="button" id="btn-export-editable-pdf" class="btn-primary">Export Editable PDF</button>
-                        <button type="button" id="btn-export-jpg" class="btn-primary">Export JPG</button>
-                    </div>
                     <input type="file" id="json-file-input" accept=".json" hidden>
                     <button type="button" id="btn-clear" class="btn-danger">Clear All</button>
                 </div>
-            </form>
+                </form>
+            </div>
         </aside>
 
         <!-- ===================== -->
@@ -322,10 +428,6 @@
                     <button type="button" id="btn-save-json-preview" class="btn-preview-secondary">Save</button>
                     <button type="button" id="btn-load-json-preview" class="btn-preview-secondary">Load</button>
                     <button type="button" id="btn-export-jpg-preview" class="btn-preview-export">Export JPG</button>
-                    <button type="button" id="btn-zoom-out" class="btn-zoom">−</button>
-                    <span id="zoom-level">100%</span>
-                    <button type="button" id="btn-zoom-in" class="btn-zoom">+</button>
-                    <button type="button" id="btn-center-preview" class="btn-zoom btn-center-preview" title="Center Preview">Center</button>
                 </div>
             </div>
             <div class="preview-container" id="preview-container">
@@ -333,6 +435,13 @@
                     <div class="recipe-page" id="recipe-page">
                         <!-- Recipe page content rendered by JS -->
                     </div>
+                </div>
+                <div class="preview-zoom-controls" aria-label="Preview zoom controls">
+                    <button type="button" id="btn-zoom-out" class="btn-zoom" aria-label="Zoom out">−</button>
+                    <input type="range" id="zoom-slider" class="zoom-slider" min="50" max="150" step="1" value="100" aria-label="Zoom level">
+                    <span id="zoom-level">100%</span>
+                    <button type="button" id="btn-zoom-in" class="btn-zoom" aria-label="Zoom in">+</button>
+                    <button type="button" id="btn-center-preview" class="btn-zoom btn-center-preview" title="Center Preview">Center</button>
                 </div>
             </div>
         </main>

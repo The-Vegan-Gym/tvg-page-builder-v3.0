@@ -51,8 +51,9 @@ const EMPTY_RECIPE = {
         posX: 50,
         posY: 50
     },
-    showCornerLogo: false,
+    showCornerLogo: true,
     showMacroBar: true,
+    macroBarPrefix: "",
     showDescription: true,
     macros: {
         calories: "",
@@ -77,9 +78,10 @@ const EMPTY_RECIPE = {
     ingredientSections: [],
     instructionsLabel: "Instructions for 1 Serving",
     instructionsStartMode: "force-right-column",
-    showDirectionsContinuedHeader: true,
+    showDirectionsContinuedHeader: false,
     materialsLayout: "column",
-    materialsAutoSpacing: true,
+    showMaterials: true,
+    materialsAutoSpacing: false,
     materials: [],
     ingredients: [],
     instructionSections: [],
@@ -94,15 +96,125 @@ const RECENT_RECIPES_STORAGE_KEY = 'tvgRecipePageGenerator.recentRecipes';
 const SECTION_VISIBILITY_DEFAULTS = [
     { key: 'masterPaste', label: 'Master Paste', visible: true },
     { key: 'basicInformation', label: 'Basic Information', visible: true },
+    { key: 'heroImage', label: 'Image', visible: true },
     { key: 'nutritionInformation', label: 'Nutrition Information', visible: true },
-    { key: 'description', label: 'Description', visible: true },
+    { key: 'meals', label: 'Meals', visible: true },
+    { key: 'dayHighlights', label: 'Day Highlights', visible: true },
     { key: 'portionVariations', label: 'Portion Variations', visible: false },
     { key: 'materialsEquipment', label: 'Materials/Equipment', visible: true },
     { key: 'ingredients', label: 'Ingredients', visible: true },
     { key: 'instructions', label: 'Instructions', visible: true },
     { key: 'notes', label: 'Notes/Callouts', visible: true },
-    { key: 'pageLayout', label: 'Page Layout', visible: false }
+    { key: 'pageLayout', label: 'Page Layout', visible: false },
+    { key: 'export', label: 'Export', visible: true }
 ];
+
+const SECTION_INFO_CONTENT = {
+    masterPaste: {
+        title: 'Master Paste',
+        items: [
+            'Paste structured recipe text here to fill the main recipe fields at once.',
+            'Use Copy AI Instructions to get an AI-ready format, then paste the result and click Fill All.',
+            'This can populate title, description, macros, equipment, ingredients, instructions, and notes.'
+        ]
+    },
+    basicInformation: {
+        title: 'Basic Information',
+        items: [
+            'Recipe Title sets the main title shown on the recipe page.',
+            'Show description controls whether the short description appears under the header.',
+            'Description Text is the paragraph shown below the title and macros.'
+        ]
+    },
+    heroImage: {
+        title: 'Image',
+        items: [
+            'Hero Image uploads the main image used in the page header.',
+            'Zoom, height, and position controls adjust how the image is cropped.',
+            'Show corner logo adds the TVG logo mark to the top-right corner.'
+        ]
+    },
+    nutritionInformation: {
+        title: 'Nutrition Information',
+        items: [
+            'Show Macro Bar controls whether macros appear below the hero/title area.',
+            'Info Before Macros adds optional leading text like “Per bite:” before the macro values.',
+            'Calories, protein, carbs, and fat populate the macro bar.'
+        ]
+    },
+    meals: {
+        title: 'Meals',
+        items: [
+            'Meal Card Paste lets you bulk-create day-of-eating meal cards from structured rows.',
+            'Copy Meal AI Prompt gives an AI-ready format for meal data.',
+            'Add Meal creates an individual editable meal card.'
+        ]
+    },
+    dayHighlights: {
+        title: 'Day Highlights',
+        items: [
+            'Nutrition Highlights and Tips become list sections on day-of-eating pages.',
+            'Section title fields rename the page areas.',
+            'Daily Totals Title controls the label for the macro summary section.'
+        ]
+    },
+    portionVariations: {
+        title: 'Portion Variations',
+        items: [
+            'Use this for alternate serving sizes, swaps, or linked portion options.',
+            'Each set can have its own label, icon, and list of variations.',
+            'Leave it empty when the recipe does not need portion alternatives.'
+        ]
+    },
+    materialsEquipment: {
+        title: 'Materials/Equipment',
+        items: [
+            'Show equipment controls whether selected equipment appears on the page.',
+            'Materials Layout chooses whether equipment spans the full width or stays with the left column.',
+            'Select Equipment opens the icon picker for tools used in the recipe.'
+        ]
+    },
+    ingredients: {
+        title: 'Ingredients',
+        items: [
+            'Ingredient sets let you group ingredients under separate labels.',
+            'Ingredients Start controls whether a set begins in the left or right column.',
+            'Add Ingredient adds a new ingredient and amount row.'
+        ]
+    },
+    instructions: {
+        title: 'Instructions',
+        items: [
+            'Instruction set labels become the headings above directions.',
+            'Instructions Start controls where directions begin in the layout.',
+            'Show Directions Continued Header adds a continuation heading when directions flow to another page.'
+        ]
+    },
+    notes: {
+        title: 'Notes/Callouts',
+        items: [
+            'Notes create callout boxes for reminders, prep tips, or warnings.',
+            'Text before a colon is bolded automatically, such as “Note:” or “Prep Tip:”.',
+            'Leave this section empty when no callouts are needed.'
+        ]
+    },
+    pageLayout: {
+        title: 'Page Layout',
+        items: [
+            'Style switches between standard and printer-friendly page designs.',
+            'Page Number adds an optional page number to the recipe.',
+            'The sliders adjust title sizing, printer-friendly spacing, and bottom flow clearance.'
+        ]
+    },
+    export: {
+        title: 'Export',
+        items: [
+            'Export All downloads standard and printer-friendly JPG versions with and without macros.',
+            'Export JPG downloads the currently visible recipe version.',
+            'Hidden export options can stay available in code without showing in the panel.'
+        ]
+    }
+};
 
 // ================================================
 // STATE MANAGEMENT
@@ -119,6 +231,7 @@ let isBottomMarginGuideVisible = false;
 let bottomMarginGuideTimer = null;
 let previewAutoCenterFrame = null;
 let previewAutoCenterTimer = null;
+let activeEditorSectionKey = 'basicInformation';
 
 function normalizeRecipe(recipe = {}) {
     const normalized = {
@@ -140,6 +253,9 @@ function normalizeRecipe(recipe = {}) {
         ingredientSections: Array.isArray(recipe.ingredientSections) ? recipe.ingredientSections : [],
         instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
         instructionSections: Array.isArray(recipe.instructionSections) ? recipe.instructionSections : [],
+        showDirectionsContinuedHeader: recipe.showDirectionsContinuedHeader === true,
+        showMaterials: recipe.showMaterials !== false,
+        materialsAutoSpacing: recipe.materialsAutoSpacing === true,
         notes: Array.isArray(recipe.notes)
             ? recipe.notes
             : (recipe.note ? [recipe.note] : []),
@@ -255,12 +371,11 @@ function getRecipePageDimensions() {
         return { width: 0, height: 0 };
     }
 
-    const previousTransform = page.style.transform;
-    page.style.transform = 'none';
-    const { width, height } = page.getBoundingClientRect();
-    page.style.transform = previousTransform;
-
-    return { width, height };
+    // offsetWidth/offsetHeight return the layout size before CSS transforms,
+    // so the transform doesn't need to be removed for measurement. The old
+    // approach conflicted with the `transition: transform 0.2s` on
+    // .recipe-page-stack and measured mid-transition scaled sizes.
+    return { width: page.offsetWidth, height: page.offsetHeight };
 }
 
 // ================================================
@@ -271,9 +386,14 @@ const elements = {
     // Form inputs
     masterPaste: () => document.getElementById('master-paste'),
     masterPasteStatus: () => document.getElementById('master-paste-status'),
+    btnMasterPasteInfo: () => document.getElementById('btn-master-paste-info'),
+    btnCloseMasterPasteInfo: () => document.getElementById('btn-close-master-paste-info'),
+    masterPasteInfoPanel: () => document.getElementById('master-paste-info-panel'),
     btnSectionSettings: () => document.getElementById('btn-section-settings'),
     sectionSettingsPanel: () => document.getElementById('section-settings-panel'),
     sectionSettingsList: () => document.getElementById('section-settings-list'),
+    editorSectionNav: () => document.getElementById('editor-section-nav'),
+    editorSectionButtons: () => Array.from(document.querySelectorAll('[data-section-target]')),
     pageType: () => document.getElementById('page-type'),
     pageStyle: () => document.getElementById('page-style'),
     pageStyleButtons: () => Array.from(document.querySelectorAll('[data-page-style]')),
@@ -285,7 +405,6 @@ const elements = {
     printerTitleMacroSpacing: () => document.getElementById('printer-title-macro-spacing'),
     printerTitleMacroSpacingValue: () => document.getElementById('printer-title-macro-spacing-value'),
     heroImage: () => document.getElementById('hero-image'),
-    heroImageUrl: () => document.getElementById('hero-image-url'),
     imageUploadArea: () => document.getElementById('image-upload-area'),
     imagePreviewThumb: () => document.getElementById('image-preview-thumb'),
     btnRemoveHeroImage: () => document.getElementById('btn-remove-hero-image'),
@@ -296,12 +415,16 @@ const elements = {
     heroHeight: () => document.getElementById('hero-height'),
     heroHeightValue: () => document.getElementById('hero-height-value'),
     imagePosX: () => document.getElementById('image-pos-x'),
+    imagePosXValue: () => document.getElementById('image-pos-x-value'),
     imagePosY: () => document.getElementById('image-pos-y'),
+    imagePosYValue: () => document.getElementById('image-pos-y-value'),
+    btnResetImageControls: () => document.getElementById('btn-reset-image-controls'),
     showCornerLogo: () => document.getElementById('show-corner-logo'),
     description: () => document.getElementById('description'),
     showDescription: () => document.getElementById('show-description'),
     pageNumber: () => document.getElementById('page-number'),
     showMacroBar: () => document.getElementById('show-macro-bar'),
+    macroBarPrefix: () => document.getElementById('macro-bar-prefix'),
     calories: () => document.getElementById('calories'),
     protein: () => document.getElementById('protein'),
     carbs: () => document.getElementById('carbs'),
@@ -321,6 +444,8 @@ const elements = {
     portionVariationSections: () => document.getElementById('portion-variation-sections'),
     addPortionVariationSection: () => document.getElementById('add-portion-variation-section'),
     materialsLayout: () => document.getElementById('materials-layout'),
+    showMaterials: () => document.getElementById('show-materials'),
+    materialsLayoutButtons: () => Array.from(document.querySelectorAll('[data-materials-layout]')),
     materialsAutoSpacing: () => document.getElementById('materials-auto-spacing'),
     selectedMaterialsPreview: () => document.getElementById('selected-materials-preview'),
     btnSelectEquipment: () => document.getElementById('btn-select-equipment'),
@@ -328,14 +453,12 @@ const elements = {
     equipmentGrid: () => document.getElementById('equipment-grid'),
     btnCloseEquipment: () => document.getElementById('btn-close-equipment'),
     btnSaveEquipment: () => document.getElementById('btn-save-equipment'),
-    servingsLabel: () => document.getElementById('servings-label'),
     ingredientsList: () => document.getElementById('ingredients-list'),
     addIngredientSection: () => document.getElementById('add-ingredient-section'),
     instructionsLabel: () => document.getElementById('instructions-label'),
     instructionsStartMode: () => document.getElementById('instructions-start-mode'),
     showDirectionsContinuedHeader: () => document.getElementById('show-directions-continued-header'),
     instructionsList: () => document.getElementById('instructions-list'),
-    addInstruction: () => document.getElementById('add-instruction'),
     addInstructionSection: () => document.getElementById('add-instruction-section'),
     notesList: () => document.getElementById('notes-list'),
     addNote: () => document.getElementById('add-note'),
@@ -347,6 +470,7 @@ const elements = {
     btnCopyAIInstructions: () => document.getElementById('btn-copy-ai-instructions'),
     btnCopyAIInfoInstructions: () => document.getElementById('btn-copy-ai-info-instructions'),
     btnCopyAIDayInstructions: () => document.getElementById('btn-copy-ai-day-instructions'),
+    btnExportAll: () => document.getElementById('btn-export-all'),
     btnExportJpg: () => document.getElementById('btn-export-jpg'),
     btnExportJpgPreview: () => document.getElementById('btn-export-jpg-preview'),
     btnExportEditablePdf: () => document.getElementById('btn-export-editable-pdf'),
@@ -364,6 +488,7 @@ const elements = {
     btnZoomIn: () => document.getElementById('btn-zoom-in'),
     btnZoomOut: () => document.getElementById('btn-zoom-out'),
     btnCenterPreview: () => document.getElementById('btn-center-preview'),
+    zoomSlider: () => document.getElementById('zoom-slider'),
     zoomLevelDisplay: () => document.getElementById('zoom-level'),
 
     // Preview
@@ -380,7 +505,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadIconsDatabase();
     populatePortionVariationIconOptions();
     initializeCollapsibleSections();
+    initializeSectionInfoPanels();
     initializeSectionSettings();
+    initializeEditorSectionNav();
     initializeMaterialsSelector();
     initializePreviewPanning();
     initializeFormListeners();
@@ -428,6 +555,78 @@ function initializeCollapsibleSections() {
         });
 
         section.dataset.accordionInitialized = 'true';
+    });
+}
+
+function initializeSectionInfoPanels() {
+    document.querySelectorAll('.recipe-form > .form-section').forEach((section) => {
+        const sectionKey = section.dataset.sectionKey;
+        const info = SECTION_INFO_CONTENT[sectionKey];
+        if (!info || section.dataset.infoInitialized === 'true') return;
+
+        if (section.querySelector(':scope > .section-heading-with-action')) {
+            section.dataset.infoInitialized = 'true';
+            return;
+        }
+
+        const toggle = section.querySelector(':scope > .form-section-toggle');
+        if (!toggle) return;
+
+        const headingRow = document.createElement('div');
+        headingRow.className = 'section-heading-with-action';
+        section.insertBefore(headingRow, toggle);
+        headingRow.appendChild(toggle);
+
+        const infoButton = document.createElement('button');
+        infoButton.type = 'button';
+        infoButton.className = 'section-info-button';
+        infoButton.setAttribute('aria-label', `About ${info.title}`);
+        infoButton.setAttribute('aria-expanded', 'false');
+        infoButton.innerHTML = '<img src="Icons/info.svg" alt="">';
+
+        const panel = document.createElement('div');
+        panel.className = 'section-info-panel';
+        panel.hidden = true;
+        panel.innerHTML = `
+            <button type="button" class="section-info-close" aria-label="Close ${escapeHtml(info.title)} info">&times;</button>
+            <h3>${escapeHtml(info.title)}</h3>
+            <ul>
+                ${info.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+            </ul>
+        `;
+
+        headingRow.appendChild(infoButton);
+        section.insertBefore(panel, section.querySelector(':scope > .form-section-content'));
+
+        infoButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const shouldOpen = panel.hidden;
+            closeAllSectionInfoPanels();
+            panel.hidden = !shouldOpen;
+            infoButton.setAttribute('aria-expanded', String(shouldOpen));
+        });
+
+        panel.querySelector('.section-info-close')?.addEventListener('click', () => {
+            panel.hidden = true;
+            infoButton.setAttribute('aria-expanded', 'false');
+        });
+
+        section.dataset.infoInitialized = 'true';
+    });
+
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('.section-info-panel') || event.target.closest('.section-info-button')) return;
+        closeAllSectionInfoPanels();
+    });
+}
+
+function closeAllSectionInfoPanels() {
+    document.querySelectorAll('.section-info-panel').forEach((panel) => {
+        panel.hidden = true;
+    });
+
+    document.querySelectorAll('.section-info-button').forEach((button) => {
+        button.setAttribute('aria-expanded', 'false');
     });
 }
 
@@ -540,13 +739,54 @@ function handleRecentRecipeClick(event) {
     closeLoadRecipeOverlay();
 }
 
-function applySectionVisibilitySettings(settings = getSectionVisibilitySettings()) {
-    SECTION_VISIBILITY_DEFAULTS.forEach((sectionConfig) => {
-        const section = document.querySelector(`[data-section-key="${sectionConfig.key}"]`);
-        if (!section) return;
+function getSectionPageTypeAvailability(section, pageType = elements.pageType()?.value || 'recipe') {
+    if (!section) return false;
+    if (section.classList.contains('recipe-only')) return pageType === 'recipe';
+    if (section.classList.contains('day-plan-only')) return pageType === 'day-of-eating';
+    return true;
+}
 
-        section.hidden = settings[sectionConfig.key] === false;
+function getAvailableEditorSectionKeys(settings = getSectionVisibilitySettings()) {
+    const pageType = elements.pageType()?.value || 'recipe';
+
+    return SECTION_VISIBILITY_DEFAULTS
+        .map((sectionConfig) => sectionConfig.key)
+        .filter((key) => {
+            const section = document.querySelector(`[data-section-key="${key}"]`);
+            return section && settings[key] !== false && getSectionPageTypeAvailability(section, pageType);
+        });
+}
+
+function applyEditorSectionState(settings = getSectionVisibilitySettings()) {
+    const availableKeys = getAvailableEditorSectionKeys(settings);
+
+    if (!availableKeys.includes(activeEditorSectionKey)) {
+        activeEditorSectionKey = availableKeys[0] || '';
+    }
+
+    document.querySelectorAll('.recipe-form > .form-section').forEach((section) => {
+        const key = section.dataset.sectionKey;
+        const isAvailable = availableKeys.includes(key);
+        const isActive = isAvailable && key === activeEditorSectionKey;
+
+        section.hidden = !isActive;
+        section.classList.toggle('is-editor-active', isActive);
+        section.classList.toggle('is-editor-unavailable', !isAvailable);
     });
+
+    elements.editorSectionButtons().forEach((button) => {
+        const key = button.dataset.sectionTarget;
+        const isAvailable = availableKeys.includes(key);
+        const isActive = isAvailable && key === activeEditorSectionKey;
+
+        button.hidden = !isAvailable;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-current', isActive ? 'page' : 'false');
+    });
+}
+
+function applySectionVisibilitySettings(settings = getSectionVisibilitySettings()) {
+    applyEditorSectionState(settings);
 }
 
 function renderSectionSettingsList(settings = getSectionVisibilitySettings()) {
@@ -568,6 +808,21 @@ function renderSectionSettingsList(settings = getSectionVisibilitySettings()) {
             applySectionVisibilitySettings(updatedSettings);
         });
     });
+}
+
+function initializeEditorSectionNav() {
+    const nav = elements.editorSectionNav();
+    if (!nav) return;
+
+    nav.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-section-target]');
+        if (!button || button.hidden || !nav.contains(button)) return;
+
+        activeEditorSectionKey = button.dataset.sectionTarget;
+        applyEditorSectionState();
+    });
+
+    applyEditorSectionState();
 }
 
 function initializeSectionSettings() {
@@ -1115,10 +1370,51 @@ function applyPageStyleSelection(style = 'standard') {
             titleFontSize: elements.titleFontSize()?.value
         });
         elements.heroHeight().value = String(printerHeroHeight);
-        elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
+        elements.heroHeightValue().value = printerHeroHeight;
     } else {
         elements.heroHeight().value = '309';
-        elements.heroHeightValue().textContent = '309px';
+        elements.heroHeightValue().value = 309;
+    }
+}
+
+function updateMaterialsLayoutButtons(layout = elements.materialsLayout()?.value || 'column') {
+    elements.materialsLayoutButtons().forEach((button) => {
+        const isActive = button.dataset.materialsLayout === layout;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', String(isActive));
+    });
+}
+
+function applyMaterialsLayoutSelection(layout = 'column') {
+    if (elements.materialsLayout()) {
+        elements.materialsLayout().value = layout;
+    }
+
+    updateMaterialsLayoutButtons(layout);
+}
+
+function toggleMasterPasteInfoPanel() {
+    const panel = elements.masterPasteInfoPanel();
+    const button = elements.btnMasterPasteInfo();
+    if (!panel) return;
+
+    const shouldOpen = panel.hidden;
+    panel.hidden = !shouldOpen;
+
+    if (button) {
+        button.setAttribute('aria-expanded', String(shouldOpen));
+    }
+}
+
+function closeMasterPasteInfoPanel() {
+    const panel = elements.masterPasteInfoPanel();
+    const button = elements.btnMasterPasteInfo();
+    if (!panel) return;
+
+    panel.hidden = true;
+
+    if (button) {
+        button.setAttribute('aria-expanded', 'false');
     }
 }
 
@@ -1127,7 +1423,7 @@ function applyPageStyleSelection(style = 'standard') {
  */
 function initializeFormListeners() {
     // Text inputs
-    const textInputs = ['title', 'description', 'pageNumber', 'calories', 'protein', 'carbs', 'fat', 'servingsLabel', 'instructionsLabel', 'note', 'dayHighlightsTitle', 'dayTipsTitle', 'dayMealsTitle', 'dayBreakdownTitle', 'dayTotalsTitle'];
+    const textInputs = ['title', 'description', 'pageNumber', 'macroBarPrefix', 'calories', 'protein', 'carbs', 'fat', 'instructionsLabel', 'note', 'dayHighlightsTitle', 'dayTipsTitle', 'dayMealsTitle', 'dayBreakdownTitle', 'dayTotalsTitle'];
     textInputs.forEach(id => {
         const element = elements[id.replace('-', '')]?.() || document.getElementById(id);
         if (element) {
@@ -1137,6 +1433,17 @@ function initializeFormListeners() {
 
     elements.dayHighlights()?.addEventListener('input', debounce(updateRecipeFromForm, 150));
     elements.dayTips()?.addEventListener('input', debounce(updateRecipeFromForm, 150));
+    elements.btnMasterPasteInfo()?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        toggleMasterPasteInfoPanel();
+    });
+    elements.btnCloseMasterPasteInfo()?.addEventListener('click', closeMasterPasteInfoPanel);
+    document.addEventListener('click', (event) => {
+        const panel = elements.masterPasteInfoPanel();
+        const button = elements.btnMasterPasteInfo();
+        if (panel?.hidden || panel?.contains(event.target) || button?.contains(event.target)) return;
+        closeMasterPasteInfoPanel();
+    });
     elements.pageType().value = 'recipe';
     updatePageTypeVisibility('recipe');
     elements.pageStyleButtons().forEach((button) => {
@@ -1151,7 +1458,17 @@ function initializeFormListeners() {
     });
 
     // Materials layout
-    elements.materialsLayout()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
+    elements.materialsLayoutButtons().forEach((button) => {
+        button.addEventListener('click', () => {
+            applyMaterialsLayoutSelection(button.dataset.materialsLayout || 'column');
+            updateRecipeFromForm();
+        });
+    });
+    elements.materialsLayout()?.addEventListener('change', () => {
+        applyMaterialsLayoutSelection(elements.materialsLayout().value || 'column');
+        updateRecipeFromForm();
+    });
+    elements.showMaterials()?.addEventListener('change', updateRecipeFromForm);
     elements.materialsAutoSpacing()?.addEventListener('change', updateRecipeFromForm);
     elements.instructionsStartMode()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
     elements.showDirectionsContinuedHeader()?.addEventListener('change', updateRecipeFromForm);
@@ -1176,21 +1493,25 @@ function initializeFormListeners() {
     });
 
     elements.heroImage()?.addEventListener('change', handleImageUpload);
-    elements.heroImageUrl()?.addEventListener('change', handleHeroImageUrlInput);
     elements.imagePreviewThumb()?.addEventListener('error', handleHeroImageLoadError);
 
     // Image controls
     elements.imageScale()?.addEventListener('input', () => {
         const value = elements.imageScale().value;
-        elements.imageScaleValue().textContent = `${value}%`;
+        elements.imageScaleValue().value = value;
         updateRecipeFromForm();
     });
 
     elements.heroHeight()?.addEventListener('input', () => {
         const value = elements.heroHeight().value;
-        elements.heroHeightValue().textContent = `${value}px`;
+        elements.heroHeightValue().value = value;
         updateRecipeFromForm();
     });
+
+    bindImageValueInput(elements.imageScaleValue(), elements.imageScale(), 100);
+    bindImageValueInput(elements.heroHeightValue(), elements.heroHeight(), 309);
+    bindImageValueInput(elements.imagePosXValue(), elements.imagePosX(), 50);
+    bindImageValueInput(elements.imagePosYValue(), elements.imagePosY(), 50);
 
     elements.titleFontSize()?.addEventListener('input', () => {
         const value = elements.titleFontSize().value;
@@ -1202,7 +1523,7 @@ function initializeFormListeners() {
                 titleFontSize: value
             });
             elements.heroHeight().value = String(printerHeroHeight);
-            elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
+            elements.heroHeightValue().value = printerHeroHeight;
         }
         updateRecipeFromForm();
     });
@@ -1217,7 +1538,7 @@ function initializeFormListeners() {
                 titleFontSize: elements.titleFontSize()?.value
             });
             elements.heroHeight().value = String(printerHeroHeight);
-            elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
+            elements.heroHeightValue().value = printerHeroHeight;
         }
         updateRecipeFromForm();
     });
@@ -1232,18 +1553,22 @@ function initializeFormListeners() {
                 titleFontSize: elements.titleFontSize()?.value
             });
             elements.heroHeight().value = String(printerHeroHeight);
-            elements.heroHeightValue().textContent = `${printerHeroHeight}px`;
+            elements.heroHeightValue().value = printerHeroHeight;
         }
         updateRecipeFromForm();
     });
 
     elements.imagePosX()?.addEventListener('input', () => {
+        elements.imagePosXValue().value = elements.imagePosX().value;
         updateRecipeFromForm();
     });
 
     elements.imagePosY()?.addEventListener('input', () => {
+        elements.imagePosYValue().value = elements.imagePosY().value;
         updateRecipeFromForm();
     });
+
+    elements.btnResetImageControls()?.addEventListener('click', resetImageControlsToDefaults);
 
     elements.showCornerLogo()?.addEventListener('change', updateRecipeFromForm);
 
@@ -1257,11 +1582,6 @@ function initializeFormListeners() {
     elements.addPortionVariationSection()?.addEventListener('click', () => {
         addPortionVariationSectionEditor();
         updateRecipeFromForm();
-    });
-
-    // Add instruction button
-    elements.addInstruction()?.addEventListener('click', () => {
-        addInstructionRowToLastSection();
     });
 
     elements.addInstructionSection()?.addEventListener('click', () => {
@@ -1295,6 +1615,7 @@ function initializeButtonListeners() {
     // Export JPG button
     elements.btnExportJpg()?.addEventListener('click', handleExportJpg);
     elements.btnExportJpgPreview()?.addEventListener('click', handleExportJpg);
+    elements.btnExportAll()?.addEventListener('click', handleExportAll);
 
     // Editable PDF button
     elements.btnExportEditablePdf()?.addEventListener('click', handleExportEditablePdf);
@@ -1341,6 +1662,11 @@ function initializeButtonListeners() {
         updateZoom();
     });
 
+    elements.zoomSlider()?.addEventListener('input', () => {
+        zoomLevel = Number.parseInt(elements.zoomSlider().value, 10) || 100;
+        updateZoom();
+    });
+
     elements.btnCenterPreview()?.addEventListener('click', centerPreview);
 }
 
@@ -1377,26 +1703,29 @@ function loadRecipeToForm(recipe) {
     elements.pageNumber().value = recipe.pageNumber || '';
     elements.showCornerLogo().checked = recipe.showCornerLogo === true;
     elements.showMacroBar().checked = recipe.showMacroBar !== false;
+    elements.macroBarPrefix().value = recipe.macroBarPrefix || '';
     elements.calories().value = recipe.macros?.calories || '';
     elements.protein().value = recipe.macros?.protein || '';
     elements.carbs().value = recipe.macros?.carbs || '';
     elements.fat().value = recipe.macros?.fat || '';
-    elements.servingsLabel().value = recipe.servingsLabel || 'Ingredients for 1 Serving';
     elements.instructionsLabel().value = recipe.instructionsLabel || 'Instructions for 1 Serving';
     if (elements.instructionsStartMode()) {
         elements.instructionsStartMode().value = recipe.instructionsStartMode || 'force-right-column';
     }
     if (elements.showDirectionsContinuedHeader()) {
-        elements.showDirectionsContinuedHeader().checked = recipe.showDirectionsContinuedHeader !== false;
+        elements.showDirectionsContinuedHeader().checked = recipe.showDirectionsContinuedHeader === true;
     }
     const pageBottomMargin = getPageBottomMargin(recipe);
     if (elements.pageBottomMargin()) {
         elements.pageBottomMargin().value = pageBottomMargin;
     }
     updatePageBottomMarginDisplay(pageBottomMargin);
-    elements.materialsLayout().value = recipe.materialsLayout || 'column';
+    applyMaterialsLayoutSelection(recipe.materialsLayout || 'column');
+    if (elements.showMaterials()) {
+        elements.showMaterials().checked = recipe.showMaterials !== false;
+    }
     if (elements.materialsAutoSpacing()) {
-        elements.materialsAutoSpacing().checked = recipe.materialsAutoSpacing !== false;
+        elements.materialsAutoSpacing().checked = recipe.materialsAutoSpacing === true;
     }
     elements.dayHighlightsTitle().value = recipe.dayHighlightsTitle || 'Nutrition Highlights';
     elements.dayTipsTitle().value = recipe.dayTipsTitle || 'Tips for Success';
@@ -1407,31 +1736,27 @@ function loadRecipeToForm(recipe) {
     elements.dayTips().value = (recipe.dayTips || []).join('\n');
     const heroHeightValue = isPrinterFriendly(recipe) ? getPrinterFriendlyHeroHeight(recipe) : (recipe.heroHeight || 309);
     elements.heroHeight().value = heroHeightValue;
-    elements.heroHeightValue().textContent = `${heroHeightValue}px`;
+    elements.heroHeightValue().value = heroHeightValue;
     updatePageTypeVisibility('recipe');
 
     // Load image if present
     if (recipe.image) {
         elements.imagePreviewThumb().src = recipe.image;
-        if (elements.heroImageUrl()) {
-            elements.heroImageUrl().value = isRemoteImageUrl(recipe.image) ? recipe.image : '';
-        }
         elements.imageUploadArea().classList.add('has-image');
-        elements.imageControls()?.classList.add('visible');
+        setImageControlsDisabled(false);
         // Load image settings
         const imgSettings = recipe.imageSettings || { scale: 100, posX: 50, posY: 50 };
         elements.imageScale().value = imgSettings.scale;
-        elements.imageScaleValue().textContent = `${imgSettings.scale}%`;
+        elements.imageScaleValue().value = imgSettings.scale;
         elements.imagePosX().value = imgSettings.posX;
+        elements.imagePosXValue().value = imgSettings.posX;
         elements.imagePosY().value = imgSettings.posY;
+        elements.imagePosYValue().value = imgSettings.posY;
     } else {
         elements.imagePreviewThumb()?.removeAttribute('src');
         elements.heroImage().value = '';
-        if (elements.heroImageUrl()) {
-            elements.heroImageUrl().value = '';
-        }
         elements.imageUploadArea().classList.remove('has-image');
-        elements.imageControls()?.classList.remove('visible');
+        setImageControlsDisabled(true);
     }
 
     // Load materials and update preview
@@ -1519,14 +1844,15 @@ function updateRecipeFromForm() {
                 printerTitleMacroSpacing: elements.printerTitleMacroSpacing()?.value,
                 titleFontSize: elements.titleFontSize()?.value
             })
-            : (parseInt(elements.heroHeight()?.value, 10) || 309),
+            : getNumericControlValue(elements.heroHeight(), 309),
         imageSettings: {
-            scale: parseInt(elements.imageScale()?.value) || 100,
-            posX: parseInt(elements.imagePosX()?.value) || 50,
-            posY: parseInt(elements.imagePosY()?.value) || 50
+            scale: getNumericControlValue(elements.imageScale(), 100),
+            posX: getNumericControlValue(elements.imagePosX(), 50),
+            posY: getNumericControlValue(elements.imagePosY(), 50)
         },
         showCornerLogo: elements.showCornerLogo()?.checked === true,
         showMacroBar: elements.showMacroBar()?.checked !== false,
+        macroBarPrefix: elements.macroBarPrefix()?.value || '',
         showDescription: elements.showDescription()?.checked !== false,
         macros: {
             calories: elements.calories()?.value || '',
@@ -1548,11 +1874,12 @@ function updateRecipeFromForm() {
         portionVariationIcon: primaryPortionVariationSection.icon || '',
         portionVariationSections,
         servingsLabel: primaryIngredientSection.label || 'Ingredients for 1 Serving',
-        instructionsLabel: elements.instructionsLabel()?.value || 'Instructions for 1 Serving',
+        instructionsLabel: instructionSections[0]?.label || elements.instructionsLabel()?.value || 'Instructions for 1 Serving',
         instructionsStartMode: instructionSections[0]?.startMode || elements.instructionsStartMode()?.value || 'force-right-column',
-        showDirectionsContinuedHeader: elements.showDirectionsContinuedHeader()?.checked !== false,
+        showDirectionsContinuedHeader: elements.showDirectionsContinuedHeader()?.checked === true,
         materialsLayout: elements.materialsLayout()?.value || 'column',
-        materialsAutoSpacing: elements.materialsAutoSpacing()?.checked !== false,
+        showMaterials: elements.showMaterials()?.checked !== false,
+        materialsAutoSpacing: elements.materialsAutoSpacing()?.checked === true,
         materials: getSelectedMaterials(),
         ingredients: primaryIngredientSection.ingredients || [],
         ingredientSections,
@@ -1652,13 +1979,7 @@ function showBottomMarginGuide() {
 }
 
 function updatePageTypeVisibility(pageType = 'recipe') {
-    document.querySelectorAll('.recipe-only').forEach((section) => {
-        section.style.display = pageType === 'recipe' ? '' : 'none';
-    });
-
-    document.querySelectorAll('.day-plan-only').forEach((section) => {
-        section.style.display = pageType === 'day-of-eating' ? '' : 'none';
-    });
+    applyEditorSectionState();
 }
 
 function getDayMealsFromForm() {
@@ -1772,9 +2093,7 @@ function getIngredientSectionsFromForm() {
     const sections = Array.from(elements.ingredientsList()?.querySelectorAll('.ingredient-section-editor') || [])
         .map((section, index) => {
             const labelInput = section.querySelector('.ingredient-section-label');
-            const label = index === 0
-                ? (elements.servingsLabel()?.value || 'Ingredients for 1 Serving')
-                : ((labelInput?.value || '').trim() || `Ingredients Section ${index + 1}`);
+            const label = (labelInput?.value || '').trim() || (index === 0 ? 'Ingredients for 1 Serving' : `Ingredients Section ${index + 1}`);
             const startMode = section.querySelector('.ingredient-section-start-mode')?.value || 'auto';
             const ingredients = Array.from(section.querySelectorAll('.ingredient-row'))
                 .map((row) => ({
@@ -1789,7 +2108,7 @@ function getIngredientSectionsFromForm() {
 
     if (sections.length === 0) {
         return [{
-            label: elements.servingsLabel()?.value || 'Ingredients for 1 Serving',
+            label: 'Ingredients for 1 Serving',
             startMode: 'auto',
             ingredients: []
         }];
@@ -1901,9 +2220,9 @@ function getInstructionSectionsFromForm() {
     const sections = Array.from(elements.instructionsList()?.querySelectorAll('.instruction-section-editor') || [])
         .map((section, index) => {
             const labelInput = section.querySelector('.instruction-section-label');
-            const label = index === 0
+            const label = ((labelInput?.value || '').trim() || (index === 0
                 ? (elements.instructionsLabel()?.value || 'Instructions for 1 Serving')
-                : ((labelInput?.value || '').trim() || `Instructions Section ${index + 1}`);
+                : `Instructions Section ${index + 1}`));
             const startMode = section.querySelector('.instruction-section-start-mode')?.value || 'force-right-column';
             const stepStyle = section.querySelector('.instruction-section-step-style')?.value || 'numbered';
             const steps = Array.from(section.querySelectorAll('.instruction-row'))
@@ -2031,13 +2350,14 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
         <div class="ingredient-section-editor-meta">
             <div class="ingredient-section-control">
                 <label>Ingredients Start</label>
-                <select class="ingredient-section-start-mode">
-                    <option value="auto" ${startMode === 'auto' ? 'selected' : ''}>Auto</option>
-                    <option value="force-right-column" ${startMode === 'force-right-column' ? 'selected' : ''}>Force right column</option>
-                </select>
+                <input type="hidden" class="ingredient-section-start-mode" value="${startMode === 'force-right-column' ? 'force-right-column' : 'auto'}">
+                <div class="segmented-control" role="group" aria-label="Ingredients start">
+                    <button type="button" class="segmented-control-button ${startMode !== 'force-right-column' ? 'is-active' : ''}" data-ingredient-start-mode="auto" aria-pressed="${startMode !== 'force-right-column'}">Left Column</button>
+                    <button type="button" class="segmented-control-button ${startMode === 'force-right-column' ? 'is-active' : ''}" data-ingredient-start-mode="force-right-column" aria-pressed="${startMode === 'force-right-column'}">Right Column</button>
+                </div>
             </div>
         </div>
-        <div class="ingredient-section-paste">
+        <div class="ingredient-section-paste" hidden>
             <textarea class="ingredient-section-paste-input" rows="4" placeholder="Paste ingredients here, one per line:&#10;Chia seeds;½ cup (80 g)&#10;Vanilla extract;1 tsp (4 g)"></textarea>
             <button type="button" class="btn-secondary btn-ingredient-paste">Paste Into This Set</button>
         </div>
@@ -2049,13 +2369,24 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
 
     const labelInput = section.querySelector('.ingredient-section-label');
     if (isPrimary) {
-        labelInput.value = elements.servingsLabel()?.value || label || 'Ingredients for 1 Serving';
-        labelInput.readOnly = true;
-    } else {
-        labelInput.addEventListener('input', debounce(updateRecipeFromForm, 150));
+        labelInput.value = label || 'Ingredients for 1 Serving';
     }
+    labelInput.addEventListener('input', debounce(updateRecipeFromForm, 150));
 
-    section.querySelector('.ingredient-section-start-mode')?.addEventListener('change', debounce(updateRecipeFromForm, 150));
+    section.querySelectorAll('[data-ingredient-start-mode]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const startModeInput = section.querySelector('.ingredient-section-start-mode');
+            if (startModeInput) {
+                startModeInput.value = button.dataset.ingredientStartMode || 'auto';
+            }
+            section.querySelectorAll('[data-ingredient-start-mode]').forEach((modeButton) => {
+                const isActive = modeButton === button;
+                modeButton.classList.toggle('is-active', isActive);
+                modeButton.setAttribute('aria-pressed', String(isActive));
+            });
+            updateRecipeFromForm();
+        });
+    });
 
     section.querySelector('.btn-add-ingredient-inline')?.addEventListener('click', () => {
         addIngredientRow('', '', section.querySelector('.ingredient-section-rows'));
@@ -2096,7 +2427,7 @@ function addIngredientRowToLastSection(name = '', amount = '') {
     let lastSectionRows = elements.ingredientsList()?.querySelector('.ingredient-section-editor:last-child .ingredient-section-rows');
 
     if (!lastSectionRows) {
-        addIngredientSectionEditor(elements.servingsLabel()?.value || 'Ingredients for 1 Serving', [], true, 'auto');
+        addIngredientSectionEditor('Ingredients for 1 Serving', [], true, 'auto');
         lastSectionRows = elements.ingredientsList()?.querySelector('.ingredient-section-editor:last-child .ingredient-section-rows');
     }
 
@@ -2334,7 +2665,7 @@ function addNoteRow(text = '') {
     const row = document.createElement('div');
     row.className = 'note-row';
     row.innerHTML = `
-        <textarea class="note-text-input" rows="2" placeholder="e.g., Note: Press tofu for 15 minutes to remove excess moisture.">${escapeHtml(text)}</textarea>
+        <textarea class="note-text-input" rows="6" placeholder="e.g., Note: Press tofu for 15 minutes to remove excess moisture.">${escapeHtml(text)}</textarea>
         <button type="button" class="btn-remove" title="Remove">×</button>
     `;
 
@@ -2369,13 +2700,7 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
                     <option value="keep-with-first-step" ${startMode === 'keep-with-first-step' ? 'selected' : ''}>Move to next column if header would orphan</option>
                 </select>
             </div>
-            <div class="instruction-section-control">
-                <label>Step Style</label>
-                <select class="instruction-section-step-style">
-                    <option value="numbered" ${stepStyle === 'numbered' ? 'selected' : ''}>Numbered</option>
-                    <option value="bulleted" ${stepStyle === 'bulleted' ? 'selected' : ''}>Bulleted</option>
-                </select>
-            </div>
+            <input type="hidden" class="instruction-section-step-style" value="numbered">
         </div>
         <div class="instruction-section-steps"></div>
         <div class="instruction-section-actions">
@@ -2386,10 +2711,8 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
     const labelInput = section.querySelector('.instruction-section-label');
     if (isPrimary) {
         labelInput.value = elements.instructionsLabel()?.value || label || 'Instructions for 1 Serving';
-        labelInput.readOnly = true;
-    } else {
-        labelInput.addEventListener('input', debounce(updateRecipeFromForm, 150));
     }
+    labelInput.addEventListener('input', debounce(updateRecipeFromForm, 150));
 
     section.querySelector('.instruction-section-start-mode')?.addEventListener('change', debounce(updateRecipeFromForm, 150));
     section.querySelector('.instruction-section-step-style')?.addEventListener('change', () => {
@@ -2557,40 +2880,13 @@ function handleImageUpload(event) {
     const reader = new FileReader();
     reader.onload = (e) => {
         const imageData = e.target.result;
-        if (elements.heroImageUrl()) {
-            elements.heroImageUrl().value = '';
-        }
         setHeroImageSource(imageData);
     };
     reader.readAsDataURL(file);
 }
 
-function handleHeroImageUrlInput() {
-    const url = elements.heroImageUrl()?.value.trim() || '';
-
-    if (!url) {
-        removeHeroImage();
-        return;
-    }
-
-    if (!isRemoteImageUrl(url)) {
-        alert('Please enter a valid image URL that starts with http:// or https://');
-        return;
-    }
-
-    if (elements.heroImage()) {
-        elements.heroImage().value = '';
-    }
-
-    setHeroImageSource(url);
-}
-
 function handleHeroImageLoadError() {
-    const url = elements.heroImageUrl()?.value.trim() || '';
-    if (!url) return;
-
-    alert('Unable to load that image URL. Try a direct image link that allows browser access.');
-    removeHeroImage();
+    alert('Unable to load that image.');
 }
 
 function setHeroImageSource(imageSource) {
@@ -2598,37 +2894,31 @@ function setHeroImageSource(imageSource) {
 
     elements.imagePreviewThumb().src = imageSource;
     elements.imageUploadArea().classList.add('has-image');
-    elements.imageControls()?.classList.add('visible');
+    setImageControlsDisabled(false);
     currentRecipe.image = imageSource;
     currentRecipe.imageSettings = { scale: 100, posX: 50, posY: 50 };
 
     if (elements.imageScale()) {
         elements.imageScale().value = 100;
-        elements.imageScaleValue().textContent = '100%';
+        elements.imageScaleValue().value = 100;
     }
 
     if (elements.imagePosX()) {
         elements.imagePosX().value = 50;
+        elements.imagePosXValue().value = 50;
     }
 
     if (elements.imagePosY()) {
         elements.imagePosY().value = 50;
+        elements.imagePosYValue().value = 50;
     }
 
     renderRecipePage();
 }
 
 function getHeroImageValue() {
-    const url = elements.heroImageUrl()?.value.trim() || '';
-    if (isRemoteImageUrl(url)) {
-        return url;
-    }
-
-    return elements.imagePreviewThumb()?.getAttribute('src') || '';
-}
-
-function isRemoteImageUrl(value = '') {
-    return /^https?:\/\/\S+$/i.test(String(value).trim());
+    const previewSource = elements.imagePreviewThumb()?.getAttribute('src') || '';
+    return previewSource || currentRecipe.image || '';
 }
 
 function removeHeroImage() {
@@ -2639,30 +2929,99 @@ function removeHeroImage() {
         elements.heroImage().value = '';
     }
 
-    if (elements.heroImageUrl()) {
-        elements.heroImageUrl().value = '';
-    }
-
     if (elements.imagePreviewThumb()) {
         elements.imagePreviewThumb().removeAttribute('src');
     }
 
     elements.imageUploadArea()?.classList.remove('has-image');
-    elements.imageControls()?.classList.remove('visible');
+    setImageControlsDisabled(true);
 
     if (elements.imageScale()) {
         elements.imageScale().value = 100;
-        elements.imageScaleValue().textContent = '100%';
+        elements.imageScaleValue().value = 100;
     }
 
     if (elements.imagePosX()) {
         elements.imagePosX().value = 50;
+        elements.imagePosXValue().value = 50;
     }
 
     if (elements.imagePosY()) {
         elements.imagePosY().value = 50;
+        elements.imagePosYValue().value = 50;
     }
 
+    updateRecipeFromForm();
+}
+
+function getNumericControlValue(control, fallback) {
+    const value = Number.parseInt(control?.value, 10);
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function bindImageValueInput(input, slider, fallback) {
+    if (!input || !slider) return;
+
+    input.addEventListener('input', () => {
+        const min = Number.parseInt(slider.min, 10);
+        const max = Number.parseInt(slider.max, 10);
+        let value = getNumericControlValue(input, fallback);
+
+        if (Number.isFinite(min)) {
+            value = Math.max(min, value);
+        }
+
+        if (Number.isFinite(max)) {
+            value = Math.min(max, value);
+        }
+
+        input.value = value;
+        slider.value = value;
+        updateRecipeFromForm();
+    });
+}
+
+function setImageControlsDisabled(disabled) {
+    [
+        elements.imageScale(),
+        elements.imageScaleValue(),
+        elements.heroHeight(),
+        elements.heroHeightValue(),
+        elements.imagePosX(),
+        elements.imagePosXValue(),
+        elements.imagePosY(),
+        elements.imagePosYValue(),
+        elements.btnResetImageControls()
+    ].forEach((control) => {
+        if (control) {
+            control.disabled = disabled;
+        }
+    });
+}
+
+function resetImageControlsToDefaults() {
+    if (elements.imageScale()) {
+        elements.imageScale().value = 100;
+        elements.imageScaleValue().value = 100;
+    }
+
+    if (elements.heroHeight()) {
+        elements.heroHeight().value = 309;
+        elements.heroHeightValue().value = 309;
+    }
+
+    if (elements.imagePosX()) {
+        elements.imagePosX().value = 50;
+        elements.imagePosXValue().value = 50;
+    }
+
+    if (elements.imagePosY()) {
+        elements.imagePosY().value = 50;
+        elements.imagePosYValue().value = 50;
+    }
+
+    currentRecipe.imageSettings = { scale: 100, posX: 50, posY: 50 };
+    currentRecipe.heroHeight = 309;
     updateRecipeFromForm();
 }
 
@@ -2685,12 +3044,13 @@ function renderRecipePage() {
 
     // Build materials HTML
     const materialsLayout = recipe.materialsLayout || 'column';
-    const materialsAutoSpacing = recipe.materialsAutoSpacing !== false;
-    const materialsHtml = recipe.materials?.map(materialId => {
+    const showMaterials = recipe.showMaterials !== false;
+    const materialsAutoSpacing = recipe.materialsAutoSpacing === true;
+    const materialsHtml = showMaterials ? recipe.materials?.map(materialId => {
         const material = AVAILABLE_MATERIALS.find(m => m.id === materialId);
         if (!material) return '';
         return `<div class="material-icon-item" title="${material.name}">${material.svg}</div>`;
-    }).join('') || '';
+    }).join('') || '' : '';
 
     // Materials section HTML
     const materialsSection = materialsHtml ? `
@@ -2753,15 +3113,7 @@ function renderRecipePage() {
     const hasMacroData = macroValues.some(value => String(value || '').trim() !== '');
     const shouldShowMacroBar = recipe.showMacroBar !== false && hasMacroData;
     const shouldShowDescription = recipe.showDescription !== false;
-    const macroBarHtml = hasMacroData ? `
-        <span>${recipe.macros?.calories || '0'} CAL</span>
-        <span class="macro-divider">|</span>
-        <span>${recipe.macros?.protein || '0'} G PROTEIN</span>
-        <span class="macro-divider">|</span>
-        <span>${recipe.macros?.carbs || '0'} G CARBS</span>
-        <span class="macro-divider">|</span>
-        <span>${recipe.macros?.fat || '0'} G FAT</span>
-    ` : '';
+    const macroBarHtml = hasMacroData ? createMacroBarMarkup(recipe.macros, recipe.macroBarPrefix) : '';
 
     // Render the complete page
     page.innerHTML = `
@@ -2810,6 +3162,7 @@ function renderRecipePage() {
 
     // Paginate ingredients and instructions in reading order after rendering
     requestAnimationFrame(() => {
+        layoutHeroImageLayers(page);
         paginateRecipeFlow(notesHtml);
     });
 }
@@ -2823,7 +3176,7 @@ function renderDayOfEatingPage(page, recipe) {
         ? `--printer-title-top-padding: ${printerTitleTopPadding}px; --printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`
         : `height: ${heroHeight}px;`;
     const heroImageHtml = createHeroImageMarkup(recipe);
-    const macroBarHtml = createMacroBarMarkup(recipe.macros);
+    const macroBarHtml = createMacroBarMarkup(recipe.macros, recipe.macroBarPrefix);
     const hasMacroData = hasAnyMacroData(recipe.macros);
     const shouldShowMacroBar = recipe.showMacroBar !== false && hasMacroData;
     const shouldShowDescription = recipe.showDescription !== false;
@@ -2937,6 +3290,7 @@ function renderDayOfEatingPage(page, recipe) {
     `;
 
     requestAnimationFrame(() => {
+        layoutHeroImageLayers(page);
         paginateDayPlanFlow();
     });
 }
@@ -2947,14 +3301,17 @@ function createHeroImageMarkup(recipe) {
     const imageHtml = isPrintFriendly
         ? `<div class="hero-print-background"></div>`
         : recipe.image
-        ? `<div class="hero-image-layer" role="img" aria-label="${escapeHtml(recipe.title)}" style="background-image: url('${recipe.image}'); background-position: ${imgSettings.posX}% ${imgSettings.posY}%; transform: scale(${imgSettings.scale / 100});"></div>`
+        ? `<img class="hero-image-layer" src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" style="--hero-image-zoom: ${imgSettings.scale / 100}; --hero-image-pos-x: ${imgSettings.posX}%; --hero-image-pos-y: ${imgSettings.posY}%;">`
         : `<div class="hero-placeholder">No image uploaded</div>`;
-    const cornerLogoSrc = isPrintFriendly ? 'logo-grayscale.png' : 'logo.png';
-    const logoHtml = recipe.showCornerLogo === true
+
+    return `${imageHtml}${createCornerLogoMarkup(recipe)}`;
+}
+
+function createCornerLogoMarkup(recipe = {}) {
+    const cornerLogoSrc = isPrinterFriendly(recipe) ? 'logo-grayscale.png' : 'logo.png';
+    return recipe.showCornerLogo === true
         ? `<div class="hero-corner-logo"><img src="${cornerLogoSrc}" alt="The Vegan Gym"></div>`
         : '';
-
-    return `${imageHtml}${logoHtml}`;
 }
 
 function isPrinterFriendly(recipe = {}) {
@@ -2965,8 +3322,12 @@ function hasAnyMacroData(macros = {}) {
     return ['calories', 'protein', 'carbs', 'fat'].some((key) => String(macros?.[key] || '').trim() !== '');
 }
 
-function createMacroBarMarkup(macros = {}) {
+function createMacroBarMarkup(macros = {}, macroBarPrefix = '') {
+    const prefix = String(macroBarPrefix || '').trim();
+    const prefixHtml = prefix ? `<span class="macro-prefix">${escapeHtml(prefix)}</span>` : '';
+
     return `
+        ${prefixHtml}
         <span>${macros?.calories || '0'} CAL</span>
         <span class="macro-divider">|</span>
         <span>${macros?.protein || '0'} G PROTEIN</span>
@@ -3293,13 +3654,18 @@ function createContinuationPage(pageNumberText = '') {
     const pageNumberMarkup = pageNumberText ? `<span class="page-number">${escapeHtml(pageNumberText)}</span>` : '';
     const printerFriendly = isPrinterFriendly(currentRecipe);
     const heroHeight = printerFriendly ? getPrinterFriendlyHeroHeight(currentRecipe) : (Number.parseInt(currentRecipe.heroHeight, 10) || 309);
+    const titleFontSize = Number.parseInt(currentRecipe.titleFontSize, 10) || 40;
     const heroImageHtml = createHeroImageMarkup(currentRecipe);
+    const printerContinuationLogo = printerFriendly ? createCornerLogoMarkup(currentRecipe) : '';
+    const continuationTitle = escapeHtml(currentRecipe.title || 'Recipe Title');
 
     return `
         <div class="recipe-page recipe-page--continuation${printerFriendly ? ' printer-friendly-page' : ''}">
+            ${printerContinuationLogo}
             <div class="hero-section hero-section--continuation" style="height: ${heroHeight}px;">
                 ${heroImageHtml}
                 <div class="hero-overlay"></div>
+                <h1 class="recipe-title" style="font-size: ${titleFontSize}px;">${continuationTitle}</h1>
             </div>
             <div class="content-area content-area--continuation">
                 <div class="page-flow-grid">
@@ -3497,12 +3863,12 @@ function paginateRecipeFlow(noteHtml = '') {
     const instructionSections = getInstructionSectionsForForm(currentRecipe)
         .filter(section => section.steps.length > 0);
     const materialsLayout = currentRecipe.materialsLayout || 'column';
-    const materialsAutoSpacing = currentRecipe.materialsAutoSpacing !== false;
-    const materialsHtml = (currentRecipe.materials || []).map((materialId) => {
+    const materialsAutoSpacing = currentRecipe.materialsAutoSpacing === true;
+    const materialsHtml = currentRecipe.showMaterials !== false ? (currentRecipe.materials || []).map((materialId) => {
         const material = AVAILABLE_MATERIALS.find(m => m.id === materialId);
         if (!material) return '';
         return `<div class="material-icon-item" title="${material.name}">${material.svg}</div>`;
-    }).join('');
+    }).join('') : '';
 
     if (materialsLayout === 'column' && materialsHtml) {
         placeNode(() => createMaterialsNode(materialsHtml, materialsAutoSpacing));
@@ -3584,6 +3950,8 @@ function paginateRecipeFlow(noteHtml = '') {
     if (noteHtml) {
         placeNode(() => createNoteNode(noteHtml));
     }
+
+    layoutHeroImageLayers(pageStack);
 }
 
 function paginateDayPlanFlow() {
@@ -3722,6 +4090,8 @@ function paginateDayPlanFlow() {
             }
         }
     });
+
+    layoutHeroImageLayers(pageStack);
 }
 
 // ================================================
@@ -3731,10 +4101,11 @@ function paginateDayPlanFlow() {
 /**
  * Handle JPG export (A4 at 300 DPI = 2480x3508 pixels)
  */
-async function handleExportJpg() {
+async function handleExportJpg(options = {}) {
     const recipePageStack = elements.recipePage();
     const recipePages = Array.from(recipePageStack?.querySelectorAll('.recipe-page') || []);
-    const exportBtn = elements.btnExportJpg();
+    const exportBtn = options?.exportButton || elements.btnExportJpg();
+    const shouldManageButtonState = options?.manageButtonState !== false;
 
     if (typeof html2canvas !== 'function') {
         alert('JPG export is unavailable because html2canvas did not load.');
@@ -3742,9 +4113,11 @@ async function handleExportJpg() {
     }
 
     // Show loading state
-    const originalText = exportBtn.textContent;
-    exportBtn.textContent = 'Exporting...';
-    exportBtn.disabled = true;
+    const originalText = exportBtn?.textContent || 'Export JPG';
+    if (shouldManageButtonState && exportBtn) {
+        exportBtn.textContent = 'Exporting...';
+        exportBtn.disabled = true;
+    }
 
     try {
         if (recipePages.length === 0) {
@@ -4020,11 +4393,76 @@ async function handleExportJpg() {
 
     } catch (error) {
         console.error('Export error:', error);
+        if (options?.rethrow === true) {
+            throw error;
+        }
         alert('Error exporting image. Please try again.');
     } finally {
         // Restore button state
-        exportBtn.textContent = originalText;
-        exportBtn.disabled = false;
+        if (shouldManageButtonState && exportBtn) {
+            exportBtn.textContent = originalText;
+            exportBtn.disabled = false;
+        }
+    }
+}
+
+function waitForPreviewRender() {
+    return new Promise((resolve) => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(resolve);
+        });
+    });
+}
+
+async function handleExportAll() {
+    const exportBtn = elements.btnExportAll();
+    const originalText = exportBtn?.textContent || 'Export All';
+    const originalRecipe = JSON.parse(JSON.stringify(currentRecipe));
+    const variants = [
+        { pageStyle: 'standard', showMacroBar: true, clearHeroImage: false },
+        { pageStyle: 'standard', showMacroBar: false, clearHeroImage: false },
+        { pageStyle: 'printer-friendly', showMacroBar: true, clearHeroImage: true },
+        { pageStyle: 'printer-friendly', showMacroBar: false, clearHeroImage: true }
+    ];
+
+    if (exportBtn) {
+        exportBtn.disabled = true;
+    }
+
+    try {
+        for (let index = 0; index < variants.length; index += 1) {
+            const variant = variants[index];
+            if (exportBtn) {
+                exportBtn.textContent = `Exporting ${index + 1}/4...`;
+            }
+
+            currentRecipe = normalizeRecipe({
+                ...originalRecipe,
+                pageStyle: variant.pageStyle,
+                showMacroBar: variant.showMacroBar,
+                image: variant.clearHeroImage ? '' : originalRecipe.image
+            });
+            loadRecipeToForm(currentRecipe);
+            renderRecipePage();
+            await waitForPreviewRender();
+            await handleExportJpg({
+                exportButton: exportBtn,
+                manageButtonState: false,
+                rethrow: true
+            });
+        }
+    } catch (error) {
+        console.error('Export all error:', error);
+        alert('Error exporting all recipe versions. Please try again.');
+    } finally {
+        currentRecipe = normalizeRecipe(originalRecipe);
+        loadRecipeToForm(currentRecipe);
+        renderRecipePage();
+
+        if (exportBtn) {
+            exportBtn.textContent = originalText;
+            exportBtn.disabled = false;
+        }
     }
 }
 
@@ -5125,6 +5563,38 @@ function handleClear() {
     }
 }
 
+function layoutHeroImageLayers(root = document) {
+    root.querySelectorAll('.hero-section .hero-image-layer').forEach((image) => {
+        const heroSection = image.closest('.hero-section');
+        if (!heroSection || !image.naturalWidth || !image.naturalHeight) {
+            if (!image.dataset.heroLayoutBound) {
+                image.dataset.heroLayoutBound = 'true';
+                image.addEventListener('load', () => layoutHeroImageLayers(root), { once: true });
+            }
+            return;
+        }
+
+        const heroWidth = heroSection.clientWidth;
+        const heroHeight = heroSection.clientHeight;
+        if (!heroWidth || !heroHeight) return;
+
+        const rawPosX = Number.parseFloat(image.style.getPropertyValue('--hero-image-pos-x'));
+        const rawPosY = Number.parseFloat(image.style.getPropertyValue('--hero-image-pos-y'));
+        const rawZoom = Number.parseFloat(image.style.getPropertyValue('--hero-image-zoom'));
+        const posX = Math.min(100, Math.max(0, Number.isFinite(rawPosX) ? rawPosX : 50)) / 100;
+        const posY = Math.min(100, Math.max(0, Number.isFinite(rawPosY) ? rawPosY : 50)) / 100;
+        const zoom = Math.max(0.01, Number.isFinite(rawZoom) ? rawZoom : 1);
+        const coverScale = Math.max(heroWidth / image.naturalWidth, heroHeight / image.naturalHeight);
+        const coverWidth = image.naturalWidth * coverScale * zoom;
+        const coverHeight = image.naturalHeight * coverScale * zoom;
+
+        image.style.width = `${coverWidth}px`;
+        image.style.height = `${coverHeight}px`;
+        image.style.left = `${(heroWidth - coverWidth) * posX}px`;
+        image.style.top = `${(heroHeight - coverHeight) * posY}px`;
+    });
+}
+
 /**
  * Update zoom level display and transform
  */
@@ -5369,15 +5839,10 @@ function drawHeroImageToCanvas(ctx, img, heroRect, imgSettings) {
     const posY = Math.min(100, Math.max(0, imgSettings?.posY ?? 50)) / 100;
 
     const coverScale = Math.max(heroRect.width / img.naturalWidth, heroRect.height / img.naturalHeight);
-    const coverWidth = img.naturalWidth * coverScale;
-    const coverHeight = img.naturalHeight * coverScale;
-    const baseX = (heroRect.width - coverWidth) * posX;
-    const baseY = (heroRect.height - coverHeight) * posY;
-
-    const drawWidth = coverWidth * zoom;
-    const drawHeight = coverHeight * zoom;
-    const drawX = heroRect.x + baseX - ((drawWidth - coverWidth) / 2);
-    const drawY = heroRect.y + baseY - ((drawHeight - coverHeight) / 2);
+        const drawWidth = img.naturalWidth * coverScale * zoom;
+        const drawHeight = img.naturalHeight * coverScale * zoom;
+        const drawX = heroRect.x + ((heroRect.width - drawWidth) * posX);
+        const drawY = heroRect.y + ((heroRect.height - drawHeight) * posY);
 
     ctx.save();
     ctx.beginPath();

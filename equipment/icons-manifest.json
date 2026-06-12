@@ -146,6 +146,11 @@
       "path": "equipment/Potato-Masher.svg"
     },
     {
+      "id": "rice-cooker",
+      "name": "Rice Cooker",
+      "path": "equipment/Rice-cooker.svg"
+    },
+    {
       "id": "scissors",
       "name": "Scissors",
       "path": "equipment/Scissors.svg"
