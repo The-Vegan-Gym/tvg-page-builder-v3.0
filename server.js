@@ -400,6 +400,17 @@ async function drawHero(doc, recipe, layout) {
     const isPrinterFriendly = recipe.pageStyle === 'printer-friendly';
     const heroHeight = isPrinterFriendly ? 120 : (Number.parseInt(recipe.heroHeight, 10) || 309);
     const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || (isPrinterFriendly ? 28 : 40);
+    const titleMacroSpacing = Number.parseInt(recipe.printerTitleMacroSpacing, 10);
+    const spacing = Number.isFinite(titleMacroSpacing) ? Math.max(0, Math.min(80, titleMacroSpacing)) : 16;
+    const titleText = String(recipe.title || 'Recipe Title').toUpperCase();
+    doc.font('Helvetica-Bold').fontSize(titleFontSize);
+    const titleHeight = doc.heightOfString(titleText, {
+        width: PAGE_WIDTH - (layout.marginX * 2),
+        lineGap: 2
+    });
+    const titleY = isPrinterFriendly
+        ? getPrinterTitleTopPaddingForPdf(recipe)
+        : Math.max(0, heroHeight - titleHeight - spacing);
 
     doc.save();
     doc.rect(0, 0, PAGE_WIDTH, heroHeight).fill(isPrinterFriendly ? '#ffffff' : '#efefef');
@@ -419,7 +430,7 @@ async function drawHero(doc, recipe, layout) {
     doc.font('Helvetica-Bold')
         .fontSize(titleFontSize)
         .fillColor(isPrinterFriendly ? '#222222' : '#ffffff')
-        .text(String(recipe.title || 'Recipe Title').toUpperCase(), layout.marginX, heroHeight - (isPrinterFriendly ? 52 : 80), {
+        .text(titleText, layout.marginX, titleY, {
             width: PAGE_WIDTH - (layout.marginX * 2),
             lineGap: 2
         });
@@ -439,17 +450,22 @@ function drawHeroGradient(doc, heroHeight) {
     doc.fillOpacity(1);
 }
 
+function getPrinterTitleTopPaddingForPdf(recipe) {
+    const parsed = Number.parseInt(recipe?.printerTitleTopPadding, 10);
+    if (!Number.isFinite(parsed)) {
+        return 70;
+    }
+    return Math.max(0, Math.min(120, parsed));
+}
+
 function drawMacroBar(doc, recipe, layout) {
     if (recipe.showMacroBar === false || !hasMacroData(recipe.macros)) {
         return;
     }
 
     const barText = `${recipe.macros.calories || '0'} CAL  |  ${recipe.macros.protein || '0'} G PROTEIN  |  ${recipe.macros.carbs || '0'} G CARBS  |  ${recipe.macros.fat || '0'} G FAT`;
-    const titleMacroSpacing = Number.parseInt(recipe.printerTitleMacroSpacing, 10);
-    const spacing = Number.isFinite(titleMacroSpacing) ? Math.max(0, Math.min(80, titleMacroSpacing)) : 18;
-    const spacingShift = spacing - 18;
     const barX = layout.marginX;
-    const barY = layout.y - 12 + spacingShift;
+    const barY = layout.y - 12;
     const barWidth = Math.min(PAGE_WIDTH - (layout.marginX * 2), doc.widthOfString(barText) + 48);
     const barHeight = 27;
     const color = recipe.pageStyle === 'printer-friendly' ? '#d9d9d9' : BRAND_GREEN;
@@ -459,8 +475,6 @@ function drawMacroBar(doc, recipe, layout) {
         .fontSize(11)
         .fillColor('#000000')
         .text(barText, barX + 20, barY + 8, { width: barWidth - 40 });
-
-    layout.y += spacingShift;
 }
 
 function drawDescription(doc, recipe, layout) {
@@ -654,9 +668,9 @@ function drawSectionTitle(doc, label, x, y, width) {
 
 function drawPillHeader(doc, label, x, y) {
     const text = String(label || '').toUpperCase();
-    const width = Math.min(PAGE_WIDTH - 100, doc.font('Helvetica-Bold').fontSize(11).widthOfString(text) + 38);
+    const width = Math.min(PAGE_WIDTH - 100, doc.font('Helvetica-Bold').fontSize(12).widthOfString(text) + 38);
     doc.roundedRect(x, y, width, 28, 5).fill('#000000');
-    doc.font('Helvetica-Bold').fontSize(11).fillColor('#ffffff').text(text, x + 18, y + 9, { width: width - 36 });
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#ffffff').text(text, x + 18, y + 8, { width: width - 36 });
 }
 
 function drawDivider(doc, x1, y, x2) {

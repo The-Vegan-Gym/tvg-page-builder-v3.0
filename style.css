@@ -2561,7 +2561,7 @@ body {
 .page-primary.printer-friendly-page .hero-section:not(.hero-section--continuation) {
     height: auto;
     padding-top: var(--printer-title-top-padding, 70px);
-    padding-bottom: var(--printer-title-macro-spacing, 18px);
+    padding-bottom: var(--printer-title-macro-spacing, 16px);
     overflow: visible;
 }
 
@@ -2595,7 +2595,7 @@ body {
 /* Recipe Title */
 .recipe-title {
     position: absolute;
-    bottom: 20px;
+    bottom: var(--printer-title-macro-spacing, 16px);
     left: var(--spacing-50);
     right: var(--spacing-50);
     font-size: 40px;
@@ -2610,7 +2610,7 @@ body {
 /* Macro Bar */
 .macro-bar {
     margin: 0 var(--spacing-50);
-    margin-top: calc(var(--printer-title-macro-spacing, 18px) - 30px);
+    margin-top: calc(-1 * var(--spacing-12));
     position: relative;
     z-index: 10;
 }
@@ -2927,7 +2927,7 @@ body {
 .instructions-header {
     background: var(--color-black);
     color: var(--color-white);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;

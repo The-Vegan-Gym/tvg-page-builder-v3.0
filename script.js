@@ -43,7 +43,7 @@ const EMPTY_RECIPE = {
     title: "",
     titleFontSize: 40,
     printerTitleTopPadding: 70,
-    printerTitleMacroSpacing: 18,
+    printerTitleMacroSpacing: 16,
     image: "",
     heroHeight: 309,
     imageSettings: {
@@ -1984,7 +1984,7 @@ function updatePrinterTitleTopPaddingDisplay(value = getPrinterTitleTopPadding()
 function getPrinterTitleMacroSpacing(recipe = currentRecipe) {
     const parsed = Number.parseInt(recipe?.printerTitleMacroSpacing, 10);
     if (!Number.isFinite(parsed)) {
-        return 18;
+        return 16;
     }
     return Math.max(0, Math.min(80, parsed));
 }
@@ -3272,8 +3272,7 @@ function renderRecipePage() {
     const printerTitleMacroSpacing = getPrinterTitleMacroSpacing(recipe);
     const heroStyle = isPrinterFriendly(recipe)
         ? `--printer-title-top-padding: ${printerTitleTopPadding}px; --printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`
-        : `height: ${heroHeight}px;`;
-    const macroBarStyle = `--printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`;
+        : `height: ${heroHeight}px; --printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`;
     const heroImageHtml = createHeroImageMarkup(recipe);
 
     const macroValues = [
@@ -3299,7 +3298,7 @@ function renderRecipePage() {
 
             <!-- Macro Bar -->
             ${shouldShowMacroBar ? `
-            <div class="macro-bar" style="${macroBarStyle}">
+            <div class="macro-bar">
                 <div class="macro-bar-content">
                     ${macroBarHtml}
                 </div>
@@ -3346,8 +3345,7 @@ function renderDayOfEatingPage(page, recipe) {
     const printerTitleMacroSpacing = getPrinterTitleMacroSpacing(recipe);
     const heroStyle = isPrinterFriendly(recipe)
         ? `--printer-title-top-padding: ${printerTitleTopPadding}px; --printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`
-        : `height: ${heroHeight}px;`;
-    const macroBarStyle = `--printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`;
+        : `height: ${heroHeight}px; --printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`;
     const heroImageHtml = createHeroImageMarkup(recipe);
     const macroBarHtml = createMacroBarMarkup(recipe.macros, recipe.macroBarPrefix);
     const hasMacroData = hasAnyMacroData(recipe.macros);
@@ -3400,7 +3398,7 @@ function renderDayOfEatingPage(page, recipe) {
             </div>
 
             ${shouldShowMacroBar ? `
-            <div class="macro-bar" style="${macroBarStyle}">
+            <div class="macro-bar">
                 <div class="macro-bar-content">
                     ${macroBarHtml}
                 </div>
@@ -4108,7 +4106,31 @@ function paginateRecipeFlow(noteHtml = '') {
         });
     });
 
-    function applyInstructionStartMode(sectionLabel, sectionSteps, startMode, stepStyle = 'numbered') {
+    function getInstructionStartPreviewNodes(sectionLabel, sectionSteps, stepStyle = 'numbered', includeMainHeader = false) {
+        const previewNodes = [];
+
+        if (includeMainHeader && currentRecipe.showInstructionsHeader !== false) {
+            previewNodes.push(createInstructionHeaderNode(currentRecipe.instructionsLabel || 'Instructions for 1 Serving'));
+        }
+
+        if (sectionLabel) {
+            previewNodes.push(createInstructionPartHeaderNode(sectionLabel));
+        }
+
+        if (sectionSteps.length > 0) {
+            previewNodes.push(createInstructionFlowNode(sectionSteps[0], 0, stepStyle));
+        }
+
+        return previewNodes;
+    }
+
+    function shouldShowInstructionSetHeader(sectionLabel) {
+        const normalizedSectionLabel = String(sectionLabel || '').trim();
+        const normalizedMainLabel = String(currentRecipe.instructionsLabel || '').trim();
+        return normalizedSectionLabel && normalizedSectionLabel !== normalizedMainLabel;
+    }
+
+    function applyInstructionStartMode(sectionLabel, sectionSteps, startMode, stepStyle = 'numbered', includeMainHeader = false) {
         if (startMode === 'force-next-page') {
             const startingPageIndex = getCurrentSlot().pageIndex;
             let slot = getCurrentSlot();
@@ -4119,7 +4141,8 @@ function paginateRecipeFlow(noteHtml = '') {
         }
 
         if (startMode === 'force-right-column') {
-            if (currentSlotIndex === 0 && slot1.children.length > 0) {
+            const slot = getCurrentSlot();
+            if (slot.columnIndex === 0 && slot.element.children.length > 0) {
                 advanceSlot();
             }
             return;
@@ -4127,12 +4150,7 @@ function paginateRecipeFlow(noteHtml = '') {
 
         if (startMode === 'keep-with-first-step') {
             const slot = getCurrentSlot();
-            const previewNodes = [createInstructionHeaderNode(sectionLabel)];
-
-            if (sectionSteps.length > 0) {
-                const firstStep = sectionSteps[0];
-                previewNodes.push(createInstructionFlowNode(firstStep, 0, stepStyle));
-            }
+            const previewNodes = getInstructionStartPreviewNodes(sectionLabel, sectionSteps, stepStyle, includeMainHeader);
 
             if (!canFitNodeGroup(slot.element, slot.maxHeight, previewNodes) && slot.element.children.length > 0) {
                 advanceSlot();
@@ -4141,16 +4159,18 @@ function paginateRecipeFlow(noteHtml = '') {
     }
 
     if (instructionSections.length > 0) {
-        if (currentRecipe.showInstructionsHeader !== false) {
-            placeInstructionNode(() => createInstructionHeaderNode(currentRecipe.instructionsLabel || 'Instructions for 1 Serving'));
-        }
-
-        instructionSections.forEach((section) => {
+        instructionSections.forEach((section, sectionIndex) => {
             const stepStyle = section.stepStyle || 'numbered';
-            applyInstructionStartMode(currentRecipe.instructionsLabel || 'Instructions', section.steps, section.startMode || 'force-right-column', stepStyle);
+            const includeMainHeader = sectionIndex === 0;
+            const sectionLabel = shouldShowInstructionSetHeader(section.label) ? section.label : '';
+            applyInstructionStartMode(sectionLabel, section.steps, section.startMode || 'force-right-column', stepStyle, includeMainHeader);
 
-            if (section.label) {
-                placeInstructionNode(() => createInstructionPartHeaderNode(section.label));
+            if (includeMainHeader && currentRecipe.showInstructionsHeader !== false) {
+                placeInstructionNode(() => createInstructionHeaderNode(currentRecipe.instructionsLabel || 'Instructions for 1 Serving'));
+            }
+
+            if (sectionLabel) {
+                placeInstructionNode(() => createInstructionPartHeaderNode(sectionLabel));
             }
 
             let visibleStepIndex = 0;
