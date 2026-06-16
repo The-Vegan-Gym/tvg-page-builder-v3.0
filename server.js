@@ -3,7 +3,10 @@ const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
 
+loadEnvFile();
+
 const PORT = Number(process.env.PORT) || 3000;
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
 const BRAND_GREEN = '#42d53b';
@@ -36,8 +39,38 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    if (req.method === 'POST' && req.url === '/api/generate-master-paste') {
+        handleMasterPasteGeneration(req, res);
+        return;
+    }
+
     serveStaticFile(req, res);
 });
+
+function loadEnvFile() {
+    const envPath = path.join(__dirname, '.env');
+    if (!fs.existsSync(envPath)) return;
+
+    const envText = fs.readFileSync(envPath, 'utf8');
+    envText.split(/\r?\n/).forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) return;
+
+        const equalsIndex = trimmed.indexOf('=');
+        if (equalsIndex === -1) return;
+
+        const key = trimmed.slice(0, equalsIndex).trim();
+        let value = trimmed.slice(equalsIndex + 1).trim();
+
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.slice(1, -1);
+        }
+
+        if (key && !process.env[key]) {
+            process.env[key] = value;
+        }
+    });
+}
 
 function handleIconsList(req, res) {
     const iconsDir = path.join(__dirname, 'equipment');
@@ -124,6 +157,174 @@ function handlePdfExport(req, res) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message || 'Unable to export PDF' }));
         });
+}
+
+async function handleMasterPasteGeneration(req, res) {
+    try {
+        loadEnvFile();
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+            throw new Error('OPENAI_API_KEY is missing. Add OPENAI_API_KEY=your_key to .env.');
+        }
+
+        const payload = await readJsonBody(req);
+        const sourceText = String(payload.text || '').trim();
+        const images = Array.isArray(payload.images) ? payload.images.slice(0, 6) : [];
+
+        if (!sourceText && images.length === 0) {
+            throw new Error('Add recipe text, one or more images, or both before generating.');
+        }
+
+        const inputContent = [
+            {
+                type: 'input_text',
+                text: `${getMasterPasteAiPrompt()}\n\nSource text from user:\n${sourceText || '(none provided)'}`
+            },
+            ...images
+                .filter((image) => image?.dataUrl && /^data:image\/(?:png|jpe?g|webp);base64,/i.test(image.dataUrl))
+                .map((image) => ({
+                    type: 'input_image',
+                    image_url: image.dataUrl
+                }))
+        ];
+
+        const response = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: OPENAI_MODEL,
+                input: [
+                    {
+                        role: 'user',
+                        content: inputContent
+                    }
+                ],
+                temperature: 0.2
+            })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            const message = data?.error?.message || `OpenAI request failed with HTTP ${response.status}`;
+            throw new Error(message);
+        }
+
+        const structuredText = extractResponseText(data);
+        if (!structuredText) {
+            throw new Error('OpenAI returned an empty response.');
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ text: cleanStructuredOutput(structuredText) }));
+    } catch (error) {
+        console.error('Master paste AI generation error:', error);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message || 'Unable to generate structured recipe data' }));
+    }
+}
+
+function extractResponseText(response) {
+    if (typeof response.output_text === 'string') {
+        return response.output_text;
+    }
+
+    const chunks = [];
+    (response.output || []).forEach((item) => {
+        (item.content || []).forEach((content) => {
+            if (typeof content.text === 'string') {
+                chunks.push(content.text);
+            }
+        });
+    });
+
+    return chunks.join('\n').trim();
+}
+
+function cleanStructuredOutput(text) {
+    const value = String(text || '').trim();
+    const codeBlockMatch = value.match(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/);
+    return (codeBlockMatch ? codeBlockMatch[1] : value).trim();
+}
+
+function getMasterPasteAiPrompt() {
+    return `You are helping format recipe data for a Recipe Page Generator app.
+
+Analyze the provided recipe text and images. Output ONLY structured plain text in this exact format. Do not include commentary.
+
+::META::
+Recipe Title;Meal Type;dietary flags;serves;prep time;cook time;calories;protein g;carbs g;fat g;equipment names;portion variation icon;show ingredients title yes/no
+
+::TEXT::
+Description or intro text
+
+::TEXT::
+Note:
+Optional note or tip text
+
+::INGREDIENTS Ingredients for 4 Servings::
+Ingredient;Amount
+Ingredient;Amount
+
+If there are multiple ingredient groups or recipe components, preserve them:
+
+::INGREDIENTS Ingredients for 4 Servings::
+::TABLE Group Name::
+Ingredient;Amount
+Ingredient;Amount
+::TABLE Another Group::
+Ingredient;Amount
+
+::DIRECTIONS::
+:HEADER: First part
+Step one text
+Step with checkbox items
+- [ ] Checkbox item one
+- [ ] Checkbox item two
+:HEADER: Second part
+Step two text
+
+Rules:
+- Return only the final structured recipe text. A fenced code block is acceptable, but no explanation outside it.
+- Use exact section headers: ::META::, ::TEXT::, ::INGREDIENTS::, ::TABLE Name::, ::DIRECTIONS::.
+- META must be semicolon-separated. Use 13 fields when possible:
+  1. Recipe title
+  2. Meal type
+  3. Dietary flags
+  4. Serves
+  5. Prep time
+  6. Cook time
+  7. Calories
+  8. Protein grams
+  9. Carb grams
+  10. Fat grams
+  11. Equipment/material names
+  12. Portion variation icon name (optional; leave blank for normal recipes)
+  13. Show ingredients title: yes or no
+- If using the older 11-field META format, the app still accepts it and defaults show ingredients title to yes.
+- If macros are unknown, use 0 for calories, protein, carbs, and fat.
+- If a non-macro field is unknown, leave it blank but keep delimiters intact.
+- Serves examples: "4 Servings", "2-3 Servings", "1 Serving".
+- Times should include units: "15 min", "1 hour", "30-45 min".
+- Equipment names should be comma-separated and use common tool names.
+- First ::TEXT:: block is the description. Additional ::TEXT:: blocks are note callouts.
+- For note callouts, put the note label on the first line, usually "Note:" or "Tip:".
+- Ingredient rows must be Name;Amount.
+- The black ingredients title is separate from ingredient set headers.
+- The black ingredients title text comes from the ::INGREDIENTS Header Text:: section line. Example: ::INGREDIENTS Ingredients for 4 Servings::.
+- The black ingredients title can be hidden with META field 13 set to "no". Use "yes" by default for normal recipes.
+- If the black title is hidden, still include the ::INGREDIENTS:: block so ingredient rows can be parsed.
+- Use ::TABLE Group Name:: only for ingredient set headers such as Sauce, Dressing, Bowl, Filling, or Topping.
+- Do not repeat "Ingredients for X Servings" as a ::TABLE name unless the source truly has an ingredient group with that exact name.
+- Use lowercase "tsp" and "tbsp".
+- Use single-character fraction glyphs for common fractions: ½, ¼, ¾, ⅓, ⅔, ⅛, ⅜, ⅝, ⅞.
+- Write mixed amounts like "1½ tsp", not "1 1/2 tsp".
+- Directions are one step per line with no numbering.
+- To add an unnumbered instruction header in the middle of directions, put it on its own line as ":HEADER: Header text". These headers should divide directions into parts, such as ":HEADER: Making the green goddess sauce".
+- Checkbox item lines must start exactly with "- [ ]" and directly follow the parent step.`;
 }
 
 function readJsonBody(req) {
@@ -288,13 +489,24 @@ function drawMaterialsPlaceholder(doc, recipe, column) {
 function drawIngredients(doc, recipe, column) {
     const sections = recipe.ingredientSections.length > 0
         ? recipe.ingredientSections
-        : [{ label: recipe.servingsLabel || 'Ingredients', ingredients: recipe.ingredients || [] }];
+        : [{ label: '', ingredients: recipe.ingredients || [] }];
+
+    const mainLabel = recipe.servingsLabel || sections[0]?.label || 'INGREDIENTS';
+    if (recipe.showIngredientsHeader !== false) {
+        column.y = ensureSpace(doc, column.y, 75);
+        drawPillHeader(doc, mainLabel, column.x, column.y);
+        column.y += 44;
+    }
 
     sections.forEach((section, index) => {
         if (index > 0) column.y += 12;
-        column.y = ensureSpace(doc, column.y, 70);
-        drawSectionTitle(doc, section.label || 'INGREDIENTS', column.x, column.y, column.width);
-        column.y += 27;
+        const sectionLabel = section.label || '';
+        const shouldShowSetHeader = sectionLabel && sectionLabel !== mainLabel && sections.length > 1;
+        if (shouldShowSetHeader) {
+            column.y = ensureSpace(doc, column.y, 70);
+            drawSectionTitle(doc, sectionLabel, column.x, column.y, column.width);
+            column.y += 27;
+        }
 
         (section.ingredients || []).forEach((ingredient) => {
             column.y = ensureSpace(doc, column.y, 24);
@@ -328,17 +540,27 @@ function drawInstructions(doc, recipe, column) {
         drawPillHeader(doc, section.label || 'INSTRUCTIONS', column.x, column.y);
         column.y += 44;
 
-        (section.steps || []).forEach((step, index) => {
-            const stepText = typeof step === 'string' ? step : (step.text || '');
+        let visibleStepIndex = 0;
+        (section.steps || []).forEach((step) => {
+            if (isInstructionHeaderStep(step)) {
+                column.y = ensureSpace(doc, column.y + 8, 28);
+                drawSectionTitle(doc, getInstructionStepText(step), column.x, column.y, column.width);
+                column.y += 26;
+                visibleStepIndex = 0;
+                return;
+            }
+
+            const stepText = getInstructionStepText(step);
             const checkboxItems = typeof step === 'object' && Array.isArray(step.checkboxItems) ? step.checkboxItems : [];
             const textHeight = doc.heightOfString(stepText, { width: column.width - 38 });
             column.y = ensureSpace(doc, column.y, textHeight + 34 + (checkboxItems.length * 16));
 
             doc.roundedRect(column.x, column.y - 2, 20, 20, 3).fill('#b2b2b2');
-            doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000').text(String(index + 1), column.x, column.y + 3, {
+            doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000').text(String(visibleStepIndex + 1), column.x, column.y + 3, {
                 width: 20,
                 align: 'center'
             });
+            visibleStepIndex += 1;
 
             doc.font('Helvetica-Bold').fontSize(9.5).fillColor(TEXT_DARK).text(stepText, column.x + 36, column.y, {
                 width: column.width - 36,
@@ -356,6 +578,27 @@ function drawInstructions(doc, recipe, column) {
             });
         });
     });
+}
+
+function parseInstructionHeaderText(value) {
+    const match = String(value || '').trim().match(/^:HEADER:\s*(.+)$/i);
+    return match ? match[1].trim() : '';
+}
+
+function isInstructionHeaderStep(step) {
+    if (typeof step === 'string') {
+        return Boolean(parseInstructionHeaderText(step));
+    }
+
+    return Boolean(step && typeof step === 'object' && step.type === 'header' && step.text);
+}
+
+function getInstructionStepText(step) {
+    if (typeof step === 'string') {
+        return parseInstructionHeaderText(step) || step;
+    }
+
+    return step?.text || '';
 }
 
 function drawNotes(doc, recipe, column) {

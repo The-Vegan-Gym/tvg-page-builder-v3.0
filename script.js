@@ -75,6 +75,7 @@ const EMPTY_RECIPE = {
     portionVariationIcon: "",
     portionVariationSections: [],
     servingsLabel: "Ingredients for 1 Serving",
+    showIngredientsHeader: true,
     ingredientSections: [],
     instructionsLabel: "Instructions for 1 Serving",
     instructionsStartMode: "force-right-column",
@@ -232,6 +233,7 @@ let bottomMarginGuideTimer = null;
 let previewAutoCenterFrame = null;
 let previewAutoCenterTimer = null;
 let activeEditorSectionKey = 'basicInformation';
+let masterPasteAiImages = [];
 
 function normalizeRecipe(recipe = {}) {
     const normalized = {
@@ -253,6 +255,7 @@ function normalizeRecipe(recipe = {}) {
         ingredientSections: Array.isArray(recipe.ingredientSections) ? recipe.ingredientSections : [],
         instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
         instructionSections: Array.isArray(recipe.instructionSections) ? recipe.instructionSections : [],
+        showIngredientsHeader: recipe.showIngredientsHeader !== false,
         showDirectionsContinuedHeader: recipe.showDirectionsContinuedHeader === true,
         showMaterials: recipe.showMaterials !== false,
         materialsAutoSpacing: recipe.materialsAutoSpacing === true,
@@ -299,7 +302,7 @@ function normalizeRecipe(recipe = {}) {
 
     normalized.ingredientSections = normalized.ingredientSections
         .map((section) => ({
-            label: section.label || EMPTY_RECIPE.servingsLabel,
+            label: section.label || '',
             startMode: section.startMode === 'force-right-column' ? 'force-right-column' : 'auto',
             ingredients: Array.isArray(section.ingredients) ? section.ingredients : []
         }))
@@ -310,14 +313,14 @@ function normalizeRecipe(recipe = {}) {
         normalized.servingsLabel
     )) {
         normalized.ingredientSections = [{
-            label: normalized.servingsLabel || EMPTY_RECIPE.servingsLabel,
+            label: '',
             startMode: 'auto',
             ingredients: normalized.ingredients
         }];
     }
 
     if (normalized.ingredientSections.length > 0) {
-        normalized.servingsLabel = normalized.ingredientSections[0].label || EMPTY_RECIPE.servingsLabel;
+        normalized.servingsLabel = normalized.servingsLabel || EMPTY_RECIPE.servingsLabel;
         normalized.ingredients = normalized.ingredientSections[0].ingredients || [];
     }
 
@@ -386,6 +389,12 @@ const elements = {
     // Form inputs
     masterPaste: () => document.getElementById('master-paste'),
     masterPasteStatus: () => document.getElementById('master-paste-status'),
+    masterPasteAiSource: () => document.getElementById('master-paste-ai-source'),
+    masterPasteAiDropzone: () => document.getElementById('master-paste-ai-dropzone'),
+    masterPasteAiImages: () => document.getElementById('master-paste-ai-images'),
+    masterPasteAiFiles: () => document.getElementById('master-paste-ai-files'),
+    btnMasterPasteAiImages: () => document.getElementById('btn-master-paste-ai-images'),
+    btnGenerateMasterPasteAi: () => document.getElementById('btn-generate-master-paste-ai'),
     btnMasterPasteInfo: () => document.getElementById('btn-master-paste-info'),
     btnCloseMasterPasteInfo: () => document.getElementById('btn-close-master-paste-info'),
     masterPasteInfoPanel: () => document.getElementById('master-paste-info-panel'),
@@ -454,6 +463,8 @@ const elements = {
     btnCloseEquipment: () => document.getElementById('btn-close-equipment'),
     btnSaveEquipment: () => document.getElementById('btn-save-equipment'),
     ingredientsList: () => document.getElementById('ingredients-list'),
+    servingsLabel: () => document.getElementById('servings-label'),
+    showIngredientsHeader: () => document.getElementById('show-ingredients-header'),
     addIngredientSection: () => document.getElementById('add-ingredient-section'),
     instructionsLabel: () => document.getElementById('instructions-label'),
     instructionsStartMode: () => document.getElementById('instructions-start-mode'),
@@ -1423,7 +1434,7 @@ function closeMasterPasteInfoPanel() {
  */
 function initializeFormListeners() {
     // Text inputs
-    const textInputs = ['title', 'description', 'pageNumber', 'macroBarPrefix', 'calories', 'protein', 'carbs', 'fat', 'instructionsLabel', 'note', 'dayHighlightsTitle', 'dayTipsTitle', 'dayMealsTitle', 'dayBreakdownTitle', 'dayTotalsTitle'];
+    const textInputs = ['title', 'description', 'pageNumber', 'macroBarPrefix', 'calories', 'protein', 'carbs', 'fat', 'servingsLabel', 'instructionsLabel', 'note', 'dayHighlightsTitle', 'dayTipsTitle', 'dayMealsTitle', 'dayBreakdownTitle', 'dayTotalsTitle'];
     textInputs.forEach(id => {
         const element = elements[id.replace('-', '')]?.() || document.getElementById(id);
         if (element) {
@@ -1471,6 +1482,7 @@ function initializeFormListeners() {
     elements.showMaterials()?.addEventListener('change', updateRecipeFromForm);
     elements.materialsAutoSpacing()?.addEventListener('change', updateRecipeFromForm);
     elements.instructionsStartMode()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
+    elements.showIngredientsHeader()?.addEventListener('change', updateRecipeFromForm);
     elements.showDirectionsContinuedHeader()?.addEventListener('change', updateRecipeFromForm);
     elements.showMacroBar()?.addEventListener('change', updateRecipeFromForm);
     elements.showDescription()?.addEventListener('change', updateRecipeFromForm);
@@ -1606,7 +1618,9 @@ function initializeFormListeners() {
  */
 function initializeButtonListeners() {
     // Master Paste buttons
+    initializeMasterPasteAiControls();
     elements.btnFillAll()?.addEventListener('click', handleFillAll);
+    elements.btnGenerateMasterPasteAi()?.addEventListener('click', handleGenerateMasterPasteAi);
     elements.btnCopyAIInstructions()?.addEventListener('click', handleCopyAIInstructions);
     elements.btnCopyAIInfoInstructions()?.addEventListener('click', handleCopyAIInfoInstructions);
     elements.btnCopyAIDayInstructions()?.addEventListener('click', handleCopyAIDayInstructions);
@@ -1708,6 +1722,10 @@ function loadRecipeToForm(recipe) {
     elements.protein().value = recipe.macros?.protein || '';
     elements.carbs().value = recipe.macros?.carbs || '';
     elements.fat().value = recipe.macros?.fat || '';
+    elements.servingsLabel().value = recipe.servingsLabel || 'Ingredients for 1 Serving';
+    if (elements.showIngredientsHeader()) {
+        elements.showIngredientsHeader().checked = recipe.showIngredientsHeader !== false;
+    }
     elements.instructionsLabel().value = recipe.instructionsLabel || 'Instructions for 1 Serving';
     if (elements.instructionsStartMode()) {
         elements.instructionsStartMode().value = recipe.instructionsStartMode || 'force-right-column';
@@ -1828,7 +1846,7 @@ function updateRecipeFromForm() {
     const instructionSections = getInstructionSectionsFromForm();
     const portionVariationSections = getPortionVariationSectionsFromForm();
     const primaryPortionVariationSection = portionVariationSections[0] || { label: 'Portion Variations', icon: '', variations: [] };
-    const primaryIngredientSection = ingredientSections[0] || { label: 'Ingredients for 1 Serving', ingredients: [] };
+    const primaryIngredientSection = ingredientSections[0] || { label: '', ingredients: [] };
 
     currentRecipe = {
         pageType: 'recipe',
@@ -1873,7 +1891,8 @@ function updateRecipeFromForm() {
         portionVariationsLabel: primaryPortionVariationSection.label || 'Portion Variations',
         portionVariationIcon: primaryPortionVariationSection.icon || '',
         portionVariationSections,
-        servingsLabel: primaryIngredientSection.label || 'Ingredients for 1 Serving',
+        servingsLabel: elements.servingsLabel()?.value || 'Ingredients for 1 Serving',
+        showIngredientsHeader: elements.showIngredientsHeader()?.checked !== false,
         instructionsLabel: instructionSections[0]?.label || elements.instructionsLabel()?.value || 'Instructions for 1 Serving',
         instructionsStartMode: instructionSections[0]?.startMode || elements.instructionsStartMode()?.value || 'force-right-column',
         showDirectionsContinuedHeader: elements.showDirectionsContinuedHeader()?.checked === true,
@@ -2072,7 +2091,7 @@ function getIngredientsFromForm() {
 function getIngredientSectionsForForm(recipe) {
     const normalizedSections = (recipe.ingredientSections || [])
         .map((section) => ({
-            label: section.label || 'Ingredients for 1 Serving',
+            label: section.label || '',
             startMode: section.startMode === 'force-right-column' ? 'force-right-column' : 'auto',
             ingredients: Array.isArray(section.ingredients) ? section.ingredients : []
         }))
@@ -2083,7 +2102,7 @@ function getIngredientSectionsForForm(recipe) {
     }
 
     return [{
-        label: recipe.servingsLabel || 'Ingredients for 1 Serving',
+        label: '',
         startMode: 'auto',
         ingredients: recipe.ingredients || []
     }];
@@ -2093,7 +2112,7 @@ function getIngredientSectionsFromForm() {
     const sections = Array.from(elements.ingredientsList()?.querySelectorAll('.ingredient-section-editor') || [])
         .map((section, index) => {
             const labelInput = section.querySelector('.ingredient-section-label');
-            const label = (labelInput?.value || '').trim() || (index === 0 ? 'Ingredients for 1 Serving' : `Ingredients Section ${index + 1}`);
+            const label = (labelInput?.value || '').trim();
             const startMode = section.querySelector('.ingredient-section-start-mode')?.value || 'auto';
             const ingredients = Array.from(section.querySelectorAll('.ingredient-row'))
                 .map((row) => ({
@@ -2108,7 +2127,7 @@ function getIngredientSectionsFromForm() {
 
     if (sections.length === 0) {
         return [{
-            label: 'Ingredients for 1 Serving',
+            label: '',
             startMode: 'auto',
             ingredients: []
         }];
@@ -2232,6 +2251,11 @@ function getInstructionSectionsFromForm() {
                         .map(input => input.value || '')
                         .filter(Boolean);
 
+                    const headerText = parseInstructionHeaderText(text);
+                    if (headerText) {
+                        return { type: 'header', text: headerText };
+                    }
+
                     return checkboxItems.length > 0 ? { text, checkboxItems } : text;
                 })
                 .filter(step => typeof step === 'string' ? step : step.text);
@@ -2333,6 +2357,27 @@ function stripFencedCodeBlockLines(text) {
         .join('\n');
 }
 
+function parseInstructionHeaderText(value) {
+    const match = String(value || '').trim().match(/^:HEADER:\s*(.+)$/i);
+    return match ? match[1].trim() : '';
+}
+
+function isInstructionHeaderStep(step) {
+    if (typeof step === 'string') {
+        return Boolean(parseInstructionHeaderText(step));
+    }
+
+    return Boolean(step && typeof step === 'object' && step.type === 'header' && step.text);
+}
+
+function getInstructionStepText(step) {
+    if (typeof step === 'string') {
+        return parseInstructionHeaderText(step) || step;
+    }
+
+    return step?.text || '';
+}
+
 /**
  * Add a new ingredient row to the form
  */
@@ -2344,7 +2389,7 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
     section.className = 'ingredient-section-editor';
     section.innerHTML = `
         <div class="ingredient-section-editor-header">
-            <input type="text" class="ingredient-section-label" placeholder="Ingredient set label" value="${escapeHtml(label || 'Ingredients for 1 Serving')}">
+            <input type="text" class="ingredient-section-label" placeholder="Ingredient set header (optional)" value="${escapeHtml(label || '')}">
             ${isPrimary ? '' : '<button type="button" class="btn-remove" title="Remove Section">×</button>'}
         </div>
         <div class="ingredient-section-editor-meta">
@@ -2369,7 +2414,7 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
 
     const labelInput = section.querySelector('.ingredient-section-label');
     if (isPrimary) {
-        labelInput.value = label || 'Ingredients for 1 Serving';
+        labelInput.value = label || '';
     }
     labelInput.addEventListener('input', debounce(updateRecipeFromForm, 150));
 
@@ -2427,7 +2472,7 @@ function addIngredientRowToLastSection(name = '', amount = '') {
     let lastSectionRows = elements.ingredientsList()?.querySelector('.ingredient-section-editor:last-child .ingredient-section-rows');
 
     if (!lastSectionRows) {
-        addIngredientSectionEditor('Ingredients for 1 Serving', [], true, 'auto');
+        addIngredientSectionEditor('', [], true, 'auto');
         lastSectionRows = elements.ingredientsList()?.querySelector('.ingredient-section-editor:last-child .ingredient-section-rows');
     }
 
@@ -2735,7 +2780,9 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
 
     const stepsContainer = section.querySelector('.instruction-section-steps');
     (steps.length ? steps : ['']).forEach((step) => {
-        if (typeof step === 'string') {
+        if (isInstructionHeaderStep(step)) {
+            addInstructionRow(`:HEADER: ${getInstructionStepText(step)}`, stepsContainer, []);
+        } else if (typeof step === 'string') {
             addInstructionRow(step, stepsContainer, []);
         } else {
             addInstructionRow(step.text || '', stepsContainer, step.checkboxItems || []);
@@ -2783,7 +2830,10 @@ function addInstructionRow(text = '', container = null, checkboxItems = []) {
     const toggleBtn = row.querySelector('.btn-toggle-checkboxes');
     const addCheckboxBtn = row.querySelector('.btn-add-checkbox-item');
 
-    textarea.addEventListener('input', debounce(updateRecipeFromForm, 150));
+    textarea.addEventListener('input', debounce(() => {
+        renumberInstructions();
+        updateRecipeFromForm();
+    }, 150));
 
     row.querySelector('.btn-remove').addEventListener('click', () => {
         row.remove();
@@ -2840,6 +2890,17 @@ function updateInstructionRowMarker(row, index, stepStyle = 'numbered') {
     const marker = row.querySelector('.step-number');
     if (!marker) return;
 
+    const headerText = parseInstructionHeaderText(row.querySelector('textarea')?.value || '');
+    if (headerText) {
+        marker.textContent = 'H';
+        marker.classList.remove('step-bullet');
+        marker.classList.add('step-header');
+        marker.removeAttribute('aria-hidden');
+        return;
+    }
+
+    marker.classList.remove('step-header');
+
     if (stepStyle === 'bulleted') {
         marker.textContent = '';
         marker.classList.add('step-bullet');
@@ -2860,8 +2921,15 @@ function renumberInstructions() {
     sections?.forEach((section) => {
         const stepStyle = getInstructionSectionStepStyle(section);
         const rows = section.querySelectorAll('.instruction-row');
-        rows.forEach((row, index) => {
-            updateInstructionRowMarker(row, index, stepStyle);
+        let visibleStepIndex = 0;
+        rows.forEach((row) => {
+            const isHeader = Boolean(parseInstructionHeaderText(row.querySelector('textarea')?.value || ''));
+            updateInstructionRowMarker(row, visibleStepIndex, stepStyle);
+            if (isHeader) {
+                visibleStepIndex = 0;
+            } else {
+                visibleStepIndex += 1;
+            }
         });
     });
 }
@@ -3579,16 +3647,30 @@ function createInstructionHeaderNode(text) {
     return header;
 }
 
+function createIngredientsHeaderNode(text) {
+    const header = document.createElement('div');
+    header.className = 'instructions-header ingredients-header';
+    header.textContent = text;
+    return header;
+}
+
 function createInstructionContinuationHeaderNode() {
     const title = (currentRecipe.title || 'Recipe').trim();
     return createInstructionHeaderNode(`${title} - Directions continued`);
+}
+
+function createInstructionPartHeaderNode(text) {
+    const title = document.createElement('h2');
+    title.className = 'section-title flow-section-title instruction-part-header';
+    title.textContent = text;
+    return title;
 }
 
 function createInstructionNode(step, index, stepStyle = 'numbered') {
     const item = document.createElement('div');
     item.className = 'instruction-item';
 
-    const text = typeof step === 'string' ? step : step.text;
+    const text = getInstructionStepText(step);
     const checkboxItems = typeof step === 'object' && step.checkboxItems ? step.checkboxItems : null;
 
     const markerHtml = stepStyle === 'bulleted'
@@ -3616,6 +3698,14 @@ function createInstructionNode(step, index, stepStyle = 'numbered') {
         </div>
     `;
     return item;
+}
+
+function createInstructionFlowNode(step, index, stepStyle = 'numbered') {
+    if (isInstructionHeaderStep(step)) {
+        return createInstructionPartHeaderNode(getInstructionStepText(step));
+    }
+
+    return createInstructionNode(step, index, stepStyle);
 }
 
 function createEmptyStateNode(text, type = 'plain') {
@@ -3892,12 +3982,21 @@ function paginateRecipeFlow(noteHtml = '') {
     ingredientSections.forEach((section) => {
         applyIngredientStartMode(section.startMode || 'auto');
 
-        placeNode(() => {
-            const title = document.createElement('h2');
-            title.className = 'section-title flow-section-title';
-            title.textContent = section.label || 'Ingredients for 1 Serving';
-            return title;
-        });
+        if (section === ingredientSections[0] && currentRecipe.showIngredientsHeader !== false) {
+            placeNode(() => createIngredientsHeaderNode(currentRecipe.servingsLabel || section.label || 'Ingredients for 1 Serving'));
+        }
+
+        const sectionLabel = section.label || '';
+        const mainLabel = currentRecipe.servingsLabel || '';
+        const shouldShowSetHeader = sectionLabel && sectionLabel !== mainLabel && ingredientSections.length > 1;
+        if (shouldShowSetHeader) {
+            placeNode(() => {
+                const title = document.createElement('h2');
+                title.className = 'section-title flow-section-title';
+                title.textContent = sectionLabel;
+                return title;
+            });
+        }
 
         section.ingredients.forEach((ingredient) => {
             placeNode(() => createIngredientNode(ingredient));
@@ -3926,7 +4025,8 @@ function paginateRecipeFlow(noteHtml = '') {
             const previewNodes = [createInstructionHeaderNode(sectionLabel)];
 
             if (sectionSteps.length > 0) {
-                previewNodes.push(createInstructionNode(sectionSteps[0], 0, stepStyle));
+                const firstStep = sectionSteps[0];
+                previewNodes.push(createInstructionFlowNode(firstStep, 0, stepStyle));
             }
 
             if (!canFitNodeGroup(slot.element, slot.maxHeight, previewNodes) && slot.element.children.length > 0) {
@@ -3941,8 +4041,17 @@ function paginateRecipeFlow(noteHtml = '') {
             applyInstructionStartMode(section.label || 'Instructions', section.steps, section.startMode || 'force-right-column', stepStyle);
             placeInstructionNode(() => createInstructionHeaderNode(section.label || 'Instructions'));
 
-            section.steps.forEach((instruction, index) => {
-                placeInstructionNode(() => createInstructionNode(instruction, index, stepStyle));
+            let visibleStepIndex = 0;
+            section.steps.forEach((instruction) => {
+                if (isInstructionHeaderStep(instruction)) {
+                    placeInstructionNode(() => createInstructionFlowNode(instruction, 0, stepStyle));
+                    visibleStepIndex = 0;
+                    return;
+                }
+
+                const stepIndex = visibleStepIndex;
+                visibleStepIndex += 1;
+                placeInstructionNode(() => createInstructionFlowNode(instruction, stepIndex, stepStyle));
             });
         });
     }
@@ -4470,6 +4579,175 @@ async function handleExportAll() {
 // MASTER PASTE FUNCTIONALITY
 // ================================================
 
+function initializeMasterPasteAiControls() {
+    const dropzone = elements.masterPasteAiDropzone();
+    const fileInput = elements.masterPasteAiImages();
+
+    elements.btnMasterPasteAiImages()?.addEventListener('click', () => {
+        fileInput?.click();
+    });
+
+    fileInput?.addEventListener('change', (event) => {
+        addMasterPasteAiFiles(Array.from(event.target.files || []));
+        event.target.value = '';
+    });
+
+    if (!dropzone) return;
+
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropzone.classList.add('is-drag-over');
+        });
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('is-drag-over');
+    });
+
+    dropzone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        dropzone.classList.remove('is-drag-over');
+
+        const imageFiles = getImageFilesFromTransfer(event.dataTransfer);
+        if (imageFiles.length) {
+            addMasterPasteAiFiles(imageFiles);
+            return;
+        }
+
+        const droppedText = event.dataTransfer?.getData('text/plain') || '';
+        if (droppedText.trim()) {
+            insertTextIntoMasterPasteAiSource(droppedText);
+        }
+    });
+
+    dropzone.addEventListener('paste', (event) => {
+        const imageFiles = getImageFilesFromTransfer(event.clipboardData);
+        if (!imageFiles.length) return;
+
+        event.preventDefault();
+        addMasterPasteAiFiles(imageFiles);
+    });
+}
+
+function getImageFilesFromTransfer(transfer) {
+    if (!transfer) return [];
+
+    const itemFiles = Array.from(transfer.items || [])
+        .filter((item) => item.kind === 'file')
+        .map((item) => item.getAsFile())
+        .filter(Boolean);
+
+    const files = itemFiles.length ? itemFiles : Array.from(transfer.files || []);
+    return files.filter((file) => file.type.startsWith('image/'));
+}
+
+function insertTextIntoMasterPasteAiSource(text) {
+    const textarea = elements.masterPasteAiSource();
+    if (!textarea) return;
+
+    const currentValue = textarea.value;
+    const start = textarea.selectionStart ?? currentValue.length;
+    const end = textarea.selectionEnd ?? currentValue.length;
+    const spacerBefore = start > 0 && currentValue[start - 1] !== '\n' ? '\n' : '';
+    const spacerAfter = end < currentValue.length && currentValue[end] !== '\n' ? '\n' : '';
+
+    textarea.value = `${currentValue.slice(0, start)}${spacerBefore}${text}${spacerAfter}${currentValue.slice(end)}`;
+    const cursorPosition = start + spacerBefore.length + text.length;
+    textarea.focus();
+    textarea.setSelectionRange(cursorPosition, cursorPosition);
+}
+
+function addMasterPasteAiFiles(files = []) {
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+    masterPasteAiImages = [...masterPasteAiImages, ...imageFiles].slice(0, 6);
+    renderMasterPasteAiFiles();
+}
+
+function renderMasterPasteAiFiles() {
+    const container = elements.masterPasteAiFiles();
+    if (!container) return;
+
+    container.innerHTML = masterPasteAiImages.map((file, index) => `
+        <span class="master-paste-ai-file">
+            ${escapeHtml(file.name || `Image ${index + 1}`)}
+            <button type="button" data-remove-ai-image="${index}" aria-label="Remove ${escapeHtml(file.name || `Image ${index + 1}`)}">&times;</button>
+        </span>
+    `).join('');
+
+    container.querySelectorAll('[data-remove-ai-image]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const index = Number.parseInt(button.dataset.removeAiImage, 10);
+            masterPasteAiImages.splice(index, 1);
+            renderMasterPasteAiFiles();
+        });
+    });
+}
+
+function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error(`Unable to read ${file.name}`));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handleGenerateMasterPasteAi() {
+    const statusEl = elements.masterPasteStatus();
+    const button = elements.btnGenerateMasterPasteAi();
+    const sourceText = elements.masterPasteAiSource()?.value.trim() || '';
+
+    if (!sourceText && masterPasteAiImages.length === 0) {
+        statusEl.className = 'master-paste-status error';
+        statusEl.textContent = 'Add recipe text, images, or both before generating.';
+        return;
+    }
+
+    const originalText = button?.textContent || 'Generate With AI';
+
+    try {
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Generating...';
+        }
+
+        statusEl.className = 'master-paste-status';
+        statusEl.textContent = '';
+
+        const images = await Promise.all(masterPasteAiImages.map(async (file) => ({
+            name: file.name,
+            type: file.type,
+            dataUrl: await fileToDataUrl(file)
+        })));
+
+        const response = await fetch('/api/generate-master-paste', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: sourceText, images })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Unable to generate structured recipe data.');
+        }
+
+        elements.masterPaste().value = data.text || '';
+        statusEl.className = 'master-paste-status success';
+        statusEl.textContent = 'AI structured data generated. Review it, then click Fill All.';
+    } catch (error) {
+        console.error('AI generation error:', error);
+        statusEl.className = 'master-paste-status error';
+        statusEl.textContent = error.message || 'Unable to generate structured recipe data.';
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    }
+}
+
 /**
  * Parse master paste text into recipe data
  */
@@ -4489,6 +4767,7 @@ function parseMasterPaste(text) {
         dayHighlights: [],
         dayTips: [],
         servingsLabel: 'Ingredients for 1 Serving',
+        showIngredientsHeader: true,
         instructionsLabel: 'Instructions for 1 Serving',
         materials: [],
         ingredients: [],
@@ -4547,8 +4826,9 @@ function parseMasterPaste(text) {
             currentSection = 'INGREDIENTS';
             currentTable = null;
             const labelMatch = line.match(/^::INGREDIENTS(?:\s+(.+?))?::$/);
+            const sectionLabel = labelMatch?.[1]?.trim();
             currentIngredientSection = {
-                label: labelMatch?.[1]?.trim() || result.servingsLabel || 'Ingredients for 1 Serving',
+                label: '',
                 startMode: 'auto',
                 ingredients: []
             };
@@ -4556,10 +4836,8 @@ function parseMasterPaste(text) {
             currentDirectionsSection = null;
             currentPortionVariationSection = null;
             currentDaySection = null;
-            const sectionLabel = labelMatch?.[1]?.trim();
             if (sectionLabel) {
                 result.servingsLabel = sectionLabel;
-                currentIngredientSection.label = sectionLabel;
             }
             continue;
         } else if (line.startsWith('::PORTION_VARIATIONS')) {
@@ -4713,6 +4991,7 @@ function parseMasterPaste(text) {
             result.macros.fat = parts[9] || '';
             result.materials = parseMaterialsField(parts[10] || '');
             result.portionVariationIcon = matchPortionVariationIconByName(parts[11] || '');
+            result.showIngredientsHeader = parseBooleanFlag(parts[12], true);
 
             // Auto-generate servings labels
             if (result.serves) {
@@ -4791,7 +5070,12 @@ function parseMasterPaste(text) {
             }
         } else if (currentSection === 'DIRECTIONS') {
             const checkboxMatch = line.match(/^-\s*\[\s*\]\s*(.+)$/) || line.match(/^\[\s*\]\s*(.+)$/);
-            if (checkboxMatch) {
+            const headerText = parseInstructionHeaderText(line);
+            if (headerText) {
+                const headerStep = { type: 'header', text: headerText };
+                result.instructions.push(headerStep);
+                currentDirectionsSection?.steps.push(headerStep);
+            } else if (checkboxMatch) {
                 addCheckboxItemToLastInstruction(result.instructions, checkboxMatch[1].trim());
                 if (currentDirectionsSection) {
                     addCheckboxItemToLastInstruction(currentDirectionsSection.steps, checkboxMatch[1].trim());
@@ -4819,7 +5103,7 @@ function parseMasterPaste(text) {
 
     if (result.ingredientSections.length === 0 && result.ingredients.length > 0) {
         result.ingredientSections = [{
-            label: result.servingsLabel || 'Ingredients for 1 Serving',
+            label: '',
             startMode: 'auto',
             ingredients: result.ingredients
         }];
@@ -4848,7 +5132,11 @@ function addCheckboxItemToLastInstruction(steps, itemText) {
         return;
     }
 
-    const lastIndex = steps.length - 1;
+    let lastIndex = steps.length - 1;
+    while (lastIndex >= 0 && isInstructionHeaderStep(steps[lastIndex])) {
+        lastIndex -= 1;
+    }
+
     if (lastIndex < 0) {
         steps.push({ text: '', checkboxItems: [itemText] });
         return;
@@ -5043,7 +5331,7 @@ function handleCopyAIInstructions() {
 Please analyze the recipe image and any recipe data provided. Output ONLY the structured data in this exact format, and include equipment/materials inferred from the image and recipe method:
 
 ::META::
-Recipe Title;Meal Type;dietary flags;serves;prep time;cook time;calories;protein g;carbs g;fat g;equipment names (if there are no macros provided, return 0 for calories, protein, carbs, and fat - do not leave blank)
+Recipe Title;Meal Type;dietary flags;serves;prep time;cook time;calories;protein g;carbs g;fat g;equipment names;portion variation icon;show ingredients title yes/no
 
 ::TEXT::
 Description or intro text (optional)
@@ -5052,14 +5340,14 @@ Description or intro text (optional)
 Note:
 Optional note or tip text (this becomes a callout box)
 
-::INGREDIENTS::
+::INGREDIENTS Ingredients for 4 Servings::
 Ingredient;Amount
 Ingredient;Amount
 ...
 
 OR if there are multiple ingredient groups:
 
-::INGREDIENTS::
+::INGREDIENTS Ingredients for 4 Servings::
 ::TABLE Group Name::
 Ingredient;Amount
 Ingredient;Amount
@@ -5068,23 +5356,39 @@ Ingredient;Amount
 ...
 
 ::DIRECTIONS::
+:HEADER: Prep the tofu
 Step one text
 Step with checkbox items
 - [ ] Checkbox item one
 - [ ] Checkbox item two
+:HEADER: Finish the dish
 Step two text
 Step three text
 ...
 
 IMPORTANT RULES:
 - Use EXACT section headers: ::META::, ::TEXT::, ::INGREDIENTS::, ::DIRECTIONS::
-- META line must be semicolon-separated with exactly 11 fields
+- META line must be semicolon-separated. Use 13 fields when possible:
+  1. Recipe title
+  2. Meal type
+  3. Dietary flags
+  4. Serves
+  5. Prep time
+  6. Cook time
+  7. Calories
+  8. Protein grams
+  9. Carb grams
+  10. Fat grams
+  11. Equipment/material names
+  12. Portion variation icon name (optional; leave blank for normal recipes)
+  13. Show ingredients title: yes or no
+- If using the older 11-field META format, the app still accepts it and defaults show ingredients title to yes.
 - For dietary flags, use: gf, sf, nf, wf (or leave blank)
 - Serves examples: "4 Servings", "2-3 Servings", "1 Serving"
 - Times should include units: "15 min", "1 hour", "30-45 min"
-- The last META field is a comma-separated or pipe-separated list of equipment/material names inferred from the image and recipe data
+- META field 11 is a comma-separated or pipe-separated list of equipment/material names inferred from the image and recipe data
 - Only include real equipment choices such as bowl, pot, pan, blender, knife, cutting board, strainer, tray, containers, spoon, whisk, etc.
-- If no equipment can be inferred, leave the last field blank but keep the semicolon
+- If no equipment can be inferred, leave the equipment field blank but keep the semicolon
 - ::TEXT:: sections (optional, can have 0 or more):
   - First ::TEXT:: section = description (appears under title)
   - Additional ::TEXT:: sections = note callouts (appear as separate callout boxes)
@@ -5093,6 +5397,12 @@ IMPORTANT RULES:
   - For note callouts, put the note label on the first line, usually "Note:" or "Tip:"
   - Text before a colon (:) in notes will appear bold (e.g., "Note:" or "Tip:")
 - Ingredient rows: Name;Amount (semicolon-separated)
+- The black ingredients title is separate from ingredient set headers.
+- The black ingredients title text comes from the ::INGREDIENTS Header Text:: section line. Example: ::INGREDIENTS Ingredients for 4 Servings::.
+- The black ingredients title can be hidden with META field 13 set to "no". Use "yes" by default for normal recipes.
+- If the black title is hidden, still include the ::INGREDIENTS:: block so ingredient rows can be parsed.
+- Use ::TABLE Group Name:: only for ingredient set headers such as Sauce, Dressing, Bowl, Filling, or Topping.
+- Do not repeat "Ingredients for X Servings" as a ::TABLE name unless the source truly has an ingredient group with that exact name.
 - Always write teaspoon/tablespoon abbreviations in lowercase: "tsp" and "tbsp" only. Never use "Tsp", "Tbsp", "TSP", or "TBSP".
 - All ingredient amounts and checkbox ingredient amounts MUST use single-character small fraction glyphs, never slash fractions or decimals when a common fraction exists.
 - Required fraction conversions: 1/2 = ½, 1/4 = ¼, 3/4 = ¾, 1/3 = ⅓, 2/3 = ⅔, 1/8 = ⅛, 3/8 = ⅜, 5/8 = ⅝, 7/8 = ⅞.
@@ -5102,6 +5412,9 @@ IMPORTANT RULES:
 - Do NOT flatten multiple ingredient groups into one list when the source clearly separates them
 - Use ::TABLE Name:: for ingredient groups (optional when there is only one group, required when there are multiple groups)
 - Directions: one step per line, no bullets, no numbering for normal steps
+- Use :HEADER: Header text on its own line to add an unnumbered instruction header in the middle of a direction set. These render like ingredient set headers.
+- Use instruction headers for recipe parts/components such as ":HEADER: Making the green goddess sauce", ":HEADER: Assemble the bowls", or ":HEADER: Bake the muffins".
+- Do not number :HEADER: lines and do not put checkbox items under a :HEADER: line.
 - For a step that needs checkbox sub-items, put the parent step on its own line, then put each checkbox item immediately below it as: - [ ] Checkbox item text
 - Checkbox item lines must always start with "- [ ]" and must directly follow the parent direction step they belong to
 - Use checkbox items for ingredient add-in lists, checklist-style substeps, or grouped items within a single step
@@ -5114,7 +5427,7 @@ IMPORTANT RULES:
 Example output:
 
 ::META::
-Tofu Scramble;Breakfast;gf,sf;2 Servings;10 min;15 min;320;18;24;16;skillet, spatula, bowl
+Tofu Scramble;Breakfast;gf,sf;2 Servings;10 min;15 min;320;18;24;16;skillet, spatula, bowl;;yes
 
 ::TEXT::
 A protein-packed breakfast that's ready in minutes.
@@ -5127,7 +5440,7 @@ For best results, press the tofu for at least 15 minutes to remove excess moistu
 Note:
 This recipe is naturally gluten-free and soy-free when using appropriate ingredients.
 
-::INGREDIENTS::
+::INGREDIENTS Ingredients for 2 Servings::
 Firm tofu;14 oz
 Nutritional yeast;2 tbsp
 Turmeric;½ tsp
@@ -5135,7 +5448,7 @@ Salt;¼ tsp
 
 Example with 2 ingredient sets:
 
-::INGREDIENTS::
+::INGREDIENTS Ingredients for 2 Servings::
 ::TABLE Smoothie::
 Banana;1
 Frozen strawberries;1 cup
@@ -5145,8 +5458,10 @@ Granola;2 tbsp
 Chia seeds;1 tsp
 
 ::DIRECTIONS::
+:HEADER: Prep the tofu
 Press tofu and crumble into a bowl
 Heat oil in a pan over medium heat
+:HEADER: Season and cook
 Add crumbled tofu and cook for 5 minutes
 Add the seasoning ingredients
 - [ ] Nutritional yeast
@@ -5176,7 +5491,7 @@ function handleCopyAIInfoInstructions() {
 Please analyze the screenshot, product image, nutrition facts, and any supporting text provided. Output ONLY plain text in this exact structured format:
 
 ::META::
-Title;Reference Page;;1 Serving;;;calories;protein;carbs;fat;equipment names;portion variation icon
+Title;Reference Page;;1 Serving;;;calories;protein;carbs;fat;equipment names;portion variation icon;show ingredients title yes/no
 
 ::TEXT::
 Short description text
@@ -5198,14 +5513,17 @@ Label;Calories;Protein;Carbs;Fat;Fiber;URL;Show Macros
 Label;Calories;Protein;Carbs;Fat;Fiber;URL;Show Macros
 
 ::DIRECTIONS Ways to Enjoy;bulleted;auto::
+:HEADER: Quick options
 Bullet point text
 Bullet point text
 
 ::DIRECTIONS Preparing Fresh Product;numbered;auto::
+:HEADER: Prep
 Step text
 Step with checkbox items
 - [ ] Checkbox item one
 - [ ] Checkbox item two
+:HEADER: Serve
 Step text
 
 IMPORTANT RULES:
@@ -5214,10 +5532,11 @@ IMPORTANT RULES:
 - Do NOT use markdown inside the code block except checkbox lines exactly like "- [ ] Checkbox item text"
 - The code block is required so checkbox lines and spacing are preserved when pasted into the app
 - Use EXACT section headers.
-- META must be semicolon-separated.
+- META must be semicolon-separated. Use 13 fields when possible.
 - If macros are unknown, use 0.
 - The 11th META field is equipment/materials. Leave blank if none.
 - The 12th META field is the portion variation icon name. Use an existing equipment/material icon name or leave blank.
+- The 13th META field controls whether the black ingredients title appears. Use "yes" when the ::INGREDIENTS ...:: header should render as a black title, and "no" when it should be hidden.
 - ::TEXT:: sections (optional, can have 0 or more):
   - First ::TEXT:: section = description (appears under title)
   - Additional ::TEXT:: sections = note callouts (appear as separate callout boxes with alert icons)
@@ -5225,6 +5544,8 @@ IMPORTANT RULES:
   - For note callouts, put the note label on the first line, usually "Note:" or "Tip:"
   - Text before a colon (:) in notes will appear bold (e.g., "Note:" or "Tip:")
 - Use the INGREDIENTS section for Nutrition Highlights when making info pages.
+- For info pages, ::INGREDIENTS Nutrition Highlights:: sets the black ingredients title text to "Nutrition Highlights" when META field 13 is yes.
+- The black ingredients title is separate from ingredient set headers. Use ::TABLE Group Name:: only when you need separate ingredient/highlight groups below the black title.
 - For Nutrition Highlights, put each highlight on its own line with a trailing semicolon.
 - Use one ::PORTION_VARIATIONS ...:: block per brand/group when needed.
 - Each portion variation row format is: Label;Calories;Protein;Carbs;Fat;Fiber;URL;Show Macros
@@ -5234,6 +5555,8 @@ IMPORTANT RULES:
 - step style must be either numbered or bulleted
 - start mode must be auto, force-right-column, force-next-page, or keep-with-first-step
 - Use force-next-page when the directions should start at the top of the next page
+- Use :HEADER: Header text on its own line to add an unnumbered instruction header in the middle of any ::DIRECTIONS:: block. These render like ingredient set headers.
+- Do not number :HEADER: lines and do not put checkbox items under a :HEADER: line.
 - For a direction step that needs checkbox sub-items, put the parent step on its own line, then put each checkbox item immediately below it as: - [ ] Checkbox item text
 - Checkbox item lines must always start with "- [ ]" and must directly follow the parent direction step they belong to
 - If a field is unknown, leave it blank but keep delimiters intact
@@ -5241,7 +5564,7 @@ IMPORTANT RULES:
 Example:
 
 ::META::
-Protein Bars;Reference Page;;1 Serving;;;190;15;11;7;protein bar;protein bar
+Protein Bars;Reference Page;;1 Serving;;;190;15;11;7;protein bar;protein bar;yes
 
 ::TEXT::
 A quick reference page for high-protein snack bars with macro comparisons.
@@ -5558,8 +5881,28 @@ function handleLoadJson(event) {
 function handleClear() {
     if (confirm('Are you sure you want to clear all recipe data?')) {
         currentRecipe = normalizeRecipe({});
+        clearMasterPasteFields();
         loadRecipeToForm(currentRecipe);
         renderRecipePage();
+    }
+}
+
+function clearMasterPasteFields() {
+    const masterPaste = elements.masterPaste();
+    const aiSource = elements.masterPasteAiSource();
+    const aiFileInput = elements.masterPasteAiImages();
+    const statusEl = elements.masterPasteStatus();
+
+    if (masterPaste) masterPaste.value = '';
+    if (aiSource) aiSource.value = '';
+    if (aiFileInput) aiFileInput.value = '';
+
+    masterPasteAiImages = [];
+    renderMasterPasteAiFiles();
+
+    if (statusEl) {
+        statusEl.className = 'master-paste-status';
+        statusEl.textContent = '';
     }
 }
 

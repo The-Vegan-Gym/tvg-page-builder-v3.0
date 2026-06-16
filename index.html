@@ -122,13 +122,35 @@
                         <p>Paste structured recipe text here to fill the main recipe fields at once, including title, image details, macros, ingredients, instructions, equipment, and notes.</p>
                         <p>Use Copy AI Instructions to get a format that can be filled by an AI assistant, then paste the result here and click Fill All.</p>
                     </div>
-                    <div class="form-group">
-                        <label for="master-paste">Paste Recipe Data</label>
-                        <textarea id="master-paste" name="masterPaste" rows="18" placeholder="Paste structured recipe data here..."></textarea>
+                    <div class="master-paste-panel-group master-paste-ai-panel">
+                        <div class="master-paste-panel-header">
+                            <h3>Generate structured recipe data</h3>
+                        </div>
+                        <div class="form-group">
+                            <label for="master-paste-ai-source">AI Source</label>
+                            <div id="master-paste-ai-dropzone" class="master-paste-ai-dropzone">
+                                <textarea id="master-paste-ai-source" name="masterPasteAiSource" rows="5" placeholder="Drop recipe images here, or paste rough recipe text for AI to format..."></textarea>
+                                <input type="file" id="master-paste-ai-images" accept="image/*" multiple hidden>
+                                <div id="master-paste-ai-files" class="master-paste-ai-files"></div>
+                            </div>
+                        </div>
+                        <div class="master-paste-actions">
+                            <button type="button" id="btn-master-paste-ai-images" class="btn-secondary">Add Images</button>
+                            <button type="button" id="btn-generate-master-paste-ai" class="btn-primary">Generate With AI</button>
+                        </div>
                     </div>
-                    <div class="master-paste-actions">
-                        <button type="button" id="btn-fill-all" class="btn-primary">Fill All</button>
-                        <button type="button" id="btn-copy-ai-instructions" class="btn-secondary">Copy AI Instructions</button>
+                    <div class="master-paste-panel-group master-paste-structured-panel">
+                        <div class="master-paste-panel-header">
+                            <h3>Paste structured recipe data</h3>
+                        </div>
+                        <div class="form-group">
+                            <label for="master-paste">Structured Recipe Data</label>
+                            <textarea id="master-paste" name="masterPaste" rows="18" placeholder="Paste structured recipe data here..."></textarea>
+                        </div>
+                        <div class="master-paste-actions">
+                            <button type="button" id="btn-copy-ai-instructions" class="btn-secondary">Copy AI Instructions</button>
+                            <button type="button" id="btn-fill-all" class="btn-primary">Fill All</button>
+                        </div>
                     </div>
                     <div id="master-paste-status" class="master-paste-status"></div>
                 </section>
@@ -322,6 +344,14 @@
                 <!-- Ingredients Section -->
                 <section class="form-section recipe-only" data-section-key="ingredients">
                     <h2>Ingredients</h2>
+                    <label class="form-toggle">
+                        <input type="checkbox" id="show-ingredients-header" name="showIngredientsHeader" checked>
+                        <span>Show ingredients title</span>
+                    </label>
+                    <div class="form-group">
+                        <label for="servings-label">Ingredients Title</label>
+                        <input type="text" id="servings-label" name="servingsLabel" placeholder="Ingredients for 1 Serving">
+                    </div>
                     <div id="ingredients-list" class="ingredients-list">
                         <!-- Ingredient set editors will be added dynamically -->
                     </div>

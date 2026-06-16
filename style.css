@@ -580,6 +580,31 @@ body {
     color: var(--color-black);
 }
 
+.master-paste-panel-group {
+    border: 1px solid var(--color-gray-300);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    background: var(--color-gray-100);
+    margin-bottom: var(--spacing-md);
+}
+
+.master-paste-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    padding-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--color-gray-300);
+}
+
+.master-paste-panel-header h3 {
+    margin: 0;
+    color: var(--color-gray-900);
+    font-size: var(--editor-section-heading-size);
+    line-height: 1.2;
+}
+
 .section-heading-with-action {
     display: flex;
     align-items: center;
@@ -690,7 +715,51 @@ body {
     font-family: 'Monaco', 'Courier New', monospace;
     font-size: var(--editor-helper-size);
     line-height: 1.4;
-    min-height: 520px;
+    min-height: 140px;
+}
+
+.master-paste-ai-dropzone {
+    border: 1px dashed #303943;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm);
+    background: #11171d;
+}
+
+.master-paste-ai-dropzone.is-drag-over {
+    border-color: var(--color-primary);
+    background: rgba(66, 213, 59, 0.08);
+}
+
+.master-paste-ai-dropzone textarea {
+    min-height: 140px;
+    margin-bottom: var(--spacing-sm);
+}
+
+.master-paste-ai-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-sm);
+}
+
+.master-paste-ai-file {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: 5px 8px;
+    border: 1px solid #303943;
+    border-radius: var(--radius-sm);
+    color: #b8c2cf;
+    font-size: var(--editor-helper-size);
+    background: #1a2027;
+}
+
+.master-paste-ai-file button {
+    border: 0;
+    background: transparent;
+    color: #edf2f7;
+    cursor: pointer;
+    font-weight: 700;
 }
 
 .master-paste-actions {
@@ -701,8 +770,8 @@ body {
 }
 
 .master-paste-actions .btn-primary {
-    flex: 1 1 100%;
-    width: 100%;
+    flex: 1 1 calc(50% - var(--spacing-sm));
+    min-width: 0;
 }
 
 .master-paste-actions .btn-secondary {
@@ -1654,6 +1723,12 @@ body {
     font-size: 0;
 }
 
+.instruction-row .step-number.step-header {
+    background: #000000;
+    color: #ffffff;
+    font-size: var(--editor-helper-size);
+}
+
 .instruction-content textarea {
     width: 100%;
     min-height: 60px;
@@ -1915,6 +1990,19 @@ body {
 
 .master-paste-section h2,
 .master-paste-section .form-section-toggle-title {
+    color: #f5f7fa;
+}
+
+.master-paste-panel-group {
+    background: #151b22;
+    border-color: #303943;
+}
+
+.master-paste-panel-header {
+    border-bottom-color: #303943;
+}
+
+.master-paste-panel-header h3 {
     color: #f5f7fa;
 }
 
