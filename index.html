@@ -361,7 +361,14 @@
                 <!-- Instructions Section -->
                 <section class="form-section recipe-only" data-section-key="instructions">
                     <h2>Instructions</h2>
-                    <input type="hidden" id="instructions-label" name="instructionsLabel">
+                    <label class="form-toggle">
+                        <input type="checkbox" id="show-instructions-header" name="showInstructionsHeader" checked>
+                        <span>Show instructions title</span>
+                    </label>
+                    <div class="form-group">
+                        <label for="instructions-label">Instructions Title</label>
+                        <input type="text" id="instructions-label" name="instructionsLabel" placeholder="Instructions for 1 Serving">
+                    </div>
                     <label class="form-toggle">
                         <input type="checkbox" id="show-directions-continued-header" name="showDirectionsContinuedHeader">
                         <span>Show Directions Continued Header</span>
@@ -417,7 +424,7 @@
                             <input type="range" id="printer-title-macro-spacing" min="0" max="80" step="1" value="18">
                             <span id="printer-title-macro-spacing-value">18px</span>
                         </div>
-                        <p class="form-hint">Controls the gap between the title and macro bar on printer-friendly pages.</p>
+                        <p class="form-hint">Controls the gap between the title and macro bar.</p>
                     </div>
                     <div class="layout-control-group">
                         <div class="image-control-row">

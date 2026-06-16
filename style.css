@@ -433,6 +433,11 @@ body {
     border-color: var(--color-primary);
 }
 
+.segmented-control-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 .form-group textarea {
     resize: vertical;
     min-height: 80px;
@@ -1393,6 +1398,13 @@ body {
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
     background: var(--color-gray-100);
+}
+
+.section-reorder-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
 }
 
 .instruction-section-editor-header,
@@ -2598,7 +2610,7 @@ body {
 /* Macro Bar */
 .macro-bar {
     margin: 0 var(--spacing-50);
-    margin-top: calc(-1 * var(--spacing-12));
+    margin-top: calc(var(--printer-title-macro-spacing, 18px) - 30px);
     position: relative;
     z-index: 10;
 }

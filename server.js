@@ -256,7 +256,7 @@ function getMasterPasteAiPrompt() {
 Analyze the provided recipe text and images. Output ONLY structured plain text in this exact format. Do not include commentary.
 
 ::META::
-Recipe Title;Meal Type;dietary flags;serves;prep time;cook time;calories;protein g;carbs g;fat g;equipment names;portion variation icon;show ingredients title yes/no
+Recipe Title;Meal Type;dietary flags;serves;prep time;cook time;calories;protein g;carbs g;fat g;equipment names;portion variation icon;show ingredients title yes/no;show instructions title yes/no
 
 ::TEXT::
 Description or intro text
@@ -290,7 +290,7 @@ Step two text
 Rules:
 - Return only the final structured recipe text. A fenced code block is acceptable, but no explanation outside it.
 - Use exact section headers: ::META::, ::TEXT::, ::INGREDIENTS::, ::TABLE Name::, ::DIRECTIONS::.
-- META must be semicolon-separated. Use 13 fields when possible:
+- META must be semicolon-separated. Use 14 fields when possible:
   1. Recipe title
   2. Meal type
   3. Dietary flags
@@ -304,7 +304,8 @@ Rules:
   11. Equipment/material names
   12. Portion variation icon name (optional; leave blank for normal recipes)
   13. Show ingredients title: yes or no
-- If using the older 11-field META format, the app still accepts it and defaults show ingredients title to yes.
+  14. Show instructions title: yes or no
+- If using the older 11-field or 13-field META format, the app still accepts it and defaults missing title toggles to yes.
 - If macros are unknown, use 0 for calories, protein, carbs, and fat.
 - If a non-macro field is unknown, leave it blank but keep delimiters intact.
 - Serves examples: "4 Servings", "2-3 Servings", "1 Serving".
@@ -323,6 +324,10 @@ Rules:
 - Use single-character fraction glyphs for common fractions: ½, ¼, ¾, ⅓, ⅔, ⅛, ⅜, ⅝, ⅞.
 - Write mixed amounts like "1½ tsp", not "1 1/2 tsp".
 - Directions are one step per line with no numbering.
+- The black instructions title is separate from instruction set labels. The black title defaults to "Instructions for X Servings" based on META serves. It can be hidden with META field 14 set to "no". Use "yes" by default for normal recipes.
+- A ::DIRECTIONS Label;step style;start mode:: label is an instruction set header. It renders like ingredient set headers, not like the black instructions title.
+- Use ::DIRECTIONS Label;numbered;auto:: when the source has major direction sections such as "Part 1: Prepare", "Part 2: Cook", "Sauce", "Assemble", or "Bake".
+- Do not repeat "Instructions for X Servings" as a ::DIRECTIONS label.
 - To add an unnumbered instruction header in the middle of directions, put it on its own line as ":HEADER: Header text". These headers should divide directions into parts, such as ":HEADER: Making the green goddess sauce".
 - Checkbox item lines must start exactly with "- [ ]" and directly follow the parent step.`;
 }
@@ -440,8 +445,11 @@ function drawMacroBar(doc, recipe, layout) {
     }
 
     const barText = `${recipe.macros.calories || '0'} CAL  |  ${recipe.macros.protein || '0'} G PROTEIN  |  ${recipe.macros.carbs || '0'} G CARBS  |  ${recipe.macros.fat || '0'} G FAT`;
+    const titleMacroSpacing = Number.parseInt(recipe.printerTitleMacroSpacing, 10);
+    const spacing = Number.isFinite(titleMacroSpacing) ? Math.max(0, Math.min(80, titleMacroSpacing)) : 18;
+    const spacingShift = spacing - 18;
     const barX = layout.marginX;
-    const barY = layout.y - 12;
+    const barY = layout.y - 12 + spacingShift;
     const barWidth = Math.min(PAGE_WIDTH - (layout.marginX * 2), doc.widthOfString(barText) + 48);
     const barHeight = 27;
     const color = recipe.pageStyle === 'printer-friendly' ? '#d9d9d9' : BRAND_GREEN;
@@ -451,6 +459,8 @@ function drawMacroBar(doc, recipe, layout) {
         .fontSize(11)
         .fillColor('#000000')
         .text(barText, barX + 20, barY + 8, { width: barWidth - 40 });
+
+    layout.y += spacingShift;
 }
 
 function drawDescription(doc, recipe, layout) {
@@ -532,13 +542,21 @@ function drawIngredients(doc, recipe, column) {
 function drawInstructions(doc, recipe, column) {
     const sections = recipe.instructionSections.length > 0
         ? recipe.instructionSections
-        : [{ label: recipe.instructionsLabel || 'Instructions', steps: recipe.instructions || [] }];
+        : [{ label: '', steps: recipe.instructions || [] }];
+
+    if (recipe.showInstructionsHeader !== false) {
+        column.y = ensureSpace(doc, column.y, 75);
+        drawPillHeader(doc, recipe.instructionsLabel || 'INSTRUCTIONS', column.x, column.y);
+        column.y += 44;
+    }
 
     sections.forEach((section, sectionIndex) => {
         if (sectionIndex > 0) column.y += 12;
-        column.y = ensureSpace(doc, column.y, 75);
-        drawPillHeader(doc, section.label || 'INSTRUCTIONS', column.x, column.y);
-        column.y += 44;
+        if (section.label) {
+            column.y = ensureSpace(doc, column.y, 28);
+            drawSectionTitle(doc, section.label, column.x, column.y, column.width);
+            column.y += 26;
+        }
 
         let visibleStepIndex = 0;
         (section.steps || []).forEach((step) => {

@@ -78,6 +78,7 @@ const EMPTY_RECIPE = {
     showIngredientsHeader: true,
     ingredientSections: [],
     instructionsLabel: "Instructions for 1 Serving",
+    showInstructionsHeader: true,
     instructionsStartMode: "force-right-column",
     showDirectionsContinuedHeader: false,
     materialsLayout: "column",
@@ -93,6 +94,8 @@ const EMPTY_RECIPE = {
 };
 
 const SECTION_SETTINGS_STORAGE_KEY = 'tvgRecipePageGenerator.sectionVisibility';
+const SECTION_SETTINGS_VERSION_KEY = 'tvgRecipePageGenerator.sectionVisibilityVersion';
+const SECTION_SETTINGS_VERSION = 2;
 const RECENT_RECIPES_STORAGE_KEY = 'tvgRecipePageGenerator.recentRecipes';
 const SECTION_VISIBILITY_DEFAULTS = [
     { key: 'masterPaste', label: 'Master Paste', visible: true },
@@ -106,7 +109,7 @@ const SECTION_VISIBILITY_DEFAULTS = [
     { key: 'ingredients', label: 'Ingredients', visible: true },
     { key: 'instructions', label: 'Instructions', visible: true },
     { key: 'notes', label: 'Notes/Callouts', visible: true },
-    { key: 'pageLayout', label: 'Page Layout', visible: false },
+    { key: 'pageLayout', label: 'Page Layout', visible: true },
     { key: 'export', label: 'Export', visible: true }
 ];
 
@@ -256,6 +259,7 @@ function normalizeRecipe(recipe = {}) {
         instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
         instructionSections: Array.isArray(recipe.instructionSections) ? recipe.instructionSections : [],
         showIngredientsHeader: recipe.showIngredientsHeader !== false,
+        showInstructionsHeader: recipe.showInstructionsHeader !== false,
         showDirectionsContinuedHeader: recipe.showDirectionsContinuedHeader === true,
         showMaterials: recipe.showMaterials !== false,
         materialsAutoSpacing: recipe.materialsAutoSpacing === true,
@@ -325,7 +329,7 @@ function normalizeRecipe(recipe = {}) {
     }
 
     if (!normalized.instructionsLabel && normalized.instructionSections.length > 0) {
-        normalized.instructionsLabel = normalized.instructionSections[0]?.label || EMPTY_RECIPE.instructionsLabel;
+        normalized.instructionsLabel = EMPTY_RECIPE.instructionsLabel;
     }
 
     if ((!normalized.instructions || normalized.instructions.length === 0) && normalized.instructionSections.length > 0) {
@@ -467,6 +471,7 @@ const elements = {
     showIngredientsHeader: () => document.getElementById('show-ingredients-header'),
     addIngredientSection: () => document.getElementById('add-ingredient-section'),
     instructionsLabel: () => document.getElementById('instructions-label'),
+    showInstructionsHeader: () => document.getElementById('show-instructions-header'),
     instructionsStartMode: () => document.getElementById('instructions-start-mode'),
     showDirectionsContinuedHeader: () => document.getElementById('show-directions-continued-header'),
     instructionsList: () => document.getElementById('instructions-list'),
@@ -646,7 +651,16 @@ function getSectionVisibilitySettings() {
 
     try {
         const saved = JSON.parse(localStorage.getItem(SECTION_SETTINGS_STORAGE_KEY) || '{}');
-        return { ...defaults, ...saved };
+        const savedVersion = Number.parseInt(localStorage.getItem(SECTION_SETTINGS_VERSION_KEY) || '0', 10);
+        const settings = savedVersion < SECTION_SETTINGS_VERSION
+            ? { ...defaults }
+            : { ...defaults, ...saved };
+
+        if (savedVersion < SECTION_SETTINGS_VERSION) {
+            saveSectionVisibilitySettings(settings);
+        }
+
+        return settings;
     } catch (error) {
         return defaults;
     }
@@ -654,6 +668,7 @@ function getSectionVisibilitySettings() {
 
 function saveSectionVisibilitySettings(settings) {
     localStorage.setItem(SECTION_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(SECTION_SETTINGS_VERSION_KEY, String(SECTION_SETTINGS_VERSION));
 }
 
 function getRecentRecipes() {
@@ -1483,6 +1498,7 @@ function initializeFormListeners() {
     elements.materialsAutoSpacing()?.addEventListener('change', updateRecipeFromForm);
     elements.instructionsStartMode()?.addEventListener('change', debounce(updateRecipeFromForm, 150));
     elements.showIngredientsHeader()?.addEventListener('change', updateRecipeFromForm);
+    elements.showInstructionsHeader()?.addEventListener('change', updateRecipeFromForm);
     elements.showDirectionsContinuedHeader()?.addEventListener('change', updateRecipeFromForm);
     elements.showMacroBar()?.addEventListener('change', updateRecipeFromForm);
     elements.showDescription()?.addEventListener('change', updateRecipeFromForm);
@@ -1727,6 +1743,9 @@ function loadRecipeToForm(recipe) {
         elements.showIngredientsHeader().checked = recipe.showIngredientsHeader !== false;
     }
     elements.instructionsLabel().value = recipe.instructionsLabel || 'Instructions for 1 Serving';
+    if (elements.showInstructionsHeader()) {
+        elements.showInstructionsHeader().checked = recipe.showInstructionsHeader !== false;
+    }
     if (elements.instructionsStartMode()) {
         elements.instructionsStartMode().value = recipe.instructionsStartMode || 'force-right-column';
     }
@@ -1893,7 +1912,8 @@ function updateRecipeFromForm() {
         portionVariationSections,
         servingsLabel: elements.servingsLabel()?.value || 'Ingredients for 1 Serving',
         showIngredientsHeader: elements.showIngredientsHeader()?.checked !== false,
-        instructionsLabel: instructionSections[0]?.label || elements.instructionsLabel()?.value || 'Instructions for 1 Serving',
+        instructionsLabel: elements.instructionsLabel()?.value || 'Instructions for 1 Serving',
+        showInstructionsHeader: elements.showInstructionsHeader()?.checked !== false,
         instructionsStartMode: instructionSections[0]?.startMode || elements.instructionsStartMode()?.value || 'force-right-column',
         showDirectionsContinuedHeader: elements.showDirectionsContinuedHeader()?.checked === true,
         materialsLayout: elements.materialsLayout()?.value || 'column',
@@ -2216,7 +2236,7 @@ function getNotesFromForm() {
 function getInstructionSectionsForForm(recipe) {
     const normalizedSections = (recipe.instructionSections || [])
         .map(section => ({
-            label: section.label || 'Instructions',
+            label: section.label || '',
             startMode: section.startMode || 'force-right-column',
             stepStyle: section.stepStyle || 'numbered',
             steps: Array.isArray(section.steps) ? section.steps : []
@@ -2228,7 +2248,7 @@ function getInstructionSectionsForForm(recipe) {
     }
 
     return [{
-        label: recipe.instructionsLabel || 'Instructions for 1 Serving',
+        label: '',
         startMode: recipe.instructionsStartMode || 'force-right-column',
         stepStyle: 'numbered',
         steps: recipe.instructions || []
@@ -2239,9 +2259,7 @@ function getInstructionSectionsFromForm() {
     const sections = Array.from(elements.instructionsList()?.querySelectorAll('.instruction-section-editor') || [])
         .map((section, index) => {
             const labelInput = section.querySelector('.instruction-section-label');
-            const label = ((labelInput?.value || '').trim() || (index === 0
-                ? (elements.instructionsLabel()?.value || 'Instructions for 1 Serving')
-                : `Instructions Section ${index + 1}`));
+            const label = (labelInput?.value || '').trim();
             const startMode = section.querySelector('.instruction-section-start-mode')?.value || 'force-right-column';
             const stepStyle = section.querySelector('.instruction-section-step-style')?.value || 'numbered';
             const steps = Array.from(section.querySelectorAll('.instruction-row'))
@@ -2266,7 +2284,7 @@ function getInstructionSectionsFromForm() {
 
     if (sections.length === 0) {
         return [{
-            label: elements.instructionsLabel()?.value || 'Instructions for 1 Serving',
+            label: '',
             startMode: 'force-right-column',
             stepStyle: 'numbered',
             steps: []
@@ -2378,6 +2396,45 @@ function getInstructionStepText(step) {
     return step?.text || '';
 }
 
+function refreshSectionMoveButtons(container, sectionSelector) {
+    const sections = Array.from(container?.querySelectorAll(sectionSelector) || []);
+    sections.forEach((section, index) => {
+        const moveUpButton = section.querySelector('[data-move-section="up"]');
+        const moveDownButton = section.querySelector('[data-move-section="down"]');
+        if (moveUpButton) {
+            moveUpButton.disabled = index === 0;
+        }
+        if (moveDownButton) {
+            moveDownButton.disabled = index === sections.length - 1;
+        }
+    });
+}
+
+function moveSectionEditor(section, direction, sectionSelector, afterMove = updateRecipeFromForm) {
+    if (!section || !section.parentElement) {
+        return;
+    }
+
+    if (direction === 'up') {
+        const previous = section.previousElementSibling?.matches(sectionSelector)
+            ? section.previousElementSibling
+            : null;
+        if (previous) {
+            section.parentElement.insertBefore(section, previous);
+        }
+    } else if (direction === 'down') {
+        const next = section.nextElementSibling?.matches(sectionSelector)
+            ? section.nextElementSibling
+            : null;
+        if (next) {
+            section.parentElement.insertBefore(next, section);
+        }
+    }
+
+    refreshSectionMoveButtons(section.parentElement, sectionSelector);
+    afterMove();
+}
+
 /**
  * Add a new ingredient row to the form
  */
@@ -2388,6 +2445,10 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
     const section = document.createElement('div');
     section.className = 'ingredient-section-editor';
     section.innerHTML = `
+        <div class="section-reorder-controls" aria-label="Move ingredient set">
+            <button type="button" class="segmented-control-button" data-move-section="up">Move Up</button>
+            <button type="button" class="segmented-control-button" data-move-section="down">Move Down</button>
+        </div>
         <div class="ingredient-section-editor-header">
             <input type="text" class="ingredient-section-label" placeholder="Ingredient set header (optional)" value="${escapeHtml(label || '')}">
             ${isPrimary ? '' : '<button type="button" class="btn-remove" title="Remove Section">×</button>'}
@@ -2433,6 +2494,12 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
         });
     });
 
+    section.querySelectorAll('[data-move-section]').forEach((button) => {
+        button.addEventListener('click', () => {
+            moveSectionEditor(section, button.dataset.moveSection, '.ingredient-section-editor');
+        });
+    });
+
     section.querySelector('.btn-add-ingredient-inline')?.addEventListener('click', () => {
         addIngredientRow('', '', section.querySelector('.ingredient-section-rows'));
         updateRecipeFromForm();
@@ -2457,6 +2524,7 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
 
     section.querySelector('.btn-remove')?.addEventListener('click', () => {
         section.remove();
+        refreshSectionMoveButtons(container, '.ingredient-section-editor');
         updateRecipeFromForm();
     });
 
@@ -2466,6 +2534,8 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
     (ingredients.length ? ingredients : [{}]).forEach((ingredient) => {
         addIngredientRow(ingredient.name || '', ingredient.amount || '', rowsContainer);
     });
+
+    refreshSectionMoveButtons(container, '.ingredient-section-editor');
 }
 
 function addIngredientRowToLastSection(name = '', amount = '') {
@@ -2728,9 +2798,16 @@ function addNoteRow(text = '') {
  */
 function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, startMode = 'force-right-column', stepStyle = 'numbered') {
     const container = elements.instructionsList();
+    const normalizedStartMode = ['auto', 'force-right-column', 'force-next-page', 'keep-with-first-step'].includes(startMode)
+        ? startMode
+        : 'force-right-column';
     const section = document.createElement('div');
     section.className = 'instruction-section-editor';
     section.innerHTML = `
+        <div class="section-reorder-controls" aria-label="Move instruction set">
+            <button type="button" class="segmented-control-button" data-move-section="up">Move Up</button>
+            <button type="button" class="segmented-control-button" data-move-section="down">Move Down</button>
+        </div>
         <div class="instruction-section-editor-header">
             <input type="text" class="instruction-section-label" placeholder="Instruction set label" value="${escapeHtml(label || '')}">
             ${isPrimary ? '' : '<button type="button" class="btn-remove" title="Remove Section">×</button>'}
@@ -2738,12 +2815,13 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
         <div class="instruction-section-editor-meta">
             <div class="instruction-section-control">
                 <label>Instructions Start</label>
-                <select class="instruction-section-start-mode">
-                    <option value="auto" ${startMode === 'auto' ? 'selected' : ''}>Auto</option>
-                    <option value="force-right-column" ${startMode === 'force-right-column' ? 'selected' : ''}>Force right column</option>
-                    <option value="force-next-page" ${startMode === 'force-next-page' ? 'selected' : ''}>Force next page</option>
-                    <option value="keep-with-first-step" ${startMode === 'keep-with-first-step' ? 'selected' : ''}>Move to next column if header would orphan</option>
-                </select>
+                <input type="hidden" class="instruction-section-start-mode" value="${normalizedStartMode}">
+                <div class="segmented-control instruction-start-control" role="group" aria-label="Instructions start">
+                    <button type="button" class="segmented-control-button ${normalizedStartMode === 'auto' ? 'is-active' : ''}" data-instruction-start-mode="auto" aria-pressed="${normalizedStartMode === 'auto'}">Auto</button>
+                    <button type="button" class="segmented-control-button ${normalizedStartMode === 'force-right-column' ? 'is-active' : ''}" data-instruction-start-mode="force-right-column" aria-pressed="${normalizedStartMode === 'force-right-column'}">Right Column</button>
+                    <button type="button" class="segmented-control-button ${normalizedStartMode === 'force-next-page' ? 'is-active' : ''}" data-instruction-start-mode="force-next-page" aria-pressed="${normalizedStartMode === 'force-next-page'}">Next Page</button>
+                    <button type="button" class="segmented-control-button ${normalizedStartMode === 'keep-with-first-step' ? 'is-active' : ''}" data-instruction-start-mode="keep-with-first-step" aria-pressed="${normalizedStartMode === 'keep-with-first-step'}">Keep With Step</button>
+                </div>
             </div>
             <input type="hidden" class="instruction-section-step-style" value="numbered">
         </div>
@@ -2755,11 +2833,34 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
 
     const labelInput = section.querySelector('.instruction-section-label');
     if (isPrimary) {
-        labelInput.value = elements.instructionsLabel()?.value || label || 'Instructions for 1 Serving';
+        labelInput.value = label || '';
     }
     labelInput.addEventListener('input', debounce(updateRecipeFromForm, 150));
 
-    section.querySelector('.instruction-section-start-mode')?.addEventListener('change', debounce(updateRecipeFromForm, 150));
+    section.querySelectorAll('[data-instruction-start-mode]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const startModeInput = section.querySelector('.instruction-section-start-mode');
+            if (startModeInput) {
+                startModeInput.value = button.dataset.instructionStartMode || 'force-right-column';
+            }
+            section.querySelectorAll('[data-instruction-start-mode]').forEach((modeButton) => {
+                const isActive = modeButton === button;
+                modeButton.classList.toggle('is-active', isActive);
+                modeButton.setAttribute('aria-pressed', String(isActive));
+            });
+            updateRecipeFromForm();
+        });
+    });
+
+    section.querySelectorAll('[data-move-section]').forEach((button) => {
+        button.addEventListener('click', () => {
+            moveSectionEditor(section, button.dataset.moveSection, '.instruction-section-editor', () => {
+                renumberInstructions();
+                updateRecipeFromForm();
+            });
+        });
+    });
+
     section.querySelector('.instruction-section-step-style')?.addEventListener('change', () => {
         renumberInstructions();
         updateRecipeFromForm();
@@ -2772,6 +2873,7 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
 
     section.querySelector('.btn-remove')?.addEventListener('click', () => {
         section.remove();
+        refreshSectionMoveButtons(container, '.instruction-section-editor');
         renumberInstructions();
         updateRecipeFromForm();
     });
@@ -2790,13 +2892,14 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
     });
 
     renumberInstructions();
+    refreshSectionMoveButtons(container, '.instruction-section-editor');
 }
 
 function addInstructionRowToLastSection(text = '') {
     let lastSectionSteps = elements.instructionsList()?.querySelector('.instruction-section-editor:last-child .instruction-section-steps');
 
     if (!lastSectionSteps) {
-        addInstructionSectionEditor(elements.instructionsLabel()?.value || 'Instructions for 1 Serving', [], true, currentRecipe.instructionsStartMode || 'force-right-column');
+        addInstructionSectionEditor('', [], true, currentRecipe.instructionsStartMode || 'force-right-column');
         lastSectionSteps = elements.instructionsList()?.querySelector('.instruction-section-editor:last-child .instruction-section-steps');
     }
 
@@ -3170,6 +3273,7 @@ function renderRecipePage() {
     const heroStyle = isPrinterFriendly(recipe)
         ? `--printer-title-top-padding: ${printerTitleTopPadding}px; --printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`
         : `height: ${heroHeight}px;`;
+    const macroBarStyle = `--printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`;
     const heroImageHtml = createHeroImageMarkup(recipe);
 
     const macroValues = [
@@ -3195,7 +3299,7 @@ function renderRecipePage() {
 
             <!-- Macro Bar -->
             ${shouldShowMacroBar ? `
-            <div class="macro-bar">
+            <div class="macro-bar" style="${macroBarStyle}">
                 <div class="macro-bar-content">
                     ${macroBarHtml}
                 </div>
@@ -3243,6 +3347,7 @@ function renderDayOfEatingPage(page, recipe) {
     const heroStyle = isPrinterFriendly(recipe)
         ? `--printer-title-top-padding: ${printerTitleTopPadding}px; --printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`
         : `height: ${heroHeight}px;`;
+    const macroBarStyle = `--printer-title-macro-spacing: ${printerTitleMacroSpacing}px;`;
     const heroImageHtml = createHeroImageMarkup(recipe);
     const macroBarHtml = createMacroBarMarkup(recipe.macros, recipe.macroBarPrefix);
     const hasMacroData = hasAnyMacroData(recipe.macros);
@@ -3295,7 +3400,7 @@ function renderDayOfEatingPage(page, recipe) {
             </div>
 
             ${shouldShowMacroBar ? `
-            <div class="macro-bar">
+            <div class="macro-bar" style="${macroBarStyle}">
                 <div class="macro-bar-content">
                     ${macroBarHtml}
                 </div>
@@ -4036,10 +4141,17 @@ function paginateRecipeFlow(noteHtml = '') {
     }
 
     if (instructionSections.length > 0) {
+        if (currentRecipe.showInstructionsHeader !== false) {
+            placeInstructionNode(() => createInstructionHeaderNode(currentRecipe.instructionsLabel || 'Instructions for 1 Serving'));
+        }
+
         instructionSections.forEach((section) => {
             const stepStyle = section.stepStyle || 'numbered';
-            applyInstructionStartMode(section.label || 'Instructions', section.steps, section.startMode || 'force-right-column', stepStyle);
-            placeInstructionNode(() => createInstructionHeaderNode(section.label || 'Instructions'));
+            applyInstructionStartMode(currentRecipe.instructionsLabel || 'Instructions', section.steps, section.startMode || 'force-right-column', stepStyle);
+
+            if (section.label) {
+                placeInstructionNode(() => createInstructionPartHeaderNode(section.label));
+            }
 
             let visibleStepIndex = 0;
             section.steps.forEach((instruction) => {
@@ -4769,6 +4881,7 @@ function parseMasterPaste(text) {
         servingsLabel: 'Ingredients for 1 Serving',
         showIngredientsHeader: true,
         instructionsLabel: 'Instructions for 1 Serving',
+        showInstructionsHeader: true,
         materials: [],
         ingredients: [],
         ingredientSections: [],
@@ -4884,9 +4997,6 @@ function parseMasterPaste(text) {
                 steps: []
             };
             result.instructionSections.push(currentDirectionsSection);
-            if (result.instructionSections.length === 1) {
-                result.instructionsLabel = currentDirectionsSection.label;
-            }
             continue;
         } else if (line.startsWith('::DAY_MEALS')) {
             if (currentSection === 'TEXT' && textBlockContent.length > 0) {
@@ -4992,6 +5102,7 @@ function parseMasterPaste(text) {
             result.materials = parseMaterialsField(parts[10] || '');
             result.portionVariationIcon = matchPortionVariationIconByName(parts[11] || '');
             result.showIngredientsHeader = parseBooleanFlag(parts[12], true);
+            result.showInstructionsHeader = parseBooleanFlag(parts[13], true);
 
             // Auto-generate servings labels
             if (result.serves) {
@@ -5331,7 +5442,7 @@ function handleCopyAIInstructions() {
 Please analyze the recipe image and any recipe data provided. Output ONLY the structured data in this exact format, and include equipment/materials inferred from the image and recipe method:
 
 ::META::
-Recipe Title;Meal Type;dietary flags;serves;prep time;cook time;calories;protein g;carbs g;fat g;equipment names;portion variation icon;show ingredients title yes/no
+Recipe Title;Meal Type;dietary flags;serves;prep time;cook time;calories;protein g;carbs g;fat g;equipment names;portion variation icon;show ingredients title yes/no;show instructions title yes/no
 
 ::TEXT::
 Description or intro text (optional)
@@ -5368,7 +5479,7 @@ Step three text
 
 IMPORTANT RULES:
 - Use EXACT section headers: ::META::, ::TEXT::, ::INGREDIENTS::, ::DIRECTIONS::
-- META line must be semicolon-separated. Use 13 fields when possible:
+- META line must be semicolon-separated. Use 14 fields when possible:
   1. Recipe title
   2. Meal type
   3. Dietary flags
@@ -5382,7 +5493,8 @@ IMPORTANT RULES:
   11. Equipment/material names
   12. Portion variation icon name (optional; leave blank for normal recipes)
   13. Show ingredients title: yes or no
-- If using the older 11-field META format, the app still accepts it and defaults show ingredients title to yes.
+  14. Show instructions title: yes or no
+- If using the older 11-field or 13-field META format, the app still accepts it and defaults missing title toggles to yes.
 - For dietary flags, use: gf, sf, nf, wf (or leave blank)
 - Serves examples: "4 Servings", "2-3 Servings", "1 Serving"
 - Times should include units: "15 min", "1 hour", "30-45 min"
@@ -5412,6 +5524,10 @@ IMPORTANT RULES:
 - Do NOT flatten multiple ingredient groups into one list when the source clearly separates them
 - Use ::TABLE Name:: for ingredient groups (optional when there is only one group, required when there are multiple groups)
 - Directions: one step per line, no bullets, no numbering for normal steps
+- The black instructions title is separate from instruction set labels. The black title comes from the app's Instructions Title field and defaults to "Instructions for X Servings" based on META serves. It can be hidden with META field 14 set to "no". Use "yes" by default for normal recipes.
+- A ::DIRECTIONS Label;step style;start mode:: label is an instruction set header. It renders like ingredient set headers, not like the black instructions title.
+- Use ::DIRECTIONS Label;numbered;auto:: when the source has major direction sections such as "Part 1: Prepare", "Part 2: Cook", "Sauce", "Assemble", or "Bake".
+- Do not repeat "Instructions for X Servings" as a ::DIRECTIONS label.
 - Use :HEADER: Header text on its own line to add an unnumbered instruction header in the middle of a direction set. These render like ingredient set headers.
 - Use instruction headers for recipe parts/components such as ":HEADER: Making the green goddess sauce", ":HEADER: Assemble the bowls", or ":HEADER: Bake the muffins".
 - Do not number :HEADER: lines and do not put checkbox items under a :HEADER: line.
@@ -5427,7 +5543,7 @@ IMPORTANT RULES:
 Example output:
 
 ::META::
-Tofu Scramble;Breakfast;gf,sf;2 Servings;10 min;15 min;320;18;24;16;skillet, spatula, bowl;;yes
+Tofu Scramble;Breakfast;gf,sf;2 Servings;10 min;15 min;320;18;24;16;skillet, spatula, bowl;;yes;yes
 
 ::TEXT::
 A protein-packed breakfast that's ready in minutes.
@@ -5491,7 +5607,7 @@ function handleCopyAIInfoInstructions() {
 Please analyze the screenshot, product image, nutrition facts, and any supporting text provided. Output ONLY plain text in this exact structured format:
 
 ::META::
-Title;Reference Page;;1 Serving;;;calories;protein;carbs;fat;equipment names;portion variation icon;show ingredients title yes/no
+Title;Reference Page;;1 Serving;;;calories;protein;carbs;fat;equipment names;portion variation icon;show ingredients title yes/no;show instructions title yes/no
 
 ::TEXT::
 Short description text
@@ -5532,11 +5648,11 @@ IMPORTANT RULES:
 - Do NOT use markdown inside the code block except checkbox lines exactly like "- [ ] Checkbox item text"
 - The code block is required so checkbox lines and spacing are preserved when pasted into the app
 - Use EXACT section headers.
-- META must be semicolon-separated. Use 13 fields when possible.
+- META must be semicolon-separated. Use 14 fields when possible.
 - If macros are unknown, use 0.
 - The 11th META field is equipment/materials. Leave blank if none.
 - The 12th META field is the portion variation icon name. Use an existing equipment/material icon name or leave blank.
-- The 13th META field controls whether the black ingredients title appears. Use "yes" when the ::INGREDIENTS ...:: header should render as a black title, and "no" when it should be hidden.
+- The 13th META field controls whether the black ingredients title appears. Use "yes" when the ::INGREDIENTS ...:: header should render as a black title, and "no" when it should be hidden. The 14th META field controls whether the black instructions title appears. Use "yes" by default.
 - ::TEXT:: sections (optional, can have 0 or more):
   - First ::TEXT:: section = description (appears under title)
   - Additional ::TEXT:: sections = note callouts (appear as separate callout boxes with alert icons)
@@ -5552,6 +5668,8 @@ IMPORTANT RULES:
 - Include URL when there is a product purchase page. Leave blank if not available.
 - Show Macros is optional and defaults to yes. Use "no" for link-only rows that should not show macro details.
 - Each ::DIRECTIONS ...:: header format is: ::DIRECTIONS Label;step style;start mode::
+- The ::DIRECTIONS label is an instruction set header. It renders like ingredient set headers and is separate from the black Instructions Title.
+- Do not use "Instructions for X Servings" as a ::DIRECTIONS label.
 - step style must be either numbered or bulleted
 - start mode must be auto, force-right-column, force-next-page, or keep-with-first-step
 - Use force-next-page when the directions should start at the top of the next page
@@ -5564,7 +5682,7 @@ IMPORTANT RULES:
 Example:
 
 ::META::
-Protein Bars;Reference Page;;1 Serving;;;190;15;11;7;protein bar;protein bar;yes
+Protein Bars;Reference Page;;1 Serving;;;190;15;11;7;protein bar;protein bar;yes;yes
 
 ::TEXT::
 A quick reference page for high-protein snack bars with macro comparisons.
