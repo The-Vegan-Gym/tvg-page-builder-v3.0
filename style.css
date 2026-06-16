@@ -408,6 +408,10 @@ body {
     gap: var(--spacing-sm);
 }
 
+.instruction-start-control {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .segmented-control-button {
     min-width: 0;
     min-height: 40px;
@@ -3063,7 +3067,7 @@ body {
 }
 
 .recipe-page--continuation .content-area {
-    padding-top: var(--spacing-50);
+    padding-top: var(--continuation-content-spacing, var(--spacing-50));
 }
 
 .printer-friendly-page.recipe-page--continuation .hero-section--continuation {
@@ -3071,7 +3075,7 @@ body {
 }
 
 .printer-friendly-page.recipe-page--continuation .content-area {
-    padding-top: var(--spacing-50);
+    padding-top: var(--continuation-content-spacing, var(--spacing-50));
 }
 
 .recipe-page--continuation .note-callout {

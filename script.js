@@ -90,6 +90,7 @@ const EMPTY_RECIPE = {
     instructions: [],
     notes: [],
     pageBottomMargin: 0,
+    continuationContentSpacing: 50,
     pageNumber: ""
 };
 
@@ -207,7 +208,7 @@ const SECTION_INFO_CONTENT = {
         items: [
             'Style switches between standard and printer-friendly page designs.',
             'Page Number adds an optional page number to the recipe.',
-            'The sliders adjust title sizing, printer-friendly spacing, and bottom flow clearance.'
+            'The sliders adjust title sizing, printer-friendly spacing, continuation-page spacing, and bottom flow clearance.'
         ]
     },
     export: {
@@ -417,6 +418,8 @@ const elements = {
     printerTitleTopPaddingValue: () => document.getElementById('printer-title-top-padding-value'),
     printerTitleMacroSpacing: () => document.getElementById('printer-title-macro-spacing'),
     printerTitleMacroSpacingValue: () => document.getElementById('printer-title-macro-spacing-value'),
+    continuationContentSpacing: () => document.getElementById('continuation-content-spacing'),
+    continuationContentSpacingValue: () => document.getElementById('continuation-content-spacing-value'),
     heroImage: () => document.getElementById('hero-image'),
     imageUploadArea: () => document.getElementById('image-upload-area'),
     imagePreviewThumb: () => document.getElementById('image-preview-thumb'),
@@ -1508,6 +1511,11 @@ function initializeFormListeners() {
         showBottomMarginGuide();
         updateRecipeFromForm();
     });
+    elements.continuationContentSpacing()?.addEventListener('input', () => {
+        const value = getContinuationContentSpacing({ continuationContentSpacing: elements.continuationContentSpacing().value });
+        updateContinuationContentSpacingDisplay(value);
+        updateRecipeFromForm();
+    });
 
     // Image upload
     elements.imageUploadArea()?.addEventListener('click', () => {
@@ -1757,6 +1765,11 @@ function loadRecipeToForm(recipe) {
         elements.pageBottomMargin().value = pageBottomMargin;
     }
     updatePageBottomMarginDisplay(pageBottomMargin);
+    const continuationContentSpacing = getContinuationContentSpacing(recipe);
+    if (elements.continuationContentSpacing()) {
+        elements.continuationContentSpacing().value = continuationContentSpacing;
+    }
+    updateContinuationContentSpacingDisplay(continuationContentSpacing);
     applyMaterialsLayoutSelection(recipe.materialsLayout || 'column');
     if (elements.showMaterials()) {
         elements.showMaterials().checked = recipe.showMaterials !== false;
@@ -1926,6 +1939,7 @@ function updateRecipeFromForm() {
         instructions: instructionSections[0]?.steps || getInstructionsFromForm(),
         notes: getNotesFromForm(),
         pageBottomMargin: getPageBottomMargin({ pageBottomMargin: elements.pageBottomMargin()?.value }),
+        continuationContentSpacing: getContinuationContentSpacing({ continuationContentSpacing: elements.continuationContentSpacing()?.value }),
         pageNumber: elements.pageNumber()?.value || ''
     };
 
@@ -2003,6 +2017,20 @@ function getPrinterFriendlyHeroHeight(recipe = currentRecipe) {
 function updatePageBottomMarginDisplay(value = getPageBottomMargin()) {
     if (elements.pageBottomMarginValue()) {
         elements.pageBottomMarginValue().textContent = `${value}px`;
+    }
+}
+
+function getContinuationContentSpacing(recipe = currentRecipe) {
+    const parsed = Number.parseInt(recipe?.continuationContentSpacing, 10);
+    if (!Number.isFinite(parsed)) {
+        return 50;
+    }
+    return Math.max(0, Math.min(200, parsed));
+}
+
+function updateContinuationContentSpacingDisplay(value = getContinuationContentSpacing()) {
+    if (elements.continuationContentSpacingValue()) {
+        elements.continuationContentSpacingValue().textContent = `${value}px`;
     }
 }
 
@@ -2237,7 +2265,7 @@ function getInstructionSectionsForForm(recipe) {
     const normalizedSections = (recipe.instructionSections || [])
         .map(section => ({
             label: section.label || '',
-            startMode: section.startMode || 'force-right-column',
+            startMode: normalizeInstructionStartMode(section.startMode),
             stepStyle: section.stepStyle || 'numbered',
             steps: Array.isArray(section.steps) ? section.steps : []
         }))
@@ -2249,10 +2277,20 @@ function getInstructionSectionsForForm(recipe) {
 
     return [{
         label: '',
-        startMode: recipe.instructionsStartMode || 'force-right-column',
+        startMode: normalizeInstructionStartMode(recipe.instructionsStartMode),
         stepStyle: 'numbered',
         steps: recipe.instructions || []
     }];
+}
+
+function normalizeInstructionStartMode(startMode, fallback = 'force-right-column') {
+    if (startMode === 'keep-with-first-step') {
+        return 'auto';
+    }
+
+    return ['auto', 'force-right-column', 'force-next-page'].includes(startMode)
+        ? startMode
+        : fallback;
 }
 
 function getInstructionSectionsFromForm() {
@@ -2260,7 +2298,7 @@ function getInstructionSectionsFromForm() {
         .map((section, index) => {
             const labelInput = section.querySelector('.instruction-section-label');
             const label = (labelInput?.value || '').trim();
-            const startMode = section.querySelector('.instruction-section-start-mode')?.value || 'force-right-column';
+            const startMode = normalizeInstructionStartMode(section.querySelector('.instruction-section-start-mode')?.value);
             const stepStyle = section.querySelector('.instruction-section-step-style')?.value || 'numbered';
             const steps = Array.from(section.querySelectorAll('.instruction-row'))
                 .map(row => {
@@ -2803,9 +2841,7 @@ function addNoteRow(text = '') {
  */
 function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, startMode = 'force-right-column', stepStyle = 'numbered') {
     const container = elements.instructionsList();
-    const normalizedStartMode = ['auto', 'force-right-column', 'force-next-page', 'keep-with-first-step'].includes(startMode)
-        ? startMode
-        : 'force-right-column';
+    const normalizedStartMode = normalizeInstructionStartMode(startMode);
     const section = document.createElement('div');
     section.className = 'instruction-section-editor';
     section.innerHTML = `
@@ -2825,7 +2861,6 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
                     <button type="button" class="segmented-control-button ${normalizedStartMode === 'auto' ? 'is-active' : ''}" data-instruction-start-mode="auto" aria-pressed="${normalizedStartMode === 'auto'}">Auto</button>
                     <button type="button" class="segmented-control-button ${normalizedStartMode === 'force-right-column' ? 'is-active' : ''}" data-instruction-start-mode="force-right-column" aria-pressed="${normalizedStartMode === 'force-right-column'}">Right Column</button>
                     <button type="button" class="segmented-control-button ${normalizedStartMode === 'force-next-page' ? 'is-active' : ''}" data-instruction-start-mode="force-next-page" aria-pressed="${normalizedStartMode === 'force-next-page'}">Next Page</button>
-                    <button type="button" class="segmented-control-button ${normalizedStartMode === 'keep-with-first-step' ? 'is-active' : ''}" data-instruction-start-mode="keep-with-first-step" aria-pressed="${normalizedStartMode === 'keep-with-first-step'}">Keep With Step</button>
                 </div>
             </div>
             <input type="hidden" class="instruction-section-step-style" value="numbered">
@@ -2846,7 +2881,7 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
         button.addEventListener('click', () => {
             const startModeInput = section.querySelector('.instruction-section-start-mode');
             if (startModeInput) {
-                startModeInput.value = button.dataset.instructionStartMode || 'force-right-column';
+                startModeInput.value = normalizeInstructionStartMode(button.dataset.instructionStartMode);
             }
             section.querySelectorAll('[data-instruction-start-mode]').forEach((modeButton) => {
                 const isActive = modeButton === button;
@@ -3865,12 +3900,13 @@ function createContinuationPage(pageNumberText = '') {
     const printerFriendly = isPrinterFriendly(currentRecipe);
     const heroHeight = printerFriendly ? getPrinterFriendlyHeroHeight(currentRecipe) : (Number.parseInt(currentRecipe.heroHeight, 10) || 309);
     const titleFontSize = Number.parseInt(currentRecipe.titleFontSize, 10) || 40;
+    const contentSpacing = getContinuationContentSpacing(currentRecipe);
     const heroImageHtml = createHeroImageMarkup(currentRecipe);
     const printerContinuationLogo = printerFriendly ? createCornerLogoMarkup(currentRecipe) : '';
     const continuationTitle = escapeHtml(currentRecipe.title || 'Recipe Title');
 
     return `
-        <div class="recipe-page recipe-page--continuation${printerFriendly ? ' printer-friendly-page' : ''}">
+        <div class="recipe-page recipe-page--continuation${printerFriendly ? ' printer-friendly-page' : ''}" style="--continuation-content-spacing: ${contentSpacing}px;">
             ${printerContinuationLogo}
             <div class="hero-section hero-section--continuation" style="height: ${heroHeight}px;">
                 ${heroImageHtml}
@@ -4123,31 +4159,13 @@ function paginateRecipeFlow(noteHtml = '') {
         });
     });
 
-    function getInstructionStartPreviewNodes(sectionLabel, sectionSteps, stepStyle = 'numbered', includeMainHeader = false) {
-        const previewNodes = [];
-
-        if (includeMainHeader && currentRecipe.showInstructionsHeader !== false) {
-            previewNodes.push(createInstructionHeaderNode(currentRecipe.instructionsLabel || 'Instructions for 1 Serving'));
-        }
-
-        if (sectionLabel) {
-            previewNodes.push(createInstructionPartHeaderNode(sectionLabel));
-        }
-
-        if (sectionSteps.length > 0) {
-            previewNodes.push(createInstructionFlowNode(sectionSteps[0], 0, stepStyle));
-        }
-
-        return previewNodes;
-    }
-
     function shouldShowInstructionSetHeader(sectionLabel) {
         const normalizedSectionLabel = String(sectionLabel || '').trim();
         const normalizedMainLabel = String(currentRecipe.instructionsLabel || '').trim();
         return normalizedSectionLabel && normalizedSectionLabel !== normalizedMainLabel;
     }
 
-    function applyInstructionStartMode(sectionLabel, sectionSteps, startMode, stepStyle = 'numbered', includeMainHeader = false) {
+    function applyInstructionStartMode(startMode) {
         if (startMode === 'force-next-page') {
             const startingPageIndex = getCurrentSlot().pageIndex;
             let slot = getCurrentSlot();
@@ -4164,15 +4182,6 @@ function paginateRecipeFlow(noteHtml = '') {
             }
             return;
         }
-
-        if (startMode === 'keep-with-first-step') {
-            const slot = getCurrentSlot();
-            const previewNodes = getInstructionStartPreviewNodes(sectionLabel, sectionSteps, stepStyle, includeMainHeader);
-
-            if (!canFitNodeGroup(slot.element, slot.maxHeight, previewNodes) && slot.element.children.length > 0) {
-                advanceSlot();
-            }
-        }
     }
 
     if (instructionSections.length > 0) {
@@ -4180,7 +4189,7 @@ function paginateRecipeFlow(noteHtml = '') {
             const stepStyle = section.stepStyle || 'numbered';
             const includeMainHeader = sectionIndex === 0;
             const sectionLabel = shouldShowInstructionSetHeader(section.label) ? section.label : '';
-            applyInstructionStartMode(sectionLabel, section.steps, section.startMode || 'force-right-column', stepStyle, includeMainHeader);
+            applyInstructionStartMode(normalizeInstructionStartMode(section.startMode));
 
             if (includeMainHeader && currentRecipe.showInstructionsHeader !== false) {
                 placeInstructionNode(() => createInstructionHeaderNode(currentRecipe.instructionsLabel || 'Instructions for 1 Serving'));
@@ -5030,7 +5039,7 @@ function parseMasterPaste(text) {
             currentDirectionsSection = {
                 label: parts[0] || result.instructionsLabel || 'Instructions for 1 Serving',
                 stepStyle: parts[1] || 'numbered',
-                startMode: parts[2] || result.instructionsStartMode || 'force-right-column',
+                startMode: normalizeInstructionStartMode(parts[2] || result.instructionsStartMode || 'force-right-column'),
                 steps: []
             };
             result.instructionSections.push(currentDirectionsSection);
@@ -5708,7 +5717,7 @@ IMPORTANT RULES:
 - The ::DIRECTIONS label is an instruction set header. It renders like ingredient set headers and is separate from the black Instructions Title.
 - Do not use "Instructions for X Servings" as a ::DIRECTIONS label.
 - step style must be either numbered or bulleted
-- start mode must be auto, force-right-column, force-next-page, or keep-with-first-step
+- start mode must be auto, force-right-column, or force-next-page
 - Use force-next-page when the directions should start at the top of the next page
 - Use :HEADER: Header text on its own line to add an unnumbered instruction header in the middle of any ::DIRECTIONS:: block. These render like ingredient set headers.
 - Do not number :HEADER: lines and do not put checkbox items under a :HEADER: line.
