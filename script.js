@@ -1986,7 +1986,7 @@ function getPrinterTitleMacroSpacing(recipe = currentRecipe) {
     if (!Number.isFinite(parsed)) {
         return 16;
     }
-    return Math.max(0, Math.min(80, parsed));
+    return Math.max(0, Math.min(200, parsed));
 }
 
 function updatePrinterTitleMacroSpacingDisplay(value = getPrinterTitleMacroSpacing()) {
@@ -2378,6 +2378,11 @@ function stripFencedCodeBlockLines(text) {
 function parseInstructionHeaderText(value) {
     const match = String(value || '').trim().match(/^:HEADER:\s*(.+)$/i);
     return match ? match[1].trim() : '';
+}
+
+function formatInstructionHeaderText(value) {
+    const text = parseInstructionHeaderText(value) || String(value || '').trim();
+    return text ? `:HEADER: ${text}` : ':HEADER: ';
 }
 
 function isInstructionHeaderStep(step) {
@@ -2913,7 +2918,7 @@ function addInstructionRow(text = '', container = null, checkboxItems = []) {
     const row = document.createElement('div');
     row.className = 'instruction-row';
     row.innerHTML = `
-        <span class="step-number">${stepNumber}</span>
+        <button type="button" class="step-number" title="Toggle instruction header" aria-label="Toggle instruction header">${stepNumber}</button>
         <div class="instruction-content">
             <textarea placeholder="Enter instruction step...">${escapeHtml(text)}</textarea>
             <div class="instruction-checkbox-section" style="display: none;">
@@ -2932,11 +2937,20 @@ function addInstructionRow(text = '', container = null, checkboxItems = []) {
     const checkboxItemsContainer = row.querySelector('.instruction-checkbox-items');
     const toggleBtn = row.querySelector('.btn-toggle-checkboxes');
     const addCheckboxBtn = row.querySelector('.btn-add-checkbox-item');
+    const markerBtn = row.querySelector('.step-number');
 
     textarea.addEventListener('input', debounce(() => {
         renumberInstructions();
         updateRecipeFromForm();
     }, 150));
+
+    markerBtn?.addEventListener('click', () => {
+        const headerText = parseInstructionHeaderText(textarea.value);
+        textarea.value = headerText ? headerText : formatInstructionHeaderText(textarea.value);
+        textarea.focus();
+        renumberInstructions();
+        updateRecipeFromForm();
+    });
 
     row.querySelector('.btn-remove').addEventListener('click', () => {
         row.remove();
@@ -2998,22 +3012,25 @@ function updateInstructionRowMarker(row, index, stepStyle = 'numbered') {
         marker.textContent = 'H';
         marker.classList.remove('step-bullet');
         marker.classList.add('step-header');
-        marker.removeAttribute('aria-hidden');
+        marker.setAttribute('aria-pressed', 'true');
+        marker.setAttribute('title', 'Change header to numbered instruction');
+        marker.setAttribute('aria-label', 'Change header to numbered instruction');
         return;
     }
 
     marker.classList.remove('step-header');
+    marker.setAttribute('aria-pressed', 'false');
+    marker.setAttribute('title', 'Change instruction to header');
+    marker.setAttribute('aria-label', 'Change instruction to header');
 
     if (stepStyle === 'bulleted') {
         marker.textContent = '';
         marker.classList.add('step-bullet');
-        marker.setAttribute('aria-hidden', 'true');
         return;
     }
 
     marker.textContent = index + 1;
     marker.classList.remove('step-bullet');
-    marker.removeAttribute('aria-hidden');
 }
 
 /**

@@ -401,7 +401,7 @@ async function drawHero(doc, recipe, layout) {
     const heroHeight = isPrinterFriendly ? 120 : (Number.parseInt(recipe.heroHeight, 10) || 309);
     const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || (isPrinterFriendly ? 28 : 40);
     const titleMacroSpacing = Number.parseInt(recipe.printerTitleMacroSpacing, 10);
-    const spacing = Number.isFinite(titleMacroSpacing) ? Math.max(0, Math.min(80, titleMacroSpacing)) : 16;
+    const spacing = Number.isFinite(titleMacroSpacing) ? Math.max(0, Math.min(200, titleMacroSpacing)) : 16;
     const titleText = String(recipe.title || 'Recipe Title').toUpperCase();
     doc.font('Helvetica-Bold').fontSize(titleFontSize);
     const titleHeight = doc.heightOfString(titleText, {
