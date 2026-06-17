@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/The-Vegan-Gym/tvg-page-builder-v3.0#readme",
   "dependencies": {
-    "pdfkit": "^0.18.0"
+    "pdfkit": "^0.18.0",
+    "sortablejs": "^1.15.7"
   }
 }

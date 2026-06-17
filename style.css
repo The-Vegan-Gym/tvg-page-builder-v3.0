@@ -1609,6 +1609,53 @@ body {
     display: flex;
     gap: var(--spacing-sm);
     align-items: flex-start;
+    transform-origin: left center;
+    transition: transform 0.16s ease, opacity 0.16s ease, filter 0.16s ease;
+}
+
+.instruction-drag-handle {
+    width: 18px;
+    height: 28px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background-color: #7f8c99;
+    -webkit-mask: url("Icons/handle.svg") center / 18px 18px no-repeat;
+    mask: url("Icons/handle.svg") center / 18px 18px no-repeat;
+    cursor: grab;
+    flex-shrink: 0;
+    margin-top: 6px;
+    padding: 0;
+}
+
+.instruction-drag-handle:hover {
+    background-color: var(--color-primary);
+}
+
+.instruction-drag-handle:active {
+    cursor: grabbing;
+}
+
+.instruction-row-ghost {
+    opacity: 0.45;
+    background: rgba(66, 213, 59, 0.12);
+    border: 1px dashed rgba(66, 213, 59, 0.75);
+    border-radius: var(--radius-md);
+}
+
+.instruction-row-chosen {
+    transform: scale(1.01);
+    filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
+    z-index: 2;
+}
+
+.instruction-row-drag {
+    opacity: 0.95;
+}
+
+.instruction-row-chosen .instruction-drag-handle,
+.instruction-row-drag .instruction-drag-handle,
+.sortable-chosen .instruction-drag-handle {
+    cursor: grabbing;
 }
 
 .instruction-row .step-number {

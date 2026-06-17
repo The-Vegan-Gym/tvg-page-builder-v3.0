@@ -2953,6 +2953,7 @@ function addInstructionRow(text = '', container = null, checkboxItems = []) {
     const row = document.createElement('div');
     row.className = 'instruction-row';
     row.innerHTML = `
+        <button type="button" class="instruction-drag-handle drag-handle" title="Drag to reorder" aria-label="Drag to reorder instruction step"></button>
         <button type="button" class="step-number" title="Toggle instruction header" aria-label="Toggle instruction header">${stepNumber}</button>
         <div class="instruction-content">
             <textarea placeholder="Enter instruction step...">${escapeHtml(text)}</textarea>
@@ -3004,6 +3005,7 @@ function addInstructionRow(text = '', container = null, checkboxItems = []) {
     });
 
     targetContainer.appendChild(row);
+    initializeInstructionSortable(targetContainer);
 
     // Add existing checkbox items
     if (checkboxItems && checkboxItems.length > 0) {
@@ -3015,6 +3017,28 @@ function addInstructionRow(text = '', container = null, checkboxItems = []) {
     }
 
     renumberInstructions();
+}
+
+function initializeInstructionSortable(container) {
+    if (!container || container.dataset.sortableReady === 'true' || typeof Sortable === 'undefined') {
+        return;
+    }
+
+    container.dataset.sortableReady = 'true';
+    Sortable.create(container, {
+        animation: 150,
+        handle: '.instruction-drag-handle',
+        draggable: '.instruction-row',
+        ghostClass: 'instruction-row-ghost',
+        chosenClass: 'instruction-row-chosen',
+        dragClass: 'instruction-row-drag',
+        preventOnFilter: false,
+        filter: 'textarea, input, button:not(.instruction-drag-handle)',
+        onEnd: () => {
+            renumberInstructions();
+            updateRecipeFromForm();
+        }
+    });
 }
 
 function addCheckboxItem(text = '', container) {
