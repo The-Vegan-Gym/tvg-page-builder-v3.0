@@ -13,6 +13,9 @@ const BRAND_GREEN = '#42d53b';
 const TEXT_DARK = '#2f343b';
 const TEXT_MUTED = '#616161';
 const BORDER = '#e0e0e0';
+const SECTION_TITLE_TOP_GAP = 12;
+const SECTION_TITLE_AFTER_GAP = 27;
+const SECTION_TITLE_SPACE_NEEDED = 70;
 
 const MIME_TYPES = {
     '.html': 'text/html',
@@ -523,13 +526,13 @@ function drawIngredients(doc, recipe, column) {
     }
 
     sections.forEach((section, index) => {
-        if (index > 0) column.y += 12;
+        if (index > 0) column.y += SECTION_TITLE_TOP_GAP;
         const sectionLabel = section.label || '';
         const shouldShowSetHeader = sectionLabel && sectionLabel !== mainLabel && sections.length > 1;
         if (shouldShowSetHeader) {
-            column.y = ensureSpace(doc, column.y, 70);
+            column.y = ensureSpace(doc, column.y, SECTION_TITLE_SPACE_NEEDED);
             drawSectionTitle(doc, sectionLabel, column.x, column.y, column.width);
-            column.y += 27;
+            column.y += SECTION_TITLE_AFTER_GAP;
         }
 
         (section.ingredients || []).forEach((ingredient) => {
@@ -565,19 +568,19 @@ function drawInstructions(doc, recipe, column) {
     }
 
     sections.forEach((section, sectionIndex) => {
-        if (sectionIndex > 0) column.y += 12;
+        if (sectionIndex > 0) column.y += SECTION_TITLE_TOP_GAP;
         if (section.label) {
-            column.y = ensureSpace(doc, column.y, 28);
+            column.y = ensureSpace(doc, column.y, SECTION_TITLE_SPACE_NEEDED);
             drawSectionTitle(doc, section.label, column.x, column.y, column.width);
-            column.y += 26;
+            column.y += SECTION_TITLE_AFTER_GAP;
         }
 
         let visibleStepIndex = 0;
         (section.steps || []).forEach((step) => {
             if (isInstructionHeaderStep(step)) {
-                column.y = ensureSpace(doc, column.y + 8, 28);
+                column.y = ensureSpace(doc, column.y + SECTION_TITLE_TOP_GAP, SECTION_TITLE_SPACE_NEEDED);
                 drawSectionTitle(doc, getInstructionStepText(step), column.x, column.y, column.width);
-                column.y += 26;
+                column.y += SECTION_TITLE_AFTER_GAP;
                 visibleStepIndex = 0;
                 return;
             }
