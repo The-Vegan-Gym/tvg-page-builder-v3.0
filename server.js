@@ -332,6 +332,7 @@ Rules:
 - Use ::DIRECTIONS Label;numbered;auto:: when the source has major direction sections such as "Part 1: Prepare", "Part 2: Cook", "Sauce", "Assemble", or "Bake".
 - Do not repeat "Instructions for X Servings" as a ::DIRECTIONS label.
 - To add an unnumbered instruction header in the middle of directions, put it on its own line as ":HEADER: Header text". These headers should divide directions into parts, such as ":HEADER: Making the green goddess sauce".
+- To add an unnumbered instruction subtitle, put it on its own line as ":SUBTITLE: Subtitle text". Subtitles follow the same layout and number-reset rules as headers but render without bold styling. Subtitle capitalization can be controlled in the app.
 - Checkbox item lines must start exactly with "- [ ]" and directly follow the parent step.`;
 }
 
@@ -584,7 +585,11 @@ function drawInstructions(doc, recipe, column) {
         (section.steps || []).forEach((step) => {
             if (isInstructionHeaderStep(step)) {
                 column.y = ensureSpace(doc, column.y + SECTION_TITLE_TOP_GAP, SECTION_TITLE_SPACE_NEEDED);
-                drawSectionTitle(doc, getInstructionStepText(step), column.x, column.y, column.width);
+                if (getInstructionLabelType(step) === 'subtitle') {
+                    drawSectionSubtitle(doc, getInstructionStepText(step), column.x, column.y, column.width, recipe.instructionSubtitleCase === 'preserve');
+                } else {
+                    drawSectionTitle(doc, getInstructionStepText(step), column.x, column.y, column.width);
+                }
                 column.y += SECTION_TITLE_AFTER_GAP;
                 visibleStepIndex = 0;
                 return;
@@ -625,17 +630,28 @@ function parseInstructionHeaderText(value) {
     return match ? match[1].trim() : '';
 }
 
-function isInstructionHeaderStep(step) {
+function parseInstructionSubtitleText(value) {
+    const match = String(value || '').trim().match(/^:SUBTITLE:\s*(.+)$/i);
+    return match ? match[1].trim() : '';
+}
+
+function getInstructionLabelType(step) {
     if (typeof step === 'string') {
-        return Boolean(parseInstructionHeaderText(step));
+        if (parseInstructionHeaderText(step)) return 'header';
+        if (parseInstructionSubtitleText(step)) return 'subtitle';
+        return '';
     }
 
-    return Boolean(step && typeof step === 'object' && step.type === 'header' && step.text);
+    return ['header', 'subtitle'].includes(step?.type) && step.text ? step.type : '';
+}
+
+function isInstructionHeaderStep(step) {
+    return Boolean(getInstructionLabelType(step));
 }
 
 function getInstructionStepText(step) {
     if (typeof step === 'string') {
-        return parseInstructionHeaderText(step) || step;
+        return parseInstructionHeaderText(step) || parseInstructionSubtitleText(step) || step;
     }
 
     return step?.text || '';
@@ -672,6 +688,13 @@ function drawSectionTitle(doc, label, x, y, width) {
         .fontSize(11)
         .fillColor('#000000')
         .text(String(label || '').toUpperCase(), x, y, { width });
+}
+
+function drawSectionSubtitle(doc, label, x, y, width, preserveCase = false) {
+    doc.font('Helvetica')
+        .fontSize(11)
+        .fillColor('#000000')
+        .text(preserveCase ? String(label || '') : String(label || '').toUpperCase(), x, y, { width });
 }
 
 function drawPillHeader(doc, label, x, y) {

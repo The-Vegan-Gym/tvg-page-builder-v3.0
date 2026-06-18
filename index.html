@@ -373,6 +373,14 @@
                         <input type="checkbox" id="show-directions-continued-header" name="showDirectionsContinuedHeader">
                         <span>Show Directions Continued Header</span>
                     </label>
+                    <div class="form-group">
+                        <label>Subtitle Case</label>
+                        <input type="hidden" id="instruction-subtitle-case" name="instructionSubtitleCase" value="preserve">
+                        <div class="segmented-control" role="group" aria-label="Subtitle case">
+                            <button type="button" class="segmented-control-button" data-instruction-subtitle-case="uppercase" aria-pressed="false">Uppercase</button>
+                            <button type="button" class="segmented-control-button is-active" data-instruction-subtitle-case="preserve" aria-pressed="true">Typed Case</button>
+                        </div>
+                    </div>
                     <div id="instructions-list" class="instructions-list">
                         <!-- Instruction rows will be added dynamically -->
                     </div>

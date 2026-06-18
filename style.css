@@ -1826,6 +1826,12 @@ body {
     font-size: var(--editor-helper-size);
 }
 
+.instruction-row .step-number.step-subtitle {
+    background: #1a2027;
+    color: #edf2f7;
+    border: 1px solid #303943;
+}
+
 .instruction-content textarea {
     width: 100%;
     min-height: 60px;
@@ -3004,6 +3010,14 @@ body {
 
 .instruction-item + .instruction-part-header {
     margin-top: 20px;
+}
+
+.instruction-subtitle {
+    font-weight: 500;
+}
+
+.instruction-subtitle--preserve-case {
+    text-transform: none;
 }
 
 .ingredient-name-cell {

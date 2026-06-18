@@ -79,6 +79,7 @@ const EMPTY_RECIPE = {
     ingredientSections: [],
     instructionsLabel: "Instructions for 1 Serving",
     showInstructionsHeader: true,
+    instructionSubtitleCase: "preserve",
     instructionsStartMode: "force-right-column",
     showDirectionsContinuedHeader: false,
     materialsLayout: "column",
@@ -475,6 +476,8 @@ const elements = {
     addIngredientSection: () => document.getElementById('add-ingredient-section'),
     instructionsLabel: () => document.getElementById('instructions-label'),
     showInstructionsHeader: () => document.getElementById('show-instructions-header'),
+    instructionSubtitleCase: () => document.getElementById('instruction-subtitle-case'),
+    instructionSubtitleCaseButtons: () => Array.from(document.querySelectorAll('[data-instruction-subtitle-case]')),
     instructionsStartMode: () => document.getElementById('instructions-start-mode'),
     showDirectionsContinuedHeader: () => document.getElementById('show-directions-continued-header'),
     instructionsList: () => document.getElementById('instructions-list'),
@@ -1422,6 +1425,28 @@ function applyMaterialsLayoutSelection(layout = 'column') {
     updateMaterialsLayoutButtons(layout);
 }
 
+function normalizeInstructionSubtitleCase(value = 'preserve') {
+    return value === 'preserve' ? 'preserve' : 'uppercase';
+}
+
+function updateInstructionSubtitleCaseButtons(value = elements.instructionSubtitleCase()?.value || 'preserve') {
+    const subtitleCase = normalizeInstructionSubtitleCase(value);
+    elements.instructionSubtitleCaseButtons().forEach((button) => {
+        const isActive = button.dataset.instructionSubtitleCase === subtitleCase;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', String(isActive));
+    });
+}
+
+function applyInstructionSubtitleCaseSelection(value = 'preserve') {
+    const subtitleCase = normalizeInstructionSubtitleCase(value);
+    if (elements.instructionSubtitleCase()) {
+        elements.instructionSubtitleCase().value = subtitleCase;
+    }
+
+    updateInstructionSubtitleCaseButtons(subtitleCase);
+}
+
 function toggleMasterPasteInfoPanel() {
     const panel = elements.masterPasteInfoPanel();
     const button = elements.btnMasterPasteInfo();
@@ -1495,6 +1520,16 @@ function initializeFormListeners() {
     });
     elements.materialsLayout()?.addEventListener('change', () => {
         applyMaterialsLayoutSelection(elements.materialsLayout().value || 'column');
+        updateRecipeFromForm();
+    });
+    elements.instructionSubtitleCaseButtons().forEach((button) => {
+        button.addEventListener('click', () => {
+            applyInstructionSubtitleCaseSelection(button.dataset.instructionSubtitleCase || 'preserve');
+            updateRecipeFromForm();
+        });
+    });
+    elements.instructionSubtitleCase()?.addEventListener('change', () => {
+        applyInstructionSubtitleCaseSelection(elements.instructionSubtitleCase().value || 'preserve');
         updateRecipeFromForm();
     });
     elements.showMaterials()?.addEventListener('change', updateRecipeFromForm);
@@ -1760,6 +1795,7 @@ function loadRecipeToForm(recipe) {
     if (elements.showDirectionsContinuedHeader()) {
         elements.showDirectionsContinuedHeader().checked = recipe.showDirectionsContinuedHeader === true;
     }
+    applyInstructionSubtitleCaseSelection(recipe.instructionSubtitleCase || 'preserve');
     const pageBottomMargin = getPageBottomMargin(recipe);
     if (elements.pageBottomMargin()) {
         elements.pageBottomMargin().value = pageBottomMargin;
@@ -1927,6 +1963,7 @@ function updateRecipeFromForm() {
         showIngredientsHeader: elements.showIngredientsHeader()?.checked !== false,
         instructionsLabel: elements.instructionsLabel()?.value || 'Instructions for 1 Serving',
         showInstructionsHeader: elements.showInstructionsHeader()?.checked !== false,
+        instructionSubtitleCase: normalizeInstructionSubtitleCase(elements.instructionSubtitleCase()?.value),
         instructionsStartMode: instructionSections[0]?.startMode || elements.instructionsStartMode()?.value || 'force-right-column',
         showDirectionsContinuedHeader: elements.showDirectionsContinuedHeader()?.checked === true,
         materialsLayout: elements.materialsLayout()?.value || 'column',
@@ -2308,8 +2345,9 @@ function getInstructionSectionsFromForm() {
                         .filter(Boolean);
 
                     const headerText = parseInstructionHeaderText(text);
-                    if (headerText) {
-                        return { type: 'header', text: headerText };
+                    const subtitleText = parseInstructionSubtitleText(text);
+                    if (headerText || subtitleText) {
+                        return { type: headerText ? 'header' : 'subtitle', text: headerText || subtitleText };
                     }
 
                     return checkboxItems.length > 0 ? { text, checkboxItems } : text;
@@ -2418,22 +2456,38 @@ function parseInstructionHeaderText(value) {
     return match ? match[1].trim() : '';
 }
 
+function parseInstructionSubtitleText(value) {
+    const match = String(value || '').trim().match(/^:SUBTITLE:\s*(.+)$/i);
+    return match ? match[1].trim() : '';
+}
+
+function getInstructionLabelType(step) {
+    if (typeof step === 'string') {
+        if (parseInstructionHeaderText(step)) return 'header';
+        if (parseInstructionSubtitleText(step)) return 'subtitle';
+        return '';
+    }
+
+    return ['header', 'subtitle'].includes(step?.type) && step.text ? step.type : '';
+}
+
 function formatInstructionHeaderText(value) {
-    const text = parseInstructionHeaderText(value) || String(value || '').trim();
+    const text = parseInstructionHeaderText(value) || parseInstructionSubtitleText(value) || String(value || '').trim();
     return text ? `:HEADER: ${text}` : ':HEADER: ';
 }
 
-function isInstructionHeaderStep(step) {
-    if (typeof step === 'string') {
-        return Boolean(parseInstructionHeaderText(step));
-    }
+function formatInstructionSubtitleText(value) {
+    const text = parseInstructionHeaderText(value) || parseInstructionSubtitleText(value) || String(value || '').trim();
+    return text ? `:SUBTITLE: ${text}` : ':SUBTITLE: ';
+}
 
-    return Boolean(step && typeof step === 'object' && step.type === 'header' && step.text);
+function isInstructionHeaderStep(step) {
+    return Boolean(getInstructionLabelType(step));
 }
 
 function getInstructionStepText(step) {
     if (typeof step === 'string') {
-        return parseInstructionHeaderText(step) || step;
+        return parseInstructionHeaderText(step) || parseInstructionSubtitleText(step) || step;
     }
 
     return step?.text || '';
@@ -2938,7 +2992,8 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
     const stepsContainer = section.querySelector('.instruction-section-steps');
     (steps.length ? steps : ['']).forEach((step) => {
         if (isInstructionHeaderStep(step)) {
-            addInstructionRow(`:HEADER: ${getInstructionStepText(step)}`, stepsContainer, []);
+            const marker = getInstructionLabelType(step) === 'subtitle' ? ':SUBTITLE:' : ':HEADER:';
+            addInstructionRow(`${marker} ${getInstructionStepText(step)}`, stepsContainer, []);
         } else if (typeof step === 'string') {
             addInstructionRow(step, stepsContainer, []);
         } else {
@@ -2997,7 +3052,14 @@ function addInstructionRow(text = '', container = null, checkboxItems = []) {
 
     markerBtn?.addEventListener('click', () => {
         const headerText = parseInstructionHeaderText(textarea.value);
-        textarea.value = headerText ? headerText : formatInstructionHeaderText(textarea.value);
+        const subtitleText = parseInstructionSubtitleText(textarea.value);
+        if (headerText) {
+            textarea.value = formatInstructionSubtitleText(headerText);
+        } else if (subtitleText) {
+            textarea.value = subtitleText;
+        } else {
+            textarea.value = formatInstructionHeaderText(textarea.value);
+        }
         textarea.focus();
         renumberInstructions();
         updateRecipeFromForm();
@@ -3100,18 +3162,20 @@ function updateInstructionRowMarker(row, index, stepStyle = 'numbered') {
     const marker = row.querySelector('.step-number');
     if (!marker) return;
 
-    const headerText = parseInstructionHeaderText(row.querySelector('textarea')?.value || '');
-    if (headerText) {
-        marker.textContent = 'H';
+    const labelType = getInstructionLabelType(row.querySelector('textarea')?.value || '');
+    if (labelType) {
+        marker.textContent = labelType === 'subtitle' ? 'S' : 'H';
         marker.classList.remove('step-bullet');
         marker.classList.add('step-header');
+        marker.classList.toggle('step-subtitle', labelType === 'subtitle');
         marker.setAttribute('aria-pressed', 'true');
-        marker.setAttribute('title', 'Change header to numbered instruction');
-        marker.setAttribute('aria-label', 'Change header to numbered instruction');
+        marker.setAttribute('title', labelType === 'subtitle' ? 'Change subtitle to numbered instruction' : 'Change header to subtitle');
+        marker.setAttribute('aria-label', labelType === 'subtitle' ? 'Change subtitle to numbered instruction' : 'Change header to subtitle');
         return;
     }
 
     marker.classList.remove('step-header');
+    marker.classList.remove('step-subtitle');
     marker.setAttribute('aria-pressed', 'false');
     marker.setAttribute('title', 'Change instruction to header');
     marker.setAttribute('aria-label', 'Change instruction to header');
@@ -3136,7 +3200,7 @@ function renumberInstructions() {
         const rows = section.querySelectorAll('.instruction-row');
         let visibleStepIndex = 0;
         rows.forEach((row) => {
-            const isHeader = Boolean(parseInstructionHeaderText(row.querySelector('textarea')?.value || ''));
+            const isHeader = Boolean(getInstructionLabelType(row.querySelector('textarea')?.value || ''));
             updateInstructionRowMarker(row, visibleStepIndex, stepStyle);
             if (isHeader) {
                 visibleStepIndex = 0;
@@ -3879,6 +3943,15 @@ function createInstructionPartHeaderNode(text) {
     return title;
 }
 
+function createInstructionSubtitleNode(text) {
+    const title = createInstructionPartHeaderNode(text);
+    title.classList.add('instruction-subtitle');
+    if (currentRecipe.instructionSubtitleCase === 'preserve') {
+        title.classList.add('instruction-subtitle--preserve-case');
+    }
+    return title;
+}
+
 function createInstructionNode(step, index, stepStyle = 'numbered') {
     const item = document.createElement('div');
     item.className = 'instruction-item';
@@ -3915,6 +3988,9 @@ function createInstructionNode(step, index, stepStyle = 'numbered') {
 
 function createInstructionFlowNode(step, index, stepStyle = 'numbered') {
     if (isInstructionHeaderStep(step)) {
+        if (getInstructionLabelType(step) === 'subtitle') {
+            return createInstructionSubtitleNode(getInstructionStepText(step));
+        }
         return createInstructionPartHeaderNode(getInstructionStepText(step));
     }
 
@@ -5286,8 +5362,9 @@ function parseMasterPaste(text) {
         } else if (currentSection === 'DIRECTIONS') {
             const checkboxMatch = line.match(/^-\s*\[\s*\]\s*(.+)$/) || line.match(/^\[\s*\]\s*(.+)$/);
             const headerText = parseInstructionHeaderText(line);
-            if (headerText) {
-                const headerStep = { type: 'header', text: headerText };
+            const subtitleText = parseInstructionSubtitleText(line);
+            if (headerText || subtitleText) {
+                const headerStep = { type: headerText ? 'header' : 'subtitle', text: headerText || subtitleText };
                 result.instructions.push(headerStep);
                 currentDirectionsSection?.steps.push(headerStep);
             } else if (checkboxMatch) {
@@ -5633,8 +5710,9 @@ IMPORTANT RULES:
 - Use ::DIRECTIONS Label;numbered;auto:: when the source has major direction sections such as "Part 1: Prepare", "Part 2: Cook", "Sauce", "Assemble", or "Bake".
 - Do not repeat "Instructions for X Servings" as a ::DIRECTIONS label.
 - Use :HEADER: Header text on its own line to add an unnumbered instruction header in the middle of a direction set. These render like ingredient set headers.
+- Use :SUBTITLE: Subtitle text on its own line to add an unnumbered instruction subtitle. It follows the same layout/number-reset rules as :HEADER: but renders without bold styling. Subtitle capitalization can be controlled in the app.
 - Use instruction headers for recipe parts/components such as ":HEADER: Making the green goddess sauce", ":HEADER: Assemble the bowls", or ":HEADER: Bake the muffins".
-- Do not number :HEADER: lines and do not put checkbox items under a :HEADER: line.
+- Do not number :HEADER: or :SUBTITLE: lines and do not put checkbox items under either line type.
 - For a step that needs checkbox sub-items, put the parent step on its own line, then put each checkbox item immediately below it as: - [ ] Checkbox item text
 - Checkbox item lines must always start with "- [ ]" and must directly follow the parent direction step they belong to
 - Use checkbox items for ingredient add-in lists, checklist-style substeps, or grouped items within a single step
@@ -5778,7 +5856,8 @@ IMPORTANT RULES:
 - start mode must be auto, force-right-column, or force-next-page
 - Use force-next-page when the directions should start at the top of the next page
 - Use :HEADER: Header text on its own line to add an unnumbered instruction header in the middle of any ::DIRECTIONS:: block. These render like ingredient set headers.
-- Do not number :HEADER: lines and do not put checkbox items under a :HEADER: line.
+- Use :SUBTITLE: Subtitle text on its own line to add an unnumbered instruction subtitle. It follows the same layout/number-reset rules as :HEADER: but renders without bold styling. Subtitle capitalization can be controlled in the app.
+- Do not number :HEADER: or :SUBTITLE: lines and do not put checkbox items under either line type.
 - For a direction step that needs checkbox sub-items, put the parent step on its own line, then put each checkbox item immediately below it as: - [ ] Checkbox item text
 - Checkbox item lines must always start with "- [ ]" and must directly follow the parent direction step they belong to
 - If a field is unknown, leave it blank but keep delimiters intact
