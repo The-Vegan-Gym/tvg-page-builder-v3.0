@@ -998,6 +998,47 @@ body {
     margin-top: 0;
 }
 
+.layout-control-container {
+    border: 1px solid #303943;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    background: #151b22;
+}
+
+.layout-control-container h3 {
+    margin: 0 0 var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid #303943;
+    color: #f3f6f8;
+    font-size: var(--editor-subheading-size);
+    font-weight: 700;
+}
+
+.layout-control-container .layout-control-group:last-of-type {
+    margin-bottom: var(--spacing-sm);
+}
+
+.layout-control-container .image-control-row label {
+    color: #b7c2ce;
+}
+
+.layout-control-container .slider-value-input {
+    background: #0f1318;
+    border: 1px solid #303943;
+    color: #e7edf3;
+}
+
+.layout-control-container .slider-value-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(66, 213, 59, 0.2);
+}
+
+.layout-control-container .form-hint {
+    color: #8793a0;
+}
+
 /* Materials Selector Button */
 .selected-materials-preview {
     display: flex;
@@ -2746,7 +2787,7 @@ body {
     background: var(--color-primary);
     border-radius: var(--radius-recipe);
     padding: var(--spacing-8) var(--spacing-24);
-    font-size: 15px;
+    font-size: var(--macro-bar-font-size, 15px);
     font-weight: 800;
     color: var(--color-black);
     text-transform: uppercase;
@@ -2765,7 +2806,7 @@ body {
 }
 
 .description-text {
-    font-size: 13px;
+    font-size: var(--description-font-size, 13px);
     line-height: 1.5;
     color: var(--color-gray-800);
     font-weight: 600;
@@ -2867,7 +2908,7 @@ body {
 }
 
 .portion-variation-card-label {
-    font-size: 10px;
+    font-size: var(--portion-label-font-size, 10px);
     font-weight: 700;
     color: var(--color-gray-900);
     line-height: 1.25;
@@ -2894,7 +2935,7 @@ body {
 }
 
 .portion-variation-card-value {
-    font-size: 11px;
+    font-size: var(--portion-macro-value-font-size, 11px);
     line-height: 1;
     font-weight: 700;
     color: var(--color-primary);
@@ -2902,7 +2943,7 @@ body {
 
 .portion-variation-card-unit {
     margin-top: 3px;
-    font-size: 9px;
+    font-size: var(--portion-macro-unit-font-size, 9px);
     line-height: 1;
     font-weight: 600;
     color: var(--color-gray-700);
@@ -2936,7 +2977,7 @@ body {
 }
 
 .section-title {
-    font-size: 12px;
+    font-size: var(--section-header-font-size, 12px);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -3007,7 +3048,7 @@ body {
 }
 
 .flow-section-title {
-    font-size: 12px;
+    font-size: var(--section-header-font-size, 12px);
     margin-bottom: var(--spacing-12);
         text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -3018,7 +3059,7 @@ body {
     justify-content: space-between;
     padding: var(--spacing-8) 0;
     border-bottom: 1px solid #c3c3c3;
-    font-size: 12px;
+    font-size: var(--body-text-font-size, 12px);
 }
 
 .ingredient-item:last-child {
@@ -3075,7 +3116,7 @@ body {
 .instructions-header {
     background: var(--color-black);
     color: var(--color-white);
-    font-size: 13px;
+    font-size: var(--black-box-header-font-size, 13px);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -3102,7 +3143,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: var(--instruction-badge-font-size, 12px);
     font-weight: 700;
     color: #000000;
     flex-shrink: 0;
@@ -3128,7 +3169,7 @@ body {
 }
 
 .instruction-text {
-    font-size: 12px;
+    font-size: var(--body-text-font-size, 12px);
     line-height: 1.5;
     color: #000000;
     font-weight: 500;
@@ -3145,12 +3186,12 @@ body {
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--body-text-font-size, 12px);
     line-height: 1.4;
 }
 
 .checkbox-box {
-    font-size: 16px;
+    font-size: var(--checkbox-box-font-size, 16px);
     color: #000000;
     flex-shrink: 0;
     margin-top: -1px;
@@ -3221,7 +3262,7 @@ body {
 }
 
 .note-text {
-    font-size: 12px;
+    font-size: var(--note-text-font-size, 12px);
     line-height: 1.5;
     color: var(--color-gray-700);
     font-weight: 600;
@@ -3248,7 +3289,7 @@ body {
 }
 
 .page-number {
-    font-size: 16px;
+    font-size: var(--page-number-font-size, 16px);
     font-weight: 600;
     color: var(--color-gray-800);
 }

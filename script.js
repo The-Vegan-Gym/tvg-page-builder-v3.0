@@ -34,6 +34,36 @@ const DEFAULT_PORTION_VARIATION_SVG = `<svg width="36" height="36" viewBox="0 0 
 <path d="M19 9L19.8 6.5" stroke="black" stroke-width="1.8" stroke-linecap="round"/>
 </svg>`;
 
+const DEFAULT_TYPOGRAPHY_SIZES = {
+    macroBar: 15,
+    description: 13,
+    sectionHeader: 12,
+    bodyText: 12,
+    blackBoxHeader: 13,
+    instructionBadge: 12,
+    checkboxBox: 16,
+    noteText: 12,
+    pageNumber: 16,
+    portionLabel: 10,
+    portionMacroValue: 11,
+    portionMacroUnit: 9
+};
+
+const TYPOGRAPHY_SIZE_CONTROLS = [
+    { key: 'macroBar', id: 'macro-bar-font-size', valueId: 'macro-bar-font-size-value', defaultValue: 15, min: 10, max: 24 },
+    { key: 'description', id: 'description-font-size', valueId: 'description-font-size-value', defaultValue: 13, min: 9, max: 22 },
+    { key: 'sectionHeader', id: 'section-header-font-size', valueId: 'section-header-font-size-value', defaultValue: 12, min: 8, max: 22 },
+    { key: 'bodyText', id: 'body-text-font-size', valueId: 'body-text-font-size-value', defaultValue: 12, min: 8, max: 22 },
+    { key: 'blackBoxHeader', id: 'black-box-header-font-size', valueId: 'black-box-header-font-size-value', defaultValue: 13, min: 9, max: 24 },
+    { key: 'instructionBadge', id: 'instruction-badge-font-size', valueId: 'instruction-badge-font-size-value', defaultValue: 12, min: 8, max: 20 },
+    { key: 'checkboxBox', id: 'checkbox-box-font-size', valueId: 'checkbox-box-font-size-value', defaultValue: 16, min: 10, max: 28 },
+    { key: 'noteText', id: 'note-text-font-size', valueId: 'note-text-font-size-value', defaultValue: 12, min: 8, max: 22 },
+    { key: 'pageNumber', id: 'page-number-font-size', valueId: 'page-number-font-size-value', defaultValue: 16, min: 10, max: 28 },
+    { key: 'portionLabel', id: 'portion-label-font-size', valueId: 'portion-label-font-size-value', defaultValue: 10, min: 7, max: 18 },
+    { key: 'portionMacroValue', id: 'portion-macro-value-font-size', valueId: 'portion-macro-value-font-size-value', defaultValue: 11, min: 7, max: 20 },
+    { key: 'portionMacroUnit', id: 'portion-macro-unit-font-size', valueId: 'portion-macro-unit-font-size-value', defaultValue: 9, min: 6, max: 16 }
+];
+
 /**
  * Empty recipe template (starts blank)
  */
@@ -42,6 +72,7 @@ const EMPTY_RECIPE = {
     pageStyle: "standard",
     title: "",
     titleFontSize: 40,
+    typographySizes: { ...DEFAULT_TYPOGRAPHY_SIZES },
     printerTitleTopPadding: 70,
     printerTitleMacroSpacing: 16,
     image: "",
@@ -252,6 +283,7 @@ function normalizeRecipe(recipe = {}) {
             ...EMPTY_RECIPE.macros,
             ...(recipe.macros || {})
         },
+        typographySizes: getTypographySizes(recipe),
         materials: Array.isArray(recipe.materials) ? recipe.materials : [],
         dayMeals: Array.isArray(recipe.dayMeals) ? recipe.dayMeals : [],
         dayHighlights: Array.isArray(recipe.dayHighlights) ? recipe.dayHighlights : [],
@@ -1586,7 +1618,7 @@ function initializeFormListeners() {
 
     elements.titleFontSize()?.addEventListener('input', () => {
         const value = elements.titleFontSize().value;
-        elements.titleFontSizeValue().textContent = `${value}px`;
+        elements.titleFontSizeValue().value = value;
         if (elements.pageStyle()?.value === 'printer-friendly') {
             const printerHeroHeight = getPrinterFriendlyHeroHeight({
                 printerTitleTopPadding: elements.printerTitleTopPadding()?.value,
@@ -1597,6 +1629,49 @@ function initializeFormListeners() {
             elements.heroHeightValue().value = printerHeroHeight;
         }
         updateRecipeFromForm();
+    });
+
+    elements.titleFontSizeValue()?.addEventListener('input', () => {
+        const value = getClampedControlValue(elements.titleFontSizeValue(), elements.titleFontSize(), 40);
+        elements.titleFontSizeValue().value = value;
+        elements.titleFontSize().value = value;
+        if (elements.pageStyle()?.value === 'printer-friendly') {
+            const printerHeroHeight = getPrinterFriendlyHeroHeight({
+                printerTitleTopPadding: elements.printerTitleTopPadding()?.value,
+                printerTitleMacroSpacing: elements.printerTitleMacroSpacing()?.value,
+                titleFontSize: value
+            });
+            elements.heroHeight().value = String(printerHeroHeight);
+            elements.heroHeightValue().value = printerHeroHeight;
+        }
+        updateRecipeFromForm();
+    });
+
+    TYPOGRAPHY_SIZE_CONTROLS.forEach((control) => {
+        const slider = document.getElementById(control.id);
+        const valueInput = document.getElementById(control.valueId);
+
+        slider?.addEventListener('input', (event) => {
+            const sizes = getTypographySizes({
+                typographySizes: {
+                    [control.key]: event.target.value
+                }
+            });
+            const value = sizes[control.key];
+            event.target.value = String(value);
+            updateTypographyControlDisplay(control, value);
+            updateRecipeFromForm();
+        });
+
+        valueInput?.addEventListener('input', (event) => {
+            const value = getClampedControlValue(event.target, slider, control.defaultValue);
+            event.target.value = value;
+            if (slider) {
+                slider.value = value;
+            }
+            updateTypographyControlDisplay(control, value);
+            updateRecipeFromForm();
+        });
     });
 
     elements.printerTitleTopPadding()?.addEventListener('input', () => {
@@ -1760,7 +1835,8 @@ function loadRecipeToForm(recipe) {
     elements.title().value = recipe.title || '';
     const titleFontSize = Number.parseInt(recipe.titleFontSize, 10) || 40;
     elements.titleFontSize().value = titleFontSize;
-    elements.titleFontSizeValue().textContent = `${titleFontSize}px`;
+    elements.titleFontSizeValue().value = titleFontSize;
+    syncTypographyControls(recipe);
     const printerTitleTopPadding = getPrinterTitleTopPadding(recipe);
     if (elements.printerTitleTopPadding()) {
         elements.printerTitleTopPadding().value = printerTitleTopPadding;
@@ -1921,6 +1997,7 @@ function updateRecipeFromForm() {
         pageStyle: elements.pageStyle()?.value || 'standard',
         title: elements.title()?.value || '',
         titleFontSize: parseInt(elements.titleFontSize()?.value, 10) || 40,
+        typographySizes: getTypographySizesFromControls(),
         printerTitleTopPadding: getPrinterTitleTopPadding({ printerTitleTopPadding: elements.printerTitleTopPadding()?.value }),
         printerTitleMacroSpacing: getPrinterTitleMacroSpacing({ printerTitleMacroSpacing: elements.printerTitleMacroSpacing()?.value }),
         image: getHeroImageValue(),
@@ -2044,6 +2121,69 @@ function updatePrinterTitleMacroSpacingDisplay(value = getPrinterTitleMacroSpaci
     if (elements.printerTitleMacroSpacingValue()) {
         elements.printerTitleMacroSpacingValue().textContent = `${value}px`;
     }
+}
+
+function getTypographySizes(recipe = currentRecipe) {
+    const savedSizes = recipe?.typographySizes || {};
+
+    return TYPOGRAPHY_SIZE_CONTROLS.reduce((sizes, control) => {
+        const rawValue = savedSizes[control.key];
+        const parsed = Number.parseInt(rawValue, 10);
+        const defaultValue = DEFAULT_TYPOGRAPHY_SIZES[control.key] ?? control.defaultValue;
+        const value = Number.isFinite(parsed) ? parsed : defaultValue;
+        sizes[control.key] = Math.max(control.min, Math.min(control.max, value));
+        return sizes;
+    }, {});
+}
+
+function updateTypographyControlDisplay(control, value) {
+    const valueElement = document.getElementById(control.valueId);
+    if (valueElement) {
+        valueElement.value = String(value);
+    }
+}
+
+function syncTypographyControls(recipe = currentRecipe) {
+    const sizes = getTypographySizes(recipe);
+
+    TYPOGRAPHY_SIZE_CONTROLS.forEach((control) => {
+        const input = document.getElementById(control.id);
+        const value = sizes[control.key];
+        if (input) {
+            input.value = String(value);
+        }
+        updateTypographyControlDisplay(control, value);
+    });
+}
+
+function getTypographySizesFromControls() {
+    return TYPOGRAPHY_SIZE_CONTROLS.reduce((sizes, control) => {
+        const input = document.getElementById(control.id);
+        sizes[control.key] = getTypographySizes({
+            typographySizes: {
+                [control.key]: input?.value
+            }
+        })[control.key];
+        return sizes;
+    }, {});
+}
+
+function createTypographyStyle(recipe = currentRecipe) {
+    const sizes = getTypographySizes(recipe);
+    return [
+        `--macro-bar-font-size: ${sizes.macroBar}px`,
+        `--description-font-size: ${sizes.description}px`,
+        `--section-header-font-size: ${sizes.sectionHeader}px`,
+        `--body-text-font-size: ${sizes.bodyText}px`,
+        `--black-box-header-font-size: ${sizes.blackBoxHeader}px`,
+        `--instruction-badge-font-size: ${sizes.instructionBadge}px`,
+        `--checkbox-box-font-size: ${sizes.checkboxBox}px`,
+        `--note-text-font-size: ${sizes.noteText}px`,
+        `--page-number-font-size: ${sizes.pageNumber}px`,
+        `--portion-label-font-size: ${sizes.portionLabel}px`,
+        `--portion-macro-value-font-size: ${sizes.portionMacroValue}px`,
+        `--portion-macro-unit-font-size: ${sizes.portionMacroUnit}px`
+    ].join('; ');
 }
 
 function getPrinterFriendlyHeroHeight(recipe = currentRecipe) {
@@ -3365,21 +3505,27 @@ function getNumericControlValue(control, fallback) {
     return Number.isFinite(value) ? value : fallback;
 }
 
+function getClampedControlValue(input, slider, fallback) {
+    const min = Number.parseInt(slider?.min, 10);
+    const max = Number.parseInt(slider?.max, 10);
+    let value = getNumericControlValue(input, fallback);
+
+    if (Number.isFinite(min)) {
+        value = Math.max(min, value);
+    }
+
+    if (Number.isFinite(max)) {
+        value = Math.min(max, value);
+    }
+
+    return value;
+}
+
 function bindImageValueInput(input, slider, fallback) {
     if (!input || !slider) return;
 
     input.addEventListener('input', () => {
-        const min = Number.parseInt(slider.min, 10);
-        const max = Number.parseInt(slider.max, 10);
-        let value = getNumericControlValue(input, fallback);
-
-        if (Number.isFinite(min)) {
-            value = Math.max(min, value);
-        }
-
-        if (Number.isFinite(max)) {
-            value = Math.min(max, value);
-        }
+        const value = getClampedControlValue(input, slider, fallback);
 
         input.value = value;
         slider.value = value;
@@ -3520,10 +3666,11 @@ function renderRecipePage() {
     const shouldShowMacroBar = recipe.showMacroBar !== false && hasMacroData;
     const shouldShowDescription = recipe.showDescription !== false;
     const macroBarHtml = hasMacroData ? createMacroBarMarkup(recipe.macros, recipe.macroBarPrefix) : '';
+    const typographyStyle = createTypographyStyle(recipe);
 
     // Render the complete page
     page.innerHTML = `
-        <div class="recipe-page page-primary${isPrinterFriendly(recipe) ? ' printer-friendly-page' : ''}">
+        <div class="recipe-page page-primary${isPrinterFriendly(recipe) ? ' printer-friendly-page' : ''}" style="${typographyStyle}">
             <!-- Hero Section -->
             <div class="hero-section" style="${heroStyle}">
                 ${heroImageHtml}
@@ -3586,6 +3733,7 @@ function renderDayOfEatingPage(page, recipe) {
     const hasMacroData = hasAnyMacroData(recipe.macros);
     const shouldShowMacroBar = recipe.showMacroBar !== false && hasMacroData;
     const shouldShowDescription = recipe.showDescription !== false;
+    const typographyStyle = createTypographyStyle(recipe);
 
     // Helper function to format note text with bold before colon
     function formatNoteText(text) {
@@ -3625,7 +3773,7 @@ function renderDayOfEatingPage(page, recipe) {
     const tipsHtml = createDayListMarkup(recipe.dayTips || [], 'dot');
 
     page.innerHTML = `
-        <div class="recipe-page page-primary day-plan-page${isPrinterFriendly(recipe) ? ' printer-friendly-page' : ''}">
+        <div class="recipe-page page-primary day-plan-page${isPrinterFriendly(recipe) ? ' printer-friendly-page' : ''}" style="${typographyStyle}">
             <div class="hero-section" style="${heroStyle}">
                 ${heroImageHtml}
                 <div class="hero-overlay"></div>
@@ -4106,12 +4254,13 @@ function createContinuationPage(pageNumberText = '') {
     const heroHeight = printerFriendly ? getPrinterFriendlyHeroHeight(currentRecipe) : (Number.parseInt(currentRecipe.heroHeight, 10) || 309);
     const titleFontSize = Number.parseInt(currentRecipe.titleFontSize, 10) || 40;
     const contentSpacing = getContinuationContentSpacing(currentRecipe);
+    const typographyStyle = createTypographyStyle(currentRecipe);
     const heroImageHtml = createHeroImageMarkup(currentRecipe);
     const printerContinuationLogo = printerFriendly ? createCornerLogoMarkup(currentRecipe) : '';
     const continuationTitle = escapeHtml(currentRecipe.title || 'Recipe Title');
 
     return `
-        <div class="recipe-page recipe-page--continuation${printerFriendly ? ' printer-friendly-page' : ''}" style="--continuation-content-spacing: ${contentSpacing}px;">
+        <div class="recipe-page recipe-page--continuation${printerFriendly ? ' printer-friendly-page' : ''}" style="${typographyStyle}; --continuation-content-spacing: ${contentSpacing}px;">
             ${printerContinuationLogo}
             <div class="hero-section hero-section--continuation" style="height: ${heroHeight}px;">
                 ${heroImageHtml}

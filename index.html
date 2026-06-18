@@ -410,13 +410,101 @@
                         <label for="page-number">Page Number</label>
                         <input type="text" id="page-number" name="pageNumber" placeholder="e.g., 14">
                     </div>
-                    <div class="layout-control-group">
-                        <div class="image-control-row">
-                            <label for="title-font-size">Title Font Size</label>
-                            <input type="range" id="title-font-size" min="24" max="64" value="40">
-                            <span id="title-font-size-value">40px</span>
+                    <div class="layout-control-container">
+                        <h3>APP/JPEG Typography</h3>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="title-font-size">Title Font Size</label>
+                                <input type="range" id="title-font-size" min="24" max="64" value="40">
+                                <input type="number" id="title-font-size-value" class="slider-value-input" min="24" max="64" value="40" aria-label="Title font size value">
+                            </div>
+                            <p class="form-hint">Adjusts the recipe title size in the page header.</p>
                         </div>
-                        <p class="form-hint">Adjusts the recipe title size in the page header.</p>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="macro-bar-font-size">Macro Bar</label>
+                                <input type="range" id="macro-bar-font-size" min="10" max="24" step="1" value="15">
+                                <input type="number" id="macro-bar-font-size-value" class="slider-value-input" min="10" max="24" step="1" value="15" aria-label="Macro bar font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="description-font-size">Description</label>
+                                <input type="range" id="description-font-size" min="9" max="22" step="1" value="13">
+                                <input type="number" id="description-font-size-value" class="slider-value-input" min="9" max="22" step="1" value="13" aria-label="Description font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="section-header-font-size">Ingredient/Instruction Headers</label>
+                                <input type="range" id="section-header-font-size" min="8" max="22" step="1" value="12">
+                                <input type="number" id="section-header-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="12" aria-label="Ingredient and instruction header font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="body-text-font-size">Ingredient/Instruction Text</label>
+                                <input type="range" id="body-text-font-size" min="8" max="22" step="1" value="12">
+                                <input type="number" id="body-text-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="12" aria-label="Ingredient and instruction text font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="black-box-header-font-size">Black Box Titles</label>
+                                <input type="range" id="black-box-header-font-size" min="9" max="24" step="1" value="13">
+                                <input type="number" id="black-box-header-font-size-value" class="slider-value-input" min="9" max="24" step="1" value="13" aria-label="Black box title font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="instruction-badge-font-size">Instruction Badges</label>
+                                <input type="range" id="instruction-badge-font-size" min="8" max="20" step="1" value="12">
+                                <input type="number" id="instruction-badge-font-size-value" class="slider-value-input" min="8" max="20" step="1" value="12" aria-label="Instruction badge font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="checkbox-box-font-size">Checkbox Icons</label>
+                                <input type="range" id="checkbox-box-font-size" min="10" max="28" step="1" value="16">
+                                <input type="number" id="checkbox-box-font-size-value" class="slider-value-input" min="10" max="28" step="1" value="16" aria-label="Checkbox icon font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="note-text-font-size">Note Text</label>
+                                <input type="range" id="note-text-font-size" min="8" max="22" step="1" value="12">
+                                <input type="number" id="note-text-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="12" aria-label="Note text font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="page-number-font-size">Page Number</label>
+                                <input type="range" id="page-number-font-size" min="10" max="28" step="1" value="16">
+                                <input type="number" id="page-number-font-size-value" class="slider-value-input" min="10" max="28" step="1" value="16" aria-label="Page number font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="portion-label-font-size">Portion Label</label>
+                                <input type="range" id="portion-label-font-size" min="7" max="18" step="1" value="10">
+                                <input type="number" id="portion-label-font-size-value" class="slider-value-input" min="7" max="18" step="1" value="10" aria-label="Portion label font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="portion-macro-value-font-size">Portion Macro Value</label>
+                                <input type="range" id="portion-macro-value-font-size" min="7" max="20" step="1" value="11">
+                                <input type="number" id="portion-macro-value-font-size-value" class="slider-value-input" min="7" max="20" step="1" value="11" aria-label="Portion macro value font size value">
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="portion-macro-unit-font-size">Portion Macro Unit</label>
+                                <input type="range" id="portion-macro-unit-font-size" min="6" max="16" step="1" value="9">
+                                <input type="number" id="portion-macro-unit-font-size-value" class="slider-value-input" min="6" max="16" step="1" value="9" aria-label="Portion macro unit font size value">
+                            </div>
+                        </div>
+                        <p class="form-hint">These controls affect the app preview and JPEG export. PDF font sizes are handled separately.</p>
                     </div>
                     <div class="layout-control-group">
                         <div class="image-control-row">
