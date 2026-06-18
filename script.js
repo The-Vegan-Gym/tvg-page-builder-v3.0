@@ -2200,11 +2200,21 @@ function getIngredientSectionsFromForm() {
             const label = (labelInput?.value || '').trim();
             const startMode = section.querySelector('.ingredient-section-start-mode')?.value || 'auto';
             const ingredients = Array.from(section.querySelectorAll('.ingredient-row'))
-                .map((row) => ({
-                    name: row.querySelector('.ingredient-name')?.value || '',
-                    amount: row.querySelector('.ingredient-amount')?.value || ''
-                }))
-                .filter((ingredient) => ingredient.name || ingredient.amount);
+                .map((row) => {
+                    const type = row.dataset.ingredientRowType || 'ingredient';
+                    if (type === 'header' || type === 'subtitle') {
+                        return {
+                            type,
+                            text: row.querySelector('.ingredient-label-text')?.value || ''
+                        };
+                    }
+
+                    return {
+                        name: row.querySelector('.ingredient-name')?.value || '',
+                        amount: row.querySelector('.ingredient-amount')?.value || ''
+                    };
+                })
+                .filter((ingredient) => ingredient.text || ingredient.name || ingredient.amount);
 
             return { label, startMode, ingredients };
         })
@@ -2415,12 +2425,18 @@ function parseIngredientPasteBlock(text) {
         .map((line) => line.trim())
         .filter(Boolean)
         .map((line) => {
+            const headerText = parseInstructionHeaderText(line);
+            const subtitleText = parseInstructionSubtitleText(line);
+            if (headerText || subtitleText) {
+                return { type: headerText ? 'header' : 'subtitle', text: headerText || subtitleText };
+            }
+
             const parts = line.split(';');
             const name = (parts.shift() || '').trim();
             const amount = parts.join(';').trim();
             return { name, amount };
         })
-        .filter((ingredient) => ingredient.name || ingredient.amount);
+        .filter((ingredient) => ingredient.text || ingredient.name || ingredient.amount);
 }
 
 function parsePortionVariationPasteBlock(text) {
@@ -2567,6 +2583,8 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
         <div class="ingredient-section-rows"></div>
         <div class="ingredient-section-actions">
             <button type="button" class="btn-add btn-add-ingredient-inline">+ Add Ingredient</button>
+            <button type="button" class="btn-add btn-add-ingredient-header-inline">+ Add Header</button>
+            <button type="button" class="btn-add btn-add-ingredient-subtitle-inline">+ Add Subtitle</button>
         </div>
     `;
 
@@ -2602,6 +2620,16 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
         updateRecipeFromForm();
     });
 
+    section.querySelector('.btn-add-ingredient-header-inline')?.addEventListener('click', () => {
+        addIngredientLabelRow('header', '', section.querySelector('.ingredient-section-rows'));
+        updateRecipeFromForm();
+    });
+
+    section.querySelector('.btn-add-ingredient-subtitle-inline')?.addEventListener('click', () => {
+        addIngredientLabelRow('subtitle', '', section.querySelector('.ingredient-section-rows'));
+        updateRecipeFromForm();
+    });
+
     section.querySelector('.btn-ingredient-paste')?.addEventListener('click', () => {
         const pasteInput = section.querySelector('.ingredient-section-paste-input');
         const rowsContainer = section.querySelector('.ingredient-section-rows');
@@ -2613,7 +2641,11 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
 
         rowsContainer.innerHTML = '';
         parsedIngredients.forEach((ingredient) => {
-            addIngredientRow(ingredient.name, ingredient.amount, rowsContainer);
+            if (ingredient.type === 'header' || ingredient.type === 'subtitle') {
+                addIngredientLabelRow(ingredient.type, ingredient.text || '', rowsContainer);
+            } else {
+                addIngredientRow(ingredient.name, ingredient.amount, rowsContainer);
+            }
         });
         pasteInput.value = '';
         updateRecipeFromForm();
@@ -2629,7 +2661,11 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
 
     const rowsContainer = section.querySelector('.ingredient-section-rows');
     (ingredients.length ? ingredients : [{}]).forEach((ingredient) => {
-        addIngredientRow(ingredient.name || '', ingredient.amount || '', rowsContainer);
+        if (ingredient.type === 'header' || ingredient.type === 'subtitle') {
+            addIngredientLabelRow(ingredient.type, ingredient.text || '', rowsContainer);
+        } else {
+            addIngredientRow(ingredient.name || '', ingredient.amount || '', rowsContainer);
+        }
     });
 
     refreshSectionMoveButtons(container, '.ingredient-section-editor');
@@ -2652,6 +2688,7 @@ function addIngredientRow(name = '', amount = '', container = null) {
 
     const row = document.createElement('div');
     row.className = 'ingredient-row';
+    row.dataset.ingredientRowType = 'ingredient';
     row.innerHTML = `
         <button type="button" class="row-drag-handle ingredient-drag-handle drag-handle" title="Drag to reorder" aria-label="Drag to reorder ingredient"></button>
         <textarea class="ingredient-name" rows="1" placeholder="Ingredient name">${escapeHtml(name)}</textarea>
@@ -2661,6 +2698,30 @@ function addIngredientRow(name = '', amount = '', container = null) {
 
     row.querySelector('.ingredient-name').addEventListener('input', debounce(updateRecipeFromForm, 150));
     row.querySelector('.ingredient-amount').addEventListener('input', debounce(updateRecipeFromForm, 150));
+    row.querySelector('.btn-remove').addEventListener('click', () => {
+        row.remove();
+        updateRecipeFromForm();
+    });
+
+    targetContainer.appendChild(row);
+    initializeIngredientSortable(targetContainer);
+}
+
+function addIngredientLabelRow(type = 'header', text = '', container = null) {
+    const targetContainer = container || elements.ingredientsList()?.querySelector('.ingredient-section-editor:last-child .ingredient-section-rows');
+    if (!targetContainer) return;
+
+    const normalizedType = type === 'subtitle' ? 'subtitle' : 'header';
+    const row = document.createElement('div');
+    row.className = `ingredient-row ingredient-label-row ingredient-label-row--${normalizedType}`;
+    row.dataset.ingredientRowType = normalizedType;
+    row.innerHTML = `
+        <button type="button" class="row-drag-handle ingredient-drag-handle drag-handle" title="Drag to reorder" aria-label="Drag to reorder ingredient ${normalizedType}"></button>
+        <textarea class="ingredient-label-text" rows="1" placeholder="Ingredient ${normalizedType}">${escapeHtml(text)}</textarea>
+        <button type="button" class="btn-remove" title="Remove">×</button>
+    `;
+
+    row.querySelector('.ingredient-label-text').addEventListener('input', debounce(updateRecipeFromForm, 150));
     row.querySelector('.btn-remove').addEventListener('click', () => {
         row.remove();
         updateRecipeFromForm();
@@ -3811,6 +3872,16 @@ function createDayTotalsMarkup(macros = {}) {
 }
 
 function createIngredientNode(ingredient) {
+    if (ingredient.type === 'header' || ingredient.type === 'subtitle') {
+        const title = document.createElement('h2');
+        title.className = `section-title flow-section-title ingredient-inline-label ingredient-inline-label--${ingredient.type}`;
+        if (ingredient.type === 'subtitle' && currentRecipe.instructionSubtitleCase === 'preserve') {
+            title.classList.add('instruction-subtitle--preserve-case');
+        }
+        title.textContent = ingredient.text || '';
+        return title;
+    }
+
     const item = document.createElement('div');
     item.className = 'ingredient-item';
     item.innerHTML = `
@@ -5308,6 +5379,15 @@ function parseMasterPaste(text) {
             // Skip header rows like "Ingredient;Amount"
             if (line.toLowerCase().startsWith('ingredient;')) continue;
 
+            const headerText = parseInstructionHeaderText(line);
+            const subtitleText = parseInstructionSubtitleText(line);
+            if (headerText || subtitleText) {
+                const labelRow = { type: headerText ? 'header' : 'subtitle', text: headerText || subtitleText };
+                result.ingredients.push(labelRow);
+                currentIngredientSection?.ingredients.push(labelRow);
+                continue;
+            }
+
             const parts = line.split(';').map(p => p.trim());
             if (parts.length >= 2) {
                 const name = parts[0];
@@ -5695,6 +5775,7 @@ IMPORTANT RULES:
 - The black ingredients title can be hidden with META field 13 set to "no". Use "yes" by default for normal recipes.
 - If the black title is hidden, still include the ::INGREDIENTS:: block so ingredient rows can be parsed.
 - Use ::TABLE Group Name:: only for ingredient set headers such as Sauce, Dressing, Bowl, Filling, or Topping.
+- Inside ingredient rows, use :HEADER: Header text for an inline ingredient header and :SUBTITLE: Subtitle text for an inline ingredient subtitle.
 - Do not repeat "Ingredients for X Servings" as a ::TABLE name unless the source truly has an ingredient group with that exact name.
 - Always write teaspoon/tablespoon abbreviations in lowercase: "tsp" and "tbsp" only. Never use "Tsp", "Tbsp", "TSP", or "TBSP".
 - All ingredient amounts and checkbox ingredient amounts MUST use single-character small fraction glyphs, never slash fractions or decimals when a common fraction exists.

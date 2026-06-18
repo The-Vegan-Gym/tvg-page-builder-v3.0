@@ -1577,6 +1577,18 @@ body {
     margin-top: var(--spacing-sm);
 }
 
+.ingredient-section-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-sm);
+}
+
+.ingredient-section-actions .btn-add {
+    white-space: nowrap;
+    padding-left: var(--spacing-sm);
+    padding-right: var(--spacing-sm);
+}
+
 .ingredient-row {
     display: grid;
     grid-template-columns: 18px minmax(0, 1.35fr) minmax(0, 1fr) 28px;
@@ -1598,6 +1610,17 @@ body {
 
 .ingredient-row .ingredient-amount {
     width: 100%;
+}
+
+.ingredient-label-row {
+    grid-template-columns: 18px minmax(0, 1fr) 28px;
+}
+
+.ingredient-label-row .ingredient-label-text {
+    width: 100%;
+    min-height: 38px;
+    min-width: 0;
+    resize: vertical;
 }
 
 .ingredient-row .btn-remove {
@@ -2046,6 +2069,7 @@ body {
 .portion-variation-section-editor textarea,
 .ingredient-row input,
 .ingredient-row textarea,
+.ingredient-label-text,
 .instruction-content textarea,
 .note-text-input,
 .portion-variation-main input,
@@ -2067,6 +2091,7 @@ body {
 .portion-variation-section-editor textarea::placeholder,
 .ingredient-row input::placeholder,
 .ingredient-row textarea::placeholder,
+.ingredient-label-text::placeholder,
 .instruction-row textarea::placeholder,
 .note-text-input::placeholder,
 .portion-variation-main input::placeholder,
@@ -3008,8 +3033,16 @@ body {
     margin-top: 20px;
 }
 
+.ingredient-item + .ingredient-inline-label {
+    margin-top: 20px;
+}
+
 .instruction-item + .instruction-part-header {
     margin-top: 20px;
+}
+
+.ingredient-inline-label--subtitle {
+    font-weight: 500;
 }
 
 .instruction-subtitle {

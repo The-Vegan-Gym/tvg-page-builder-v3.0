@@ -537,6 +537,17 @@ function drawIngredients(doc, recipe, column) {
         }
 
         (section.ingredients || []).forEach((ingredient) => {
+            if (ingredient.type === 'header' || ingredient.type === 'subtitle') {
+                column.y = ensureSpace(doc, column.y + SECTION_TITLE_TOP_GAP, SECTION_TITLE_SPACE_NEEDED);
+                if (ingredient.type === 'subtitle') {
+                    drawSectionSubtitle(doc, ingredient.text || '', column.x, column.y, column.width, recipe.instructionSubtitleCase === 'preserve');
+                } else {
+                    drawSectionTitle(doc, ingredient.text || '', column.x, column.y, column.width);
+                }
+                column.y += SECTION_TITLE_AFTER_GAP;
+                return;
+            }
+
             column.y = ensureSpace(doc, column.y, 24);
             const rowTop = column.y;
             const nameWidth = column.width * 0.58;
