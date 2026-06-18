@@ -538,18 +538,23 @@ function drawIngredients(doc, recipe, column) {
         (section.ingredients || []).forEach((ingredient) => {
             column.y = ensureSpace(doc, column.y, 24);
             const rowTop = column.y;
+            const nameWidth = column.width * 0.58;
+            const amountX = column.x + (column.width * 0.6);
+            const amountWidth = column.width * 0.4;
             doc.font('Helvetica-Bold')
                 .fontSize(9)
                 .fillColor(TEXT_DARK)
-                .text(ingredient.name || '', column.x, rowTop, { width: column.width * 0.58 });
+                .text(ingredient.name || '', column.x, rowTop, { width: nameWidth });
             doc.font('Helvetica-Bold')
                 .fontSize(9)
                 .fillColor(TEXT_DARK)
-                .text(ingredient.amount || '', column.x + (column.width * 0.6), rowTop, {
-                    width: column.width * 0.4,
+                .text(ingredient.amount || '', amountX, rowTop, {
+                    width: amountWidth,
                     align: 'right'
                 });
-            const rowHeight = Math.max(doc.heightOfString(ingredient.name || '', { width: column.width * 0.58 }), 14);
+            const nameHeight = doc.heightOfString(ingredient.name || '', { width: nameWidth });
+            const amountHeight = doc.heightOfString(ingredient.amount || '', { width: amountWidth, align: 'right' });
+            const rowHeight = Math.max(nameHeight, amountHeight, 14);
             doc.moveTo(column.x, rowTop + rowHeight + 4).lineTo(column.x + column.width, rowTop + rowHeight + 4).strokeColor(BORDER).lineWidth(0.75).stroke();
             column.y = rowTop + rowHeight + 9;
         });

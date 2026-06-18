@@ -65,7 +65,7 @@
     --shadow-lg: 0 10px 25px rgba(0,0,0,0.15);
 
     /* Editor Panel */
-    --editor-width: 560px;
+    --editor-width: 600px;
     --editor-nav-width: 88px;
     --editor-heading-size: 0.875rem;
     --editor-label-size: 0.8125rem;
@@ -1566,6 +1566,11 @@ body {
     gap: var(--spacing-sm);
 }
 
+.instruction-section-steps,
+.ingredient-section-rows {
+    min-height: 44px;
+}
+
 .instruction-section-actions,
 .ingredient-section-actions,
 .portion-variation-section-actions {
@@ -1573,22 +1578,31 @@ body {
 }
 
 .ingredient-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1.35fr) minmax(0, 1fr) 28px;
     gap: var(--spacing-sm);
-    align-items: flex-start;
-    flex-wrap: wrap;
+    align-items: start;
+    transform-origin: left center;
+    transition: transform 0.16s ease, opacity 0.16s ease, filter 0.16s ease;
 }
 
-.ingredient-row input {
-    flex: 1 1 150px;
+.ingredient-row textarea {
+    min-height: 38px;
+    min-width: 0;
+    resize: vertical;
 }
 
 .ingredient-row .ingredient-name {
-    flex: 1.5 1 190px;
+    width: 100%;
 }
 
 .ingredient-row .ingredient-amount {
-    flex: 1 1 150px;
+    width: 100%;
+}
+
+.ingredient-row .btn-remove {
+    width: 28px;
+    height: 28px;
 }
 
 .note-row {
@@ -1613,6 +1627,7 @@ body {
     transition: transform 0.16s ease, opacity 0.16s ease, filter 0.16s ease;
 }
 
+.row-drag-handle,
 .instruction-drag-handle {
     width: 18px;
     height: 28px;
@@ -1627,33 +1642,38 @@ body {
     padding: 0;
 }
 
+.row-drag-handle:hover,
 .instruction-drag-handle:hover {
     background-color: var(--color-primary);
 }
 
+.row-drag-handle:active,
 .instruction-drag-handle:active {
     cursor: grabbing;
 }
 
-.instruction-row-ghost {
+.row-sortable-ghost {
     opacity: 0.45;
     background: rgba(66, 213, 59, 0.12);
     border: 1px dashed rgba(66, 213, 59, 0.75);
     border-radius: var(--radius-md);
 }
 
-.instruction-row-chosen {
+.row-sortable-chosen {
     transform: scale(1.01);
     filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
     z-index: 2;
 }
 
-.instruction-row-drag {
+.row-sortable-drag {
     opacity: 0.95;
 }
 
-.instruction-row-chosen .instruction-drag-handle,
-.instruction-row-drag .instruction-drag-handle,
+.row-sortable-chosen .row-drag-handle,
+.row-sortable-drag .row-drag-handle,
+.sortable-chosen .row-drag-handle,
+.row-sortable-chosen .instruction-drag-handle,
+.row-sortable-drag .instruction-drag-handle,
 .sortable-chosen .instruction-drag-handle {
     cursor: grabbing;
 }
@@ -2019,6 +2039,7 @@ body {
 .portion-variation-section-editor input,
 .portion-variation-section-editor textarea,
 .ingredient-row input,
+.ingredient-row textarea,
 .instruction-content textarea,
 .note-text-input,
 .portion-variation-main input,
@@ -2039,6 +2060,7 @@ body {
 .portion-variation-section-editor input::placeholder,
 .portion-variation-section-editor textarea::placeholder,
 .ingredient-row input::placeholder,
+.ingredient-row textarea::placeholder,
 .instruction-row textarea::placeholder,
 .note-text-input::placeholder,
 .portion-variation-main input::placeholder,
@@ -2987,15 +3009,20 @@ body {
 .ingredient-name-cell {
     color: var(--color-gray-800);
     flex: 1;
+    min-width: 0;
     padding-right: var(--spacing-16);
     font-weight: 600;
+    white-space: pre-line;
 }
 
 .ingredient-amount-cell {
     color: var(--color-gray-800);
+    flex: 0 1 42%;
+    min-width: 0;
     text-align: right;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     font-weight: 600;
+    white-space: pre-line;
 }
 
 .instructions-header {

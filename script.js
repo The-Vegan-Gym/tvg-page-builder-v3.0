@@ -2599,8 +2599,9 @@ function addIngredientRow(name = '', amount = '', container = null) {
     const row = document.createElement('div');
     row.className = 'ingredient-row';
     row.innerHTML = `
-        <input type="text" class="ingredient-name" placeholder="Ingredient name" value="${escapeHtml(name)}">
-        <input type="text" class="ingredient-amount" placeholder="Amount" value="${escapeHtml(amount)}">
+        <button type="button" class="row-drag-handle ingredient-drag-handle drag-handle" title="Drag to reorder" aria-label="Drag to reorder ingredient"></button>
+        <textarea class="ingredient-name" rows="1" placeholder="Ingredient name">${escapeHtml(name)}</textarea>
+        <textarea class="ingredient-amount" rows="1" placeholder="Amount">${escapeHtml(amount)}</textarea>
         <button type="button" class="btn-remove" title="Remove">×</button>
     `;
 
@@ -2612,6 +2613,20 @@ function addIngredientRow(name = '', amount = '', container = null) {
     });
 
     targetContainer.appendChild(row);
+    initializeIngredientSortable(targetContainer);
+}
+
+function initializeIngredientSortable(container) {
+    initializeRowSortable(container, {
+        readyKey: 'ingredientSortableReady',
+        groupName: 'ingredient-rows',
+        handle: '.ingredient-drag-handle',
+        draggable: '.ingredient-row',
+        ghostClass: 'row-sortable-ghost',
+        chosenClass: 'row-sortable-chosen',
+        dragClass: 'row-sortable-drag',
+        onEnd: updateRecipeFromForm
+    });
 }
 
 function addPortionVariationSectionEditor(label = '', icon = '', variations = [], isPrimary = false, linkIconPosition = 'right') {
@@ -3020,24 +3035,43 @@ function addInstructionRow(text = '', container = null, checkboxItems = []) {
 }
 
 function initializeInstructionSortable(container) {
-    if (!container || container.dataset.sortableReady === 'true' || typeof Sortable === 'undefined') {
-        return;
-    }
-
-    container.dataset.sortableReady = 'true';
-    Sortable.create(container, {
-        animation: 150,
+    initializeRowSortable(container, {
+        readyKey: 'instructionSortableReady',
+        groupName: 'instruction-steps',
         handle: '.instruction-drag-handle',
         draggable: '.instruction-row',
-        ghostClass: 'instruction-row-ghost',
-        chosenClass: 'instruction-row-chosen',
-        dragClass: 'instruction-row-drag',
-        preventOnFilter: false,
-        filter: 'textarea, input, button:not(.instruction-drag-handle)',
+        ghostClass: 'row-sortable-ghost',
+        chosenClass: 'row-sortable-chosen',
+        dragClass: 'row-sortable-drag',
         onEnd: () => {
             renumberInstructions();
             updateRecipeFromForm();
         }
+    });
+}
+
+function initializeRowSortable(container, options) {
+    if (!container || container.dataset[options.readyKey] === 'true' || typeof Sortable === 'undefined') {
+        return;
+    }
+
+    container.dataset[options.readyKey] = 'true';
+    Sortable.create(container, {
+        group: {
+            name: options.groupName,
+            pull: true,
+            put: true
+        },
+        animation: 150,
+        handle: options.handle,
+        draggable: options.draggable,
+        ghostClass: options.ghostClass,
+        chosenClass: options.chosenClass,
+        dragClass: options.dragClass,
+        emptyInsertThreshold: 24,
+        preventOnFilter: false,
+        filter: 'textarea, input, button:not(.drag-handle)',
+        onEnd: options.onEnd
     });
 }
 
