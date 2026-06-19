@@ -1487,6 +1487,47 @@ body {
     min-width: 0;
 }
 
+.ingredient-section-reorder-controls {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.btn-section-reorder-icon {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #303943;
+    border-radius: var(--radius-sm);
+    background: #202832;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: border-color 0.2s, background 0.2s, opacity 0.2s;
+}
+
+.btn-section-reorder-icon img {
+    width: 14px;
+    height: 14px;
+    display: block;
+    filter: invert(77%) sepia(9%) saturate(576%) hue-rotate(174deg) brightness(90%) contrast(85%);
+}
+
+.btn-section-reorder-icon:hover:not(:disabled) {
+    border-color: rgba(66, 213, 59, 0.45);
+    background: rgba(66, 213, 59, 0.14);
+}
+
+.btn-section-reorder-icon:hover:not(:disabled) img {
+    filter: invert(91%) sepia(56%) saturate(688%) hue-rotate(48deg) brightness(98%) contrast(92%);
+}
+
+.btn-section-reorder-icon:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+}
+
 .instruction-section-editor-meta,
 .ingredient-section-editor-meta,
 .ingredient-section-paste,
@@ -2398,6 +2439,12 @@ body {
     color: #edf2f7;
 }
 
+.btn-remove:hover,
+.btn-remove-small:hover {
+    background: rgba(239, 83, 80, 0.12);
+    color: #ff8d8a;
+}
+
 .equipment-item {
     background: #11161b;
     border-color: #303943;
@@ -2872,7 +2919,7 @@ body {
 .page-primary.printer-friendly-page .hero-section:not(.hero-section--continuation) {
     height: auto;
     padding-top: var(--printer-title-top-padding, 70px);
-    padding-bottom: var(--printer-title-macro-spacing, 16px);
+    padding-bottom: var(--printer-title-macro-spacing, 35px);
     overflow: visible;
 }
 
@@ -2906,7 +2953,7 @@ body {
 /* Recipe Title */
 .recipe-title {
     position: absolute;
-    bottom: var(--printer-title-macro-spacing, 16px);
+    bottom: var(--printer-title-macro-spacing, 35px);
     left: var(--spacing-50);
     right: var(--spacing-50);
     font-size: 40px;
@@ -2935,7 +2982,7 @@ body {
     border-radius: var(--radius-recipe);
     padding: var(--spacing-8) var(--spacing-24);
     font-size: var(--macro-bar-font-size, 15px);
-    font-weight: 800;
+    font-weight: 600;
     color: var(--color-black);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -3198,9 +3245,13 @@ body {
 
 .flow-section-title {
     font-size: var(--section-header-font-size, 12px);
-    margin-bottom: var(--spacing-12);
-        text-transform: uppercase;
+    margin: 0 0 var(--spacing-12);
+    text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.flow-section-title:has(+ .flow-section-title) {
+    margin-bottom: var(--section-label-spacing, 4px);
 }
 
 .ingredient-item {
@@ -3236,7 +3287,11 @@ body {
 }
 
 .instruction-item + .instruction-part-header {
-    margin-top: 20px;
+    margin-top: 0;
+}
+
+.instruction-item:has(+ .instruction-part-header) {
+    margin-bottom: var(--step-to-header-spacing, 32px);
 }
 
 .ingredient-inline-label--subtitle {
@@ -3245,6 +3300,10 @@ body {
 
 .instruction-subtitle {
     font-weight: 500;
+}
+
+.instruction-subtitle:has(+ .instruction-item) {
+    margin-bottom: var(--subtitle-to-step-spacing, var(--spacing-12));
 }
 
 .instruction-subtitle--preserve-case {
@@ -3305,7 +3364,7 @@ body {
     align-items: center;
     justify-content: center;
     font-size: var(--instruction-badge-font-size, 12px);
-    font-weight: 700;
+    font-weight: 600;
     color: #000000;
     flex-shrink: 0;
     margin-top: calc((var(--body-text-font-size, 14px) * 1.5 - 22px) / 2);
@@ -3354,7 +3413,7 @@ body {
 .checkbox-box {
     width: var(--checkbox-box-font-size, 16px);
     height: var(--checkbox-box-font-size, 16px);
-    border: 1.5px solid #c0c0c0;
+    border: 2px solid #c0c0c0;
     border-radius: 3px;
     color: #c0c0c0;
     flex-shrink: 0;
@@ -3434,8 +3493,8 @@ body {
 .note-text {
     font-size: var(--note-text-font-size, 12px);
     line-height: 1.5;
-    color: var(--color-gray-700);
-    font-weight: 600;
+    color: #000000;
+    font-weight: 500;
     white-space: pre-line;
 }
 
@@ -3528,13 +3587,13 @@ body {
     }
 
     /* Make exported text bold */
-    .description-text,
-    .note-text {
+    .description-text {
         font-weight: 600;
     }
 
     .instruction-text,
-    .checkbox-text {
+    .checkbox-text,
+    .note-text {
         color: #000000 !important;
         font-weight: 500;
         font-style: normal;
@@ -3652,7 +3711,8 @@ body {
     }
 
     .print-only .note-text {
-        color: #616161 !important;
+        color: #000000 !important;
+        font-weight: 500;
     }
 
     .print-only .page-number {

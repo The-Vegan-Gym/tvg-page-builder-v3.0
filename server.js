@@ -685,7 +685,7 @@ function drawNotes(doc, recipe, column) {
             width: 20,
             align: 'center'
         });
-        doc.font('Helvetica-Bold').fontSize(9.5).fillColor(TEXT_MUTED).text(note, column.x + 48, column.y + 14, {
+        doc.font('Helvetica').fontSize(9.5).fillColor('#000000').text(note, column.x + 48, column.y + 14, {
             width: column.width - 62,
             lineGap: 2
         });

@@ -73,8 +73,11 @@ const EMPTY_RECIPE = {
     title: "",
     titleFontSize: 40,
     typographySizes: { ...DEFAULT_TYPOGRAPHY_SIZES },
+    sectionLabelSpacing: 4,
+    stepToHeaderSpacing: 32,
+    subtitleToStepSpacing: 12,
     printerTitleTopPadding: 70,
-    printerTitleMacroSpacing: 16,
+    printerTitleMacroSpacing: 35,
     image: "",
     heroHeight: 309,
     imageSettings: {
@@ -453,6 +456,12 @@ const elements = {
     title: () => document.getElementById('title'),
     titleFontSize: () => document.getElementById('title-font-size'),
     titleFontSizeValue: () => document.getElementById('title-font-size-value'),
+    sectionLabelSpacing: () => document.getElementById('section-label-spacing'),
+    sectionLabelSpacingValue: () => document.getElementById('section-label-spacing-value'),
+    stepToHeaderSpacing: () => document.getElementById('step-to-header-spacing'),
+    stepToHeaderSpacingValue: () => document.getElementById('step-to-header-spacing-value'),
+    subtitleToStepSpacing: () => document.getElementById('subtitle-to-step-spacing'),
+    subtitleToStepSpacingValue: () => document.getElementById('subtitle-to-step-spacing-value'),
     printerTitleTopPadding: () => document.getElementById('printer-title-top-padding'),
     printerTitleTopPaddingValue: () => document.getElementById('printer-title-top-padding-value'),
     printerTitleMacroSpacing: () => document.getElementById('printer-title-macro-spacing'),
@@ -1669,6 +1678,21 @@ function initializeFormListeners() {
         updateContinuationContentSpacingDisplay(value);
         updateRecipeFromForm();
     });
+    elements.sectionLabelSpacing()?.addEventListener('input', () => {
+        const value = getSectionLabelSpacing({ sectionLabelSpacing: elements.sectionLabelSpacing().value });
+        updateSectionLabelSpacingDisplay(value);
+        updateRecipeFromForm();
+    });
+    elements.stepToHeaderSpacing()?.addEventListener('input', () => {
+        const value = getStepToHeaderSpacing({ stepToHeaderSpacing: elements.stepToHeaderSpacing().value });
+        updateStepToHeaderSpacingDisplay(value);
+        updateRecipeFromForm();
+    });
+    elements.subtitleToStepSpacing()?.addEventListener('input', () => {
+        const value = getSubtitleToStepSpacing({ subtitleToStepSpacing: elements.subtitleToStepSpacing().value });
+        updateSubtitleToStepSpacingDisplay(value);
+        updateRecipeFromForm();
+    });
 
     // Image upload
     elements.imageUploadArea()?.addEventListener('click', () => {
@@ -1937,6 +1961,21 @@ function loadRecipeToForm(recipe) {
         elements.printerTitleMacroSpacing().value = printerTitleMacroSpacing;
     }
     updatePrinterTitleMacroSpacingDisplay(printerTitleMacroSpacing);
+    const sectionLabelSpacing = getSectionLabelSpacing(recipe);
+    if (elements.sectionLabelSpacing()) {
+        elements.sectionLabelSpacing().value = sectionLabelSpacing;
+    }
+    updateSectionLabelSpacingDisplay(sectionLabelSpacing);
+    const stepToHeaderSpacing = getStepToHeaderSpacing(recipe);
+    if (elements.stepToHeaderSpacing()) {
+        elements.stepToHeaderSpacing().value = stepToHeaderSpacing;
+    }
+    updateStepToHeaderSpacingDisplay(stepToHeaderSpacing);
+    const subtitleToStepSpacing = getSubtitleToStepSpacing(recipe);
+    if (elements.subtitleToStepSpacing()) {
+        elements.subtitleToStepSpacing().value = subtitleToStepSpacing;
+    }
+    updateSubtitleToStepSpacingDisplay(subtitleToStepSpacing);
     elements.showDescription().checked = recipe.showDescription !== false;
     elements.description().value = recipe.description || '';
     elements.pageNumber().value = recipe.pageNumber || '';
@@ -2089,6 +2128,9 @@ function updateRecipeFromForm() {
         title: elements.title()?.value || '',
         titleFontSize: parseInt(elements.titleFontSize()?.value, 10) || 40,
         typographySizes: getTypographySizesFromControls(),
+        sectionLabelSpacing: getSectionLabelSpacing({ sectionLabelSpacing: elements.sectionLabelSpacing()?.value }),
+        stepToHeaderSpacing: getStepToHeaderSpacing({ stepToHeaderSpacing: elements.stepToHeaderSpacing()?.value }),
+        subtitleToStepSpacing: getSubtitleToStepSpacing({ subtitleToStepSpacing: elements.subtitleToStepSpacing()?.value }),
         printerTitleTopPadding: getPrinterTitleTopPadding({ printerTitleTopPadding: elements.printerTitleTopPadding()?.value }),
         printerTitleMacroSpacing: getPrinterTitleMacroSpacing({ printerTitleMacroSpacing: elements.printerTitleMacroSpacing()?.value }),
         image: getHeroImageValue(),
@@ -2204,7 +2246,7 @@ function updatePrinterTitleTopPaddingDisplay(value = getPrinterTitleTopPadding()
 function getPrinterTitleMacroSpacing(recipe = currentRecipe) {
     const parsed = Number.parseInt(recipe?.printerTitleMacroSpacing, 10);
     if (!Number.isFinite(parsed)) {
-        return 16;
+        return 35;
     }
     return Math.max(0, Math.min(200, parsed));
 }
@@ -2212,6 +2254,48 @@ function getPrinterTitleMacroSpacing(recipe = currentRecipe) {
 function updatePrinterTitleMacroSpacingDisplay(value = getPrinterTitleMacroSpacing()) {
     if (elements.printerTitleMacroSpacingValue()) {
         elements.printerTitleMacroSpacingValue().textContent = `${value}px`;
+    }
+}
+
+function getSectionLabelSpacing(recipe = currentRecipe) {
+    const parsed = Number.parseInt(recipe?.sectionLabelSpacing, 10);
+    if (!Number.isFinite(parsed)) {
+        return 4;
+    }
+    return Math.max(0, Math.min(60, parsed));
+}
+
+function updateSectionLabelSpacingDisplay(value = getSectionLabelSpacing()) {
+    if (elements.sectionLabelSpacingValue()) {
+        elements.sectionLabelSpacingValue().textContent = `${value}px`;
+    }
+}
+
+function getStepToHeaderSpacing(recipe = currentRecipe) {
+    const parsed = Number.parseInt(recipe?.stepToHeaderSpacing, 10);
+    if (!Number.isFinite(parsed)) {
+        return 32;
+    }
+    return Math.max(0, Math.min(100, parsed));
+}
+
+function updateStepToHeaderSpacingDisplay(value = getStepToHeaderSpacing()) {
+    if (elements.stepToHeaderSpacingValue()) {
+        elements.stepToHeaderSpacingValue().textContent = `${value}px`;
+    }
+}
+
+function getSubtitleToStepSpacing(recipe = currentRecipe) {
+    const parsed = Number.parseInt(recipe?.subtitleToStepSpacing, 10);
+    if (!Number.isFinite(parsed)) {
+        return 12;
+    }
+    return Math.max(0, Math.min(100, parsed));
+}
+
+function updateSubtitleToStepSpacingDisplay(value = getSubtitleToStepSpacing()) {
+    if (elements.subtitleToStepSpacingValue()) {
+        elements.subtitleToStepSpacingValue().textContent = `${value}px`;
     }
 }
 
@@ -2266,6 +2350,9 @@ function createTypographyStyle(recipe = currentRecipe) {
         `--macro-bar-font-size: ${sizes.macroBar}px`,
         `--description-font-size: ${sizes.description}px`,
         `--section-header-font-size: ${sizes.sectionHeader}px`,
+        `--section-label-spacing: ${getSectionLabelSpacing(recipe)}px`,
+        `--step-to-header-spacing: ${getStepToHeaderSpacing(recipe)}px`,
+        `--subtitle-to-step-spacing: ${getSubtitleToStepSpacing(recipe)}px`,
         `--body-text-font-size: ${sizes.bodyText}px`,
         `--black-box-header-font-size: ${sizes.blackBoxHeader}px`,
         `--instruction-badge-font-size: ${sizes.instructionBadge}px`,
@@ -2776,11 +2863,15 @@ function moveSectionEditor(section, direction, sectionSelector, afterMove = upda
         return;
     }
 
+    let swapSection = null;
+    const beforePositions = new Map();
     if (direction === 'up') {
         const previous = section.previousElementSibling?.matches(sectionSelector)
             ? section.previousElementSibling
             : null;
         if (previous) {
+            swapSection = previous;
+            [section, swapSection].forEach((item) => beforePositions.set(item, item.getBoundingClientRect()));
             section.parentElement.insertBefore(section, previous);
         }
     } else if (direction === 'down') {
@@ -2788,12 +2879,38 @@ function moveSectionEditor(section, direction, sectionSelector, afterMove = upda
             ? section.nextElementSibling
             : null;
         if (next) {
+            swapSection = next;
+            [section, swapSection].forEach((item) => beforePositions.set(item, item.getBoundingClientRect()));
             section.parentElement.insertBefore(next, section);
         }
     }
 
     refreshSectionMoveButtons(section.parentElement, sectionSelector);
+    if (swapSection) {
+        animateSectionSwap([section, swapSection], beforePositions);
+    }
     afterMove();
+}
+
+function animateSectionSwap(sections, beforePositions) {
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && typeof Element.prototype.animate === 'function') {
+        sections.forEach((section) => {
+            const before = beforePositions.get(section);
+            if (!before) return;
+
+            const after = section.getBoundingClientRect();
+            const deltaY = before.top - after.top;
+            if (!deltaY) return;
+
+            section.animate([
+                { transform: `translateY(${deltaY}px)` },
+                { transform: 'translateY(0)' }
+            ], {
+                duration: 220,
+                easing: 'cubic-bezier(0.2, 0, 0.2, 1)'
+            });
+        });
+    }
 }
 
 /**
@@ -2808,13 +2925,17 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
     const section = document.createElement('div');
     section.className = 'ingredient-section-editor';
     section.innerHTML = `
-        <div class="section-reorder-controls" aria-label="Move ingredient set">
-            <button type="button" class="segmented-control-button" data-move-section="up">Move Up</button>
-            <button type="button" class="segmented-control-button" data-move-section="down">Move Down</button>
-        </div>
         <div class="ingredient-section-editor-header">
             <input type="text" class="ingredient-section-label" placeholder="Ingredient set header (optional)" value="${escapeHtml(label || '')}">
-            ${isPrimary ? '' : '<button type="button" class="btn-remove" title="Remove Section">×</button>'}
+            <div class="ingredient-section-reorder-controls" aria-label="Move ingredient set">
+                <button type="button" class="btn-section-reorder-icon" data-move-section="up" aria-label="Move ingredient set up" title="Move up">
+                    <img src="Icons/move%20up.svg" alt="">
+                </button>
+                <button type="button" class="btn-section-reorder-icon" data-move-section="down" aria-label="Move ingredient set down" title="Move down">
+                    <img src="Icons/move%20down.svg" alt="">
+                </button>
+            </div>
+            <button type="button" class="btn-remove" title="Remove Section">×</button>
         </div>
         <div class="ingredient-section-editor-meta">
             <div class="ingredient-section-control">
@@ -2945,6 +3066,7 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
     section.querySelector('.btn-remove')?.addEventListener('click', () => {
         section.remove();
         refreshSectionMoveButtons(container, '.ingredient-section-editor');
+        refreshIngredientSplitControls();
         updateRecipeFromForm();
     });
 
@@ -5155,12 +5277,12 @@ async function handleExportJpg(options = {}) {
             // Apply bold text styles and force light mode for export
             const styleTag = document.createElement('style');
             styleTag.textContent = `
-                .description-text,
-                .note-text {
+                .description-text {
                     font-weight: 600 !important;
                 }
                 .instruction-text,
-                .checkbox-text {
+                .checkbox-text,
+                .note-text {
                     color: #000000 !important;
                     font-weight: 500 !important;
                     font-style: normal !important;
@@ -5187,7 +5309,7 @@ async function handleExportJpg(options = {}) {
                 .instruction-text, .checkbox-text, .checkbox-box { color: #000000 !important; }
                 .checkbox-box { border-color: #c0c0c0 !important; color: #c0c0c0 !important; }
                 .note-callout { background: #dbdbdb !important; }
-                .note-text { color: #616161 !important; }
+                .note-text { color: #000000 !important; font-weight: 500 !important; }
                 .page-number { color: #424242 !important; }
                 .description-section { border-bottom-color: #E0E0E0 !important; }
             `;
@@ -6932,7 +7054,7 @@ function schedulePreviewAutoCenterIfOutOfView() {
                 if (!hasVisiblePreviewPage()) {
                     centerPreviewWithBehavior('smooth');
                 }
-            }, 750);
+            }, 250);
         }
     });
 }

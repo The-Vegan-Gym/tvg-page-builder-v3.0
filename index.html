@@ -443,6 +443,30 @@
                         </div>
                         <div class="layout-control-group">
                             <div class="image-control-row">
+                                <label for="section-label-spacing">Header/Subtitle Spacing</label>
+                                <input type="range" id="section-label-spacing" min="0" max="60" step="1" value="4">
+                                <span id="section-label-spacing-value">4px</span>
+                            </div>
+                            <p class="form-hint">Adjusts spacing around inline ingredient and instruction headers/subtitles.</p>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="step-to-header-spacing">Step to Header Spacing</label>
+                                <input type="range" id="step-to-header-spacing" min="0" max="100" step="1" value="32">
+                                <span id="step-to-header-spacing-value">32px</span>
+                            </div>
+                            <p class="form-hint">Controls the gap from an instruction step to the next inline header/subtitle.</p>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="subtitle-to-step-spacing">Subtitle to Step Spacing</label>
+                                <input type="range" id="subtitle-to-step-spacing" min="0" max="100" step="1" value="12">
+                                <span id="subtitle-to-step-spacing-value">12px</span>
+                            </div>
+                            <p class="form-hint">Controls the gap from an instruction subtitle to the next step.</p>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
                                 <label for="body-text-font-size">Ingredient/Instruction Text</label>
                                 <input type="range" id="body-text-font-size" min="8" max="22" step="1" value="14">
                                 <input type="number" id="body-text-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="14" aria-label="Ingredient and instruction text font size value">
@@ -517,8 +541,8 @@
                     <div class="layout-control-group">
                         <div class="image-control-row">
                             <label for="printer-title-macro-spacing">Title to Macro Spacing</label>
-                            <input type="range" id="printer-title-macro-spacing" min="0" max="200" step="1" value="16">
-                            <span id="printer-title-macro-spacing-value">16px</span>
+                            <input type="range" id="printer-title-macro-spacing" min="0" max="200" step="1" value="35">
+                            <span id="printer-title-macro-spacing-value">35px</span>
                         </div>
                         <p class="form-hint">Controls the gap between the title and macro bar.</p>
                     </div>
