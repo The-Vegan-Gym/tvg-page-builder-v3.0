@@ -38,7 +38,7 @@ const DEFAULT_TYPOGRAPHY_SIZES = {
     macroBar: 15,
     description: 13,
     sectionHeader: 12,
-    bodyText: 12,
+    bodyText: 14,
     blackBoxHeader: 13,
     instructionBadge: 12,
     checkboxBox: 16,
@@ -53,7 +53,7 @@ const TYPOGRAPHY_SIZE_CONTROLS = [
     { key: 'macroBar', id: 'macro-bar-font-size', valueId: 'macro-bar-font-size-value', defaultValue: 15, min: 10, max: 24 },
     { key: 'description', id: 'description-font-size', valueId: 'description-font-size-value', defaultValue: 13, min: 9, max: 22 },
     { key: 'sectionHeader', id: 'section-header-font-size', valueId: 'section-header-font-size-value', defaultValue: 12, min: 8, max: 22 },
-    { key: 'bodyText', id: 'body-text-font-size', valueId: 'body-text-font-size-value', defaultValue: 12, min: 8, max: 22 },
+    { key: 'bodyText', id: 'body-text-font-size', valueId: 'body-text-font-size-value', defaultValue: 14, min: 8, max: 22 },
     { key: 'blackBoxHeader', id: 'black-box-header-font-size', valueId: 'black-box-header-font-size-value', defaultValue: 13, min: 9, max: 24 },
     { key: 'instructionBadge', id: 'instruction-badge-font-size', valueId: 'instruction-badge-font-size-value', defaultValue: 12, min: 8, max: 20 },
     { key: 'checkboxBox', id: 'checkbox-box-font-size', valueId: 'checkbox-box-font-size-value', defaultValue: 16, min: 10, max: 28 },
@@ -215,7 +215,7 @@ const SECTION_INFO_CONTENT = {
         title: 'Ingredients',
         items: [
             'Ingredient sets let you group ingredients under separate labels.',
-            'Ingredients Start controls whether a set begins in the left or right column.',
+            'Ingredients Start controls whether a set begins in the left column, right column, or on the next page.',
             'Add Ingredient adds a new ingredient and amount row.'
         ]
     },
@@ -270,6 +270,10 @@ let previewAutoCenterFrame = null;
 let previewAutoCenterTimer = null;
 let activeEditorSectionKey = 'basicInformation';
 let masterPasteAiImages = [];
+const RECIPE_HISTORY_LIMIT = 80;
+let recipeHistory = [];
+let recipeHistoryIndex = -1;
+let isApplyingRecipeHistory = false;
 
 function normalizeRecipe(recipe = {}) {
     const normalized = {
@@ -341,7 +345,8 @@ function normalizeRecipe(recipe = {}) {
     normalized.ingredientSections = normalized.ingredientSections
         .map((section) => ({
             label: section.label || '',
-            startMode: section.startMode === 'force-right-column' ? 'force-right-column' : 'auto',
+            startMode: normalizeIngredientStartMode(section.startMode),
+            alignment: normalizeIngredientAlignment(section.alignment),
             ingredients: Array.isArray(section.ingredients) ? section.ingredients : []
         }))
         .filter((section) => section.label || section.ingredients.length > 0);
@@ -353,6 +358,7 @@ function normalizeRecipe(recipe = {}) {
         normalized.ingredientSections = [{
             label: '',
             startMode: 'auto',
+            alignment: 'left',
             ingredients: normalized.ingredients
         }];
     }
@@ -529,6 +535,8 @@ const elements = {
     btnExportJpgPreview: () => document.getElementById('btn-export-jpg-preview'),
     btnExportEditablePdf: () => document.getElementById('btn-export-editable-pdf'),
     btnPrint: () => document.getElementById('btn-print'),
+    btnUndo: () => document.getElementById('btn-undo'),
+    btnRedo: () => document.getElementById('btn-redo'),
     btnSaveJson: () => document.getElementById('btn-save-json'),
     btnSaveJsonPreview: () => document.getElementById('btn-save-json-preview'),
     btnLoadJson: () => document.getElementById('btn-load-json'),
@@ -568,6 +576,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeButtonListeners();
     loadRecipeToForm(currentRecipe);
     renderRecipePage();
+    resetRecipeHistory(currentRecipe);
     setZoomToFit();
 });
 
@@ -736,11 +745,88 @@ function saveRecentRecipe(recipe) {
     }
 }
 
+function serializeRecipeHistoryState(recipe) {
+    return JSON.stringify(normalizeRecipe(recipe));
+}
+
+function cloneRecipeHistoryState(serializedRecipe) {
+    return normalizeRecipe(JSON.parse(serializedRecipe));
+}
+
+function updateRecipeHistoryButtons() {
+    const canUndo = recipeHistoryIndex > 0;
+    const canRedo = recipeHistoryIndex >= 0 && recipeHistoryIndex < recipeHistory.length - 1;
+
+    if (elements.btnUndo()) {
+        elements.btnUndo().disabled = !canUndo;
+    }
+
+    if (elements.btnRedo()) {
+        elements.btnRedo().disabled = !canRedo;
+    }
+}
+
+function resetRecipeHistory(recipe = currentRecipe) {
+    recipeHistory = [serializeRecipeHistoryState(recipe)];
+    recipeHistoryIndex = 0;
+    updateRecipeHistoryButtons();
+}
+
+function recordRecipeHistory(recipe = currentRecipe) {
+    if (isApplyingRecipeHistory) return;
+
+    const serializedRecipe = serializeRecipeHistoryState(recipe);
+    if (recipeHistory[recipeHistoryIndex] === serializedRecipe) {
+        updateRecipeHistoryButtons();
+        return;
+    }
+
+    if (recipeHistoryIndex < recipeHistory.length - 1) {
+        recipeHistory = recipeHistory.slice(0, recipeHistoryIndex + 1);
+    }
+
+    recipeHistory.push(serializedRecipe);
+    if (recipeHistory.length > RECIPE_HISTORY_LIMIT) {
+        recipeHistory.shift();
+    } else {
+        recipeHistoryIndex += 1;
+    }
+
+    if (recipeHistory.length === RECIPE_HISTORY_LIMIT) {
+        recipeHistoryIndex = recipeHistory.length - 1;
+    }
+
+    updateRecipeHistoryButtons();
+}
+
+function applyRecipeHistoryAt(index) {
+    if (index < 0 || index >= recipeHistory.length) return;
+
+    recipeHistoryIndex = index;
+    isApplyingRecipeHistory = true;
+    currentRecipe = cloneRecipeHistoryState(recipeHistory[recipeHistoryIndex]);
+    loadRecipeToForm(currentRecipe);
+    renderRecipePage();
+    isApplyingRecipeHistory = false;
+    updateRecipeHistoryButtons();
+}
+
+function undoRecipeChange() {
+    if (recipeHistoryIndex <= 0) return;
+    applyRecipeHistoryAt(recipeHistoryIndex - 1);
+}
+
+function redoRecipeChange() {
+    if (recipeHistoryIndex >= recipeHistory.length - 1) return;
+    applyRecipeHistoryAt(recipeHistoryIndex + 1);
+}
+
 function loadRecipeObject(recipe) {
     const normalized = normalizeRecipe(recipe);
     currentRecipe = normalized;
     loadRecipeToForm(normalized);
     renderRecipePage();
+    recordRecipeHistory(currentRecipe);
 }
 
 function formatRecentRecipeDate(value) {
@@ -1799,6 +1885,10 @@ function initializeButtonListeners() {
     // Clear button
     elements.btnClear()?.addEventListener('click', handleClear);
 
+    // Undo / redo buttons
+    elements.btnUndo()?.addEventListener('click', undoRecipeChange);
+    elements.btnRedo()?.addEventListener('click', redoRecipeChange);
+
     // Zoom controls
     elements.btnZoomIn()?.addEventListener('click', () => {
         zoomLevel = Math.min(150, zoomLevel + 10);
@@ -1949,7 +2039,8 @@ function loadRecipeToForm(recipe) {
             section.label,
             section.ingredients,
             index === 0,
-            section.startMode || 'auto'
+            section.startMode || 'auto',
+            section.alignment || 'left'
         );
     });
 
@@ -2065,6 +2156,7 @@ function updateRecipeFromForm() {
     }
 
     renderRecipePage();
+    recordRecipeHistory(currentRecipe);
 }
 
 /**
@@ -2317,7 +2409,8 @@ function getIngredientSectionsForForm(recipe) {
     const normalizedSections = (recipe.ingredientSections || [])
         .map((section) => ({
             label: section.label || '',
-            startMode: section.startMode === 'force-right-column' ? 'force-right-column' : 'auto',
+            startMode: normalizeIngredientStartMode(section.startMode),
+            alignment: normalizeIngredientAlignment(section.alignment),
             ingredients: Array.isArray(section.ingredients) ? section.ingredients : []
         }))
         .filter((section) => section.label || section.ingredients.length > 0);
@@ -2329,6 +2422,7 @@ function getIngredientSectionsForForm(recipe) {
     return [{
         label: '',
         startMode: 'auto',
+        alignment: 'left',
         ingredients: recipe.ingredients || []
     }];
 }
@@ -2338,7 +2432,8 @@ function getIngredientSectionsFromForm() {
         .map((section, index) => {
             const labelInput = section.querySelector('.ingredient-section-label');
             const label = (labelInput?.value || '').trim();
-            const startMode = section.querySelector('.ingredient-section-start-mode')?.value || 'auto';
+            const startMode = normalizeIngredientStartMode(section.querySelector('.ingredient-section-start-mode')?.value);
+            const alignment = normalizeIngredientAlignment(section.querySelector('.ingredient-section-alignment')?.value);
             const ingredients = Array.from(section.querySelectorAll('.ingredient-row'))
                 .map((row) => {
                     const type = row.dataset.ingredientRowType || 'ingredient';
@@ -2356,7 +2451,7 @@ function getIngredientSectionsFromForm() {
                 })
                 .filter((ingredient) => ingredient.text || ingredient.name || ingredient.amount);
 
-            return { label, startMode, ingredients };
+            return { label, startMode, alignment, ingredients };
         })
         .filter((section) => section.label || section.ingredients.length > 0);
 
@@ -2364,11 +2459,24 @@ function getIngredientSectionsFromForm() {
         return [{
             label: '',
             startMode: 'auto',
+            alignment: 'left',
             ingredients: []
         }];
     }
 
     return sections;
+}
+
+function normalizeIngredientStartMode(startMode, fallback = 'auto') {
+    return ['auto', 'force-right-column', 'force-next-page'].includes(startMode)
+        ? startMode
+        : fallback;
+}
+
+function normalizeIngredientAlignment(alignment, fallback = 'left') {
+    return ['left', 'right'].includes(alignment)
+        ? alignment
+        : fallback;
 }
 
 function getPortionVariationsFromForm() {
@@ -2608,12 +2716,12 @@ function stripFencedCodeBlockLines(text) {
 }
 
 function parseInstructionHeaderText(value) {
-    const match = String(value || '').trim().match(/^:HEADER:\s*(.+)$/i);
+    const match = String(value || '').trim().match(/^:HEADER:\s*([\s\S]+)$/i);
     return match ? match[1].trim() : '';
 }
 
 function parseInstructionSubtitleText(value) {
-    const match = String(value || '').trim().match(/^:SUBTITLE:\s*(.+)$/i);
+    const match = String(value || '').trim().match(/^:SUBTITLE:\s*([\s\S]+)$/i);
     return match ? match[1].trim() : '';
 }
 
@@ -2691,9 +2799,11 @@ function moveSectionEditor(section, direction, sectionSelector, afterMove = upda
 /**
  * Add a new ingredient row to the form
  */
-function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = false, startMode = 'auto') {
+function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = false, startMode = 'auto', alignment = 'left') {
     const container = elements.ingredientsList();
     if (!container) return;
+    const normalizedStartMode = normalizeIngredientStartMode(startMode);
+    const normalizedAlignment = normalizeIngredientAlignment(alignment);
 
     const section = document.createElement('div');
     section.className = 'ingredient-section-editor';
@@ -2709,10 +2819,23 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
         <div class="ingredient-section-editor-meta">
             <div class="ingredient-section-control">
                 <label>Ingredients Start</label>
-                <input type="hidden" class="ingredient-section-start-mode" value="${startMode === 'force-right-column' ? 'force-right-column' : 'auto'}">
-                <div class="segmented-control" role="group" aria-label="Ingredients start">
-                    <button type="button" class="segmented-control-button ${startMode !== 'force-right-column' ? 'is-active' : ''}" data-ingredient-start-mode="auto" aria-pressed="${startMode !== 'force-right-column'}">Left Column</button>
-                    <button type="button" class="segmented-control-button ${startMode === 'force-right-column' ? 'is-active' : ''}" data-ingredient-start-mode="force-right-column" aria-pressed="${startMode === 'force-right-column'}">Right Column</button>
+                <input type="hidden" class="ingredient-section-start-mode" value="${normalizedStartMode}">
+                <div class="segmented-control ingredient-start-control" role="group" aria-label="Ingredients start">
+                    <button type="button" class="segmented-control-button ${normalizedStartMode === 'auto' ? 'is-active' : ''}" data-ingredient-start-mode="auto" aria-pressed="${normalizedStartMode === 'auto'}">Left Column</button>
+                    <button type="button" class="segmented-control-button ${normalizedStartMode === 'force-right-column' ? 'is-active' : ''}" data-ingredient-start-mode="force-right-column" aria-pressed="${normalizedStartMode === 'force-right-column'}">Right Column</button>
+                    <button type="button" class="segmented-control-button ${normalizedStartMode === 'force-next-page' ? 'is-active' : ''}" data-ingredient-start-mode="force-next-page" aria-pressed="${normalizedStartMode === 'force-next-page'}">Next Page</button>
+                </div>
+            </div>
+            <div class="ingredient-section-control">
+                <label>Ingredient Alignment</label>
+                <input type="hidden" class="ingredient-section-alignment" value="${normalizedAlignment}">
+                <div class="segmented-control ingredient-alignment-control" role="group" aria-label="Ingredient alignment">
+                    <button type="button" class="segmented-control-button ingredient-alignment-button ${normalizedAlignment === 'left' ? 'is-active' : ''}" data-ingredient-alignment="left" aria-pressed="${normalizedAlignment === 'left'}" aria-label="Left aligned" title="Left aligned">
+                        <img src="Icons/left%20aligned.svg" alt="">
+                    </button>
+                    <button type="button" class="segmented-control-button ingredient-alignment-button ${normalizedAlignment === 'right' ? 'is-active' : ''}" data-ingredient-alignment="right" aria-pressed="${normalizedAlignment === 'right'}" aria-label="Right aligned" title="Right aligned">
+                        <img src="Icons/right%20aligned.svg" alt="">
+                    </button>
                 </div>
             </div>
         </div>
@@ -2725,6 +2848,9 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
             <button type="button" class="btn-add btn-add-ingredient-inline">+ Add Ingredient</button>
             <button type="button" class="btn-add btn-add-ingredient-header-inline">+ Add Header</button>
             <button type="button" class="btn-add btn-add-ingredient-subtitle-inline">+ Add Subtitle</button>
+            <button type="button" class="btn-add btn-toggle-ingredient-split btn-icon-add" aria-pressed="false" aria-label="Show ingredient split points" title="Show split points">
+                <img src="Icons/split.svg" alt="">
+            </button>
         </div>
     `;
 
@@ -2738,12 +2864,27 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
         button.addEventListener('click', () => {
             const startModeInput = section.querySelector('.ingredient-section-start-mode');
             if (startModeInput) {
-                startModeInput.value = button.dataset.ingredientStartMode || 'auto';
+                startModeInput.value = normalizeIngredientStartMode(button.dataset.ingredientStartMode);
             }
             section.querySelectorAll('[data-ingredient-start-mode]').forEach((modeButton) => {
                 const isActive = modeButton === button;
                 modeButton.classList.toggle('is-active', isActive);
                 modeButton.setAttribute('aria-pressed', String(isActive));
+            });
+            updateRecipeFromForm();
+        });
+    });
+
+    section.querySelectorAll('[data-ingredient-alignment]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const alignmentInput = section.querySelector('.ingredient-section-alignment');
+            if (alignmentInput) {
+                alignmentInput.value = normalizeIngredientAlignment(button.dataset.ingredientAlignment);
+            }
+            section.querySelectorAll('[data-ingredient-alignment]').forEach((alignmentButton) => {
+                const isActive = alignmentButton === button;
+                alignmentButton.classList.toggle('is-active', isActive);
+                alignmentButton.setAttribute('aria-pressed', String(isActive));
             });
             updateRecipeFromForm();
         });
@@ -2768,6 +2909,16 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
     section.querySelector('.btn-add-ingredient-subtitle-inline')?.addEventListener('click', () => {
         addIngredientLabelRow('subtitle', '', section.querySelector('.ingredient-section-rows'));
         updateRecipeFromForm();
+    });
+
+    section.querySelector('.btn-toggle-ingredient-split')?.addEventListener('click', () => {
+        const isActive = section.classList.toggle('is-splitting');
+        updateIngredientSplitButton(section);
+        if (isActive) {
+            refreshIngredientSplitControls(section);
+        } else {
+            section.querySelectorAll('.ingredient-split-control').forEach((control) => control.remove());
+        }
     });
 
     section.querySelector('.btn-ingredient-paste')?.addEventListener('click', () => {
@@ -2811,6 +2962,76 @@ function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = fa
     refreshSectionMoveButtons(container, '.ingredient-section-editor');
 }
 
+function splitIngredientSectionAfter(row) {
+    const section = row.closest('.ingredient-section-editor');
+    const container = elements.ingredientsList();
+    const rowsContainer = section?.querySelector('.ingredient-section-rows');
+    if (!section || !container || !rowsContainer) return;
+
+    const rows = Array.from(rowsContainer.querySelectorAll('.ingredient-row'));
+    const splitIndex = rows.indexOf(row);
+    const rowsToMove = rows.slice(splitIndex + 1);
+    if (splitIndex === -1 || rowsToMove.length === 0) return;
+
+    const startMode = normalizeIngredientStartMode(section.querySelector('.ingredient-section-start-mode')?.value);
+    const alignment = normalizeIngredientAlignment(section.querySelector('.ingredient-section-alignment')?.value);
+    addIngredientSectionEditor('', [], false, startMode, alignment);
+
+    const newSection = container.querySelector('.ingredient-section-editor:last-child');
+    if (!newSection) return;
+
+    section.after(newSection);
+    const newRowsContainer = newSection.querySelector('.ingredient-section-rows');
+    newRowsContainer?.querySelectorAll('.ingredient-row').forEach((blankRow) => blankRow.remove());
+    rowsToMove.forEach((ingredientRow) => newRowsContainer?.appendChild(ingredientRow));
+    section.classList.remove('is-splitting');
+    updateIngredientSplitButton(section);
+
+    refreshSectionMoveButtons(container, '.ingredient-section-editor');
+    refreshIngredientSplitControls(section);
+    updateRecipeFromForm();
+}
+
+function updateIngredientSplitButton(section) {
+    const button = section.querySelector('.btn-toggle-ingredient-split');
+    if (!button) return;
+
+    const isActive = section.classList.contains('is-splitting');
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', String(isActive));
+    button.setAttribute('aria-label', isActive ? 'Cancel ingredient split' : 'Show ingredient split points');
+    button.setAttribute('title', isActive ? 'Cancel split' : 'Show split points');
+}
+
+function refreshIngredientSplitControls(section) {
+    const sections = section
+        ? [section]
+        : Array.from(elements.ingredientsList()?.querySelectorAll('.ingredient-section-editor') || []);
+
+    sections.forEach((ingredientSection) => {
+        const rowsContainer = ingredientSection.querySelector('.ingredient-section-rows');
+        if (!rowsContainer) return;
+
+        rowsContainer.querySelectorAll('.ingredient-split-control').forEach((control) => control.remove());
+        updateIngredientSplitButton(ingredientSection);
+
+        if (!ingredientSection.classList.contains('is-splitting')) {
+            return;
+        }
+
+        const rows = Array.from(rowsContainer.querySelectorAll('.ingredient-row'));
+        rows.slice(0, -1).forEach((row) => {
+            const control = document.createElement('div');
+            control.className = 'ingredient-split-control';
+            control.innerHTML = '<button type="button" class="btn-split-ingredient-set">Split here</button>';
+            control.querySelector('.btn-split-ingredient-set')?.addEventListener('click', () => {
+                splitIngredientSectionAfter(row);
+            });
+            row.after(control);
+        });
+    });
+}
+
 function addIngredientRowToLastSection(name = '', amount = '') {
     let lastSectionRows = elements.ingredientsList()?.querySelector('.ingredient-section-editor:last-child .ingredient-section-rows');
 
@@ -2839,12 +3060,15 @@ function addIngredientRow(name = '', amount = '', container = null) {
     row.querySelector('.ingredient-name').addEventListener('input', debounce(updateRecipeFromForm, 150));
     row.querySelector('.ingredient-amount').addEventListener('input', debounce(updateRecipeFromForm, 150));
     row.querySelector('.btn-remove').addEventListener('click', () => {
+        const section = row.closest('.ingredient-section-editor');
         row.remove();
+        refreshIngredientSplitControls(section);
         updateRecipeFromForm();
     });
 
     targetContainer.appendChild(row);
     initializeIngredientSortable(targetContainer);
+    refreshIngredientSplitControls(targetContainer.closest('.ingredient-section-editor'));
 }
 
 function addIngredientLabelRow(type = 'header', text = '', container = null) {
@@ -2863,12 +3087,15 @@ function addIngredientLabelRow(type = 'header', text = '', container = null) {
 
     row.querySelector('.ingredient-label-text').addEventListener('input', debounce(updateRecipeFromForm, 150));
     row.querySelector('.btn-remove').addEventListener('click', () => {
+        const section = row.closest('.ingredient-section-editor');
         row.remove();
+        refreshIngredientSplitControls(section);
         updateRecipeFromForm();
     });
 
     targetContainer.appendChild(row);
     initializeIngredientSortable(targetContainer);
+    refreshIngredientSplitControls(targetContainer.closest('.ingredient-section-editor'));
 }
 
 function initializeIngredientSortable(container) {
@@ -2880,7 +3107,10 @@ function initializeIngredientSortable(container) {
         ghostClass: 'row-sortable-ghost',
         chosenClass: 'row-sortable-chosen',
         dragClass: 'row-sortable-drag',
-        onEnd: updateRecipeFromForm
+        onEnd: () => {
+            refreshIngredientSplitControls(container.closest('.ingredient-section-editor'));
+            updateRecipeFromForm();
+        }
     });
 }
 
@@ -3138,6 +3368,11 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
         <div class="instruction-section-steps"></div>
         <div class="instruction-section-actions">
             <button type="button" class="btn-add btn-add-step-inline">+ Add Step</button>
+            <button type="button" class="btn-add btn-add-instruction-header-inline">+ Add Header</button>
+            <button type="button" class="btn-add btn-add-instruction-subtitle-inline">+ Add Subtitle</button>
+            <button type="button" class="btn-add btn-toggle-instruction-split btn-icon-add" aria-pressed="false" aria-label="Show instruction split points" title="Show split points">
+                <img src="Icons/split.svg" alt="">
+            </button>
         </div>
     `;
 
@@ -3181,6 +3416,26 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
         updateRecipeFromForm();
     });
 
+    section.querySelector('.btn-add-instruction-header-inline')?.addEventListener('click', () => {
+        addInstructionRow(':HEADER: ', section.querySelector('.instruction-section-steps'));
+        updateRecipeFromForm();
+    });
+
+    section.querySelector('.btn-add-instruction-subtitle-inline')?.addEventListener('click', () => {
+        addInstructionRow(':SUBTITLE: ', section.querySelector('.instruction-section-steps'));
+        updateRecipeFromForm();
+    });
+
+    section.querySelector('.btn-toggle-instruction-split')?.addEventListener('click', () => {
+        const isActive = section.classList.toggle('is-splitting');
+        updateInstructionSplitButton(section);
+        if (isActive) {
+            refreshInstructionSplitControls(section);
+        } else {
+            section.querySelectorAll('.instruction-split-control').forEach((control) => control.remove());
+        }
+    });
+
     section.querySelector('.btn-remove')?.addEventListener('click', () => {
         section.remove();
         refreshSectionMoveButtons(container, '.instruction-section-editor');
@@ -3204,6 +3459,76 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
 
     renumberInstructions();
     refreshSectionMoveButtons(container, '.instruction-section-editor');
+}
+
+function splitInstructionSectionAfter(row) {
+    const section = row.closest('.instruction-section-editor');
+    const container = elements.instructionsList();
+    const stepsContainer = section?.querySelector('.instruction-section-steps');
+    if (!section || !container || !stepsContainer) return;
+
+    const rows = Array.from(stepsContainer.querySelectorAll('.instruction-row'));
+    const splitIndex = rows.indexOf(row);
+    const rowsToMove = rows.slice(splitIndex + 1);
+    if (splitIndex === -1 || rowsToMove.length === 0) return;
+
+    const startMode = normalizeInstructionStartMode(section.querySelector('.instruction-section-start-mode')?.value);
+    const stepStyle = getInstructionSectionStepStyle(section);
+    addInstructionSectionEditor('', [], false, startMode, stepStyle);
+
+    const newSection = container.querySelector('.instruction-section-editor:last-child');
+    if (!newSection) return;
+
+    section.after(newSection);
+    const newStepsContainer = newSection.querySelector('.instruction-section-steps');
+    newStepsContainer?.querySelectorAll('.instruction-row').forEach((blankRow) => blankRow.remove());
+    rowsToMove.forEach((instructionRow) => newStepsContainer?.appendChild(instructionRow));
+    section.classList.remove('is-splitting');
+    updateInstructionSplitButton(section);
+
+    refreshSectionMoveButtons(container, '.instruction-section-editor');
+    renumberInstructions();
+    updateRecipeFromForm();
+}
+
+function updateInstructionSplitButton(section) {
+    const button = section.querySelector('.btn-toggle-instruction-split');
+    if (!button) return;
+
+    const isActive = section.classList.contains('is-splitting');
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', String(isActive));
+    button.setAttribute('aria-label', isActive ? 'Cancel instruction split' : 'Show instruction split points');
+    button.setAttribute('title', isActive ? 'Cancel split' : 'Show split points');
+}
+
+function refreshInstructionSplitControls(section) {
+    const sections = section
+        ? [section]
+        : Array.from(elements.instructionsList()?.querySelectorAll('.instruction-section-editor') || []);
+
+    sections.forEach((instructionSection) => {
+        const stepsContainer = instructionSection.querySelector('.instruction-section-steps');
+        if (!stepsContainer) return;
+
+        stepsContainer.querySelectorAll('.instruction-split-control').forEach((control) => control.remove());
+        updateInstructionSplitButton(instructionSection);
+
+        if (!instructionSection.classList.contains('is-splitting')) {
+            return;
+        }
+
+        const rows = Array.from(stepsContainer.querySelectorAll('.instruction-row'));
+        rows.slice(0, -1).forEach((row) => {
+            const control = document.createElement('div');
+            control.className = 'instruction-split-control';
+            control.innerHTML = '<button type="button" class="btn-split-instruction-set">Split here</button>';
+            control.querySelector('.btn-split-instruction-set')?.addEventListener('click', () => {
+                splitInstructionSectionAfter(row);
+            });
+            row.after(control);
+        });
+    });
 }
 
 function addInstructionRowToLastSection(text = '') {
@@ -3410,6 +3735,7 @@ function renumberInstructions() {
             }
         });
     });
+    refreshInstructionSplitControls();
 }
 
 // ================================================
@@ -4019,7 +4345,9 @@ function createDayTotalsMarkup(macros = {}) {
     `;
 }
 
-function createIngredientNode(ingredient) {
+function createIngredientNode(ingredient, alignment = 'left') {
+    const normalizedAlignment = normalizeIngredientAlignment(alignment);
+
     if (ingredient.type === 'header' || ingredient.type === 'subtitle') {
         const title = document.createElement('h2');
         title.className = `section-title flow-section-title ingredient-inline-label ingredient-inline-label--${ingredient.type}`;
@@ -4032,6 +4360,7 @@ function createIngredientNode(ingredient) {
 
     const item = document.createElement('div');
     item.className = 'ingredient-item';
+    item.classList.add(`ingredient-item--align-${normalizedAlignment}`);
     item.innerHTML = `
         <span class="ingredient-name-cell">${escapeHtml(ingredient.name)}</span>
         <span class="ingredient-amount-cell">${escapeHtml(ingredient.amount)}</span>
@@ -4479,7 +4808,17 @@ function paginateRecipeFlow(noteHtml = '') {
     });
 
     function applyIngredientStartMode(startMode) {
-        if (startMode !== 'force-right-column') {
+        const normalizedStartMode = normalizeIngredientStartMode(startMode);
+        if (normalizedStartMode === 'force-next-page') {
+            const startingPageIndex = getCurrentSlot().pageIndex;
+            let slot = getCurrentSlot();
+            while (slot.pageIndex <= startingPageIndex || slot.columnIndex !== 0) {
+                slot = advanceSlot();
+            }
+            return;
+        }
+
+        if (normalizedStartMode !== 'force-right-column') {
             return;
         }
 
@@ -4491,6 +4830,7 @@ function paginateRecipeFlow(noteHtml = '') {
 
     ingredientSections.forEach((section) => {
         applyIngredientStartMode(section.startMode || 'auto');
+        const ingredientAlignment = normalizeIngredientAlignment(section.alignment);
 
         if (section === ingredientSections[0] && currentRecipe.showIngredientsHeader !== false) {
             placeNode(() => createIngredientsHeaderNode(currentRecipe.servingsLabel || section.label || 'Ingredients for 1 Serving'));
@@ -4509,7 +4849,7 @@ function paginateRecipeFlow(noteHtml = '') {
         }
 
         section.ingredients.forEach((ingredient) => {
-            placeNode(() => createIngredientNode(ingredient));
+            placeNode(() => createIngredientNode(ingredient, ingredientAlignment));
         });
     });
 
@@ -4816,11 +5156,20 @@ async function handleExportJpg(options = {}) {
             const styleTag = document.createElement('style');
             styleTag.textContent = `
                 .description-text,
-                .ingredient-name-cell,
-                .ingredient-amount-cell,
-                .instruction-text,
                 .note-text {
                     font-weight: 600 !important;
+                }
+                .instruction-text,
+                .checkbox-text {
+                    color: #000000 !important;
+                    font-weight: 500 !important;
+                    font-style: normal !important;
+                }
+                .ingredient-name-cell,
+                .ingredient-amount-cell {
+                    color: #000000 !important;
+                    font-weight: 500 !important;
+                    font-style: normal !important;
                 }
                 /* Force light mode colors for export */
                 .recipe-page { background: #ffffff !important; }
@@ -4831,11 +5180,12 @@ async function handleExportJpg(options = {}) {
                 .macro-bar-content .macro-divider { color: #000000 !important; }
                 .description-text { color: #424242 !important; }
                 .section-title { color: #000000 !important; }
-                .ingredient-name-cell, .ingredient-amount-cell { color: #424242 !important; }
+                .ingredient-name-cell, .ingredient-amount-cell { color: #000000 !important; }
                 .ingredient-item { border-bottom-color: #E0E0E0 !important; }
                 .instruction-number { background: #b2b2b2 !important; color: #000000 !important; }
                 .instructions-header { background: #000000 !important; color: #ffffff !important; }
                 .instruction-text, .checkbox-text, .checkbox-box { color: #000000 !important; }
+                .checkbox-box { border-color: #c0c0c0 !important; color: #c0c0c0 !important; }
                 .note-callout { background: #dbdbdb !important; }
                 .note-text { color: #616161 !important; }
                 .page-number { color: #424242 !important; }
@@ -5339,10 +5689,15 @@ function parseMasterPaste(text) {
             currentSection = 'INGREDIENTS';
             currentTable = null;
             const labelMatch = line.match(/^::INGREDIENTS(?:\s+(.+?))?::$/);
-            const sectionLabel = labelMatch?.[1]?.trim();
+            const parts = (labelMatch?.[1] || '')
+                .split(';')
+                .map((part) => part.trim())
+                .filter(Boolean);
+            const sectionLabel = parts[0] || '';
             currentIngredientSection = {
                 label: '',
-                startMode: 'auto',
+                startMode: normalizeIngredientStartMode(parts[1]),
+                alignment: normalizeIngredientAlignment(parts[2]),
                 ingredients: []
             };
             result.ingredientSections.push(currentIngredientSection);
@@ -5464,15 +5819,24 @@ function parseMasterPaste(text) {
             continue;
         } else if (line.startsWith('::TABLE') && line.endsWith('::')) {
             // Extract table name: ::TABLE Name::
-            const tableName = line.replace(/^::TABLE\s*/, '').replace(/\s*::$/, '');
+            const tableParts = line.replace(/^::TABLE\s*/, '').replace(/\s*::$/, '')
+                .split(';')
+                .map((part) => part.trim())
+                .filter(Boolean);
+            const tableName = tableParts[0] || '';
+            const tableStartMode = normalizeIngredientStartMode(tableParts[1]);
+            const tableAlignment = normalizeIngredientAlignment(tableParts[2]);
             currentTable = tableName;
             if (currentSection === 'INGREDIENTS' && tableName) {
                 if (currentIngredientSection && currentIngredientSection.ingredients.length === 0) {
                     currentIngredientSection.label = tableName;
+                    currentIngredientSection.startMode = tableStartMode;
+                    currentIngredientSection.alignment = tableAlignment;
                 } else {
                     currentIngredientSection = {
                         label: tableName,
-                        startMode: 'auto',
+                        startMode: tableStartMode,
+                        alignment: tableAlignment,
                         ingredients: []
                     };
                     result.ingredientSections.push(currentIngredientSection);
@@ -5626,6 +5990,7 @@ function parseMasterPaste(text) {
         result.ingredientSections = [{
             label: '',
             startMode: 'auto',
+            alignment: 'left',
             ingredients: result.ingredients
         }];
     }
@@ -5826,6 +6191,7 @@ function handleFillAll() {
 
         // Render preview
         renderRecipePage();
+        recordRecipeHistory(currentRecipe);
 
         // Show success
         statusEl.className = 'master-paste-status success';
@@ -5872,7 +6238,7 @@ OR if there are multiple ingredient groups:
 ::TABLE Group Name::
 Ingredient;Amount
 Ingredient;Amount
-::TABLE Another Group::
+::TABLE Another Group;force-next-page::
 Ingredient;Amount
 ...
 
@@ -5921,6 +6287,8 @@ IMPORTANT RULES:
 - Ingredient rows: Name;Amount (semicolon-separated)
 - The black ingredients title is separate from ingredient set headers.
 - The black ingredients title text comes from the ::INGREDIENTS Header Text:: section line. Example: ::INGREDIENTS Ingredients for 4 Servings::.
+- The optional ingredient start mode format is ::INGREDIENTS Header Text;start mode:: or ::TABLE Group Name;start mode::. Start mode must be auto, force-right-column, or force-next-page.
+- Use force-next-page when an ingredient set should begin at the top of the next page.
 - The black ingredients title can be hidden with META field 13 set to "no". Use "yes" by default for normal recipes.
 - If the black title is hidden, still include the ::INGREDIENTS:: block so ingredient rows can be parsed.
 - Use ::TABLE Group Name:: only for ingredient set headers such as Sauce, Dressing, Bowl, Filling, or Topping.
@@ -6074,6 +6442,7 @@ IMPORTANT RULES:
 - Use the INGREDIENTS section for Nutrition Highlights when making info pages.
 - For info pages, ::INGREDIENTS Nutrition Highlights:: sets the black ingredients title text to "Nutrition Highlights" when META field 13 is yes.
 - The black ingredients title is separate from ingredient set headers. Use ::TABLE Group Name:: only when you need separate ingredient/highlight groups below the black title.
+- Optional ingredient start mode format: ::INGREDIENTS Header Text;start mode:: or ::TABLE Group Name;start mode::. Start mode must be auto, force-right-column, or force-next-page. Use force-next-page when an ingredient set should begin at the top of the next page.
 - For Nutrition Highlights, put each highlight on its own line with a trailing semicolon.
 - Use one ::PORTION_VARIATIONS ...:: block per brand/group when needed.
 - Each portion variation row format is: Label;Calories;Protein;Carbs;Fat;Fiber;URL;Show Macros
@@ -6394,6 +6763,7 @@ function handleLoadJson(event) {
             currentRecipe = recipe;
             loadRecipeToForm(recipe);
             renderRecipePage();
+            recordRecipeHistory(currentRecipe);
             saveRecentRecipe(recipe);
         } catch (error) {
             alert('Error loading JSON file. Please ensure it is a valid recipe file.');
@@ -6415,6 +6785,7 @@ function handleClear() {
         clearMasterPasteFields();
         loadRecipeToForm(currentRecipe);
         renderRecipePage();
+        recordRecipeHistory(currentRecipe);
     }
 }
 
@@ -6807,6 +7178,7 @@ window.RecipeGenerator = {
         currentRecipe = normalizeRecipe(recipe);
         loadRecipeToForm(currentRecipe);
         renderRecipePage();
+        recordRecipeHistory(currentRecipe);
     },
 
     // Available materials (getter to return current loaded materials)
@@ -6822,6 +7194,7 @@ window.RecipeGenerator = {
             currentRecipe = recipe;
             loadRecipeToForm(recipe);
             renderRecipePage();
+            recordRecipeHistory(currentRecipe);
             return true;
         } catch (e) {
             console.error('Import error:', e);

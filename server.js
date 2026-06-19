@@ -319,6 +319,7 @@ Rules:
 - Ingredient rows must be Name;Amount.
 - The black ingredients title is separate from ingredient set headers.
 - The black ingredients title text comes from the ::INGREDIENTS Header Text:: section line. Example: ::INGREDIENTS Ingredients for 4 Servings::.
+- Optional ingredient start mode format: ::INGREDIENTS Header Text;start mode:: or ::TABLE Group Name;start mode::. Start mode must be auto, force-right-column, or force-next-page. Use force-next-page when an ingredient set should begin at the top of the next page in the app/JPEG layout.
 - The black ingredients title can be hidden with META field 13 set to "no". Use "yes" by default for normal recipes.
 - If the black title is hidden, still include the ::INGREDIENTS:: block so ingredient rows can be parsed.
 - Use ::TABLE Group Name:: only for ingredient set headers such as Sauce, Dressing, Bowl, Filling, or Topping.
@@ -372,6 +373,10 @@ function normalizeRecipe(recipe = {}) {
         instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
         notes: Array.isArray(recipe.notes) ? recipe.notes : []
     };
+}
+
+function normalizeIngredientAlignment(alignment) {
+    return alignment === 'right' ? 'right' : 'left';
 }
 
 async function drawRecipePdf(doc, recipe) {
@@ -527,6 +532,8 @@ function drawIngredients(doc, recipe, column) {
     }
 
     sections.forEach((section, index) => {
+        const amountAlignment = normalizeIngredientAlignment(section.alignment);
+
         if (index > 0) column.y += SECTION_TITLE_TOP_GAP;
         const sectionLabel = section.label || '';
         const shouldShowSetHeader = sectionLabel && sectionLabel !== mainLabel && sections.length > 1;
@@ -562,10 +569,10 @@ function drawIngredients(doc, recipe, column) {
                 .fillColor(TEXT_DARK)
                 .text(ingredient.amount || '', amountX, rowTop, {
                     width: amountWidth,
-                    align: 'right'
+                    align: amountAlignment
                 });
             const nameHeight = doc.heightOfString(ingredient.name || '', { width: nameWidth });
-            const amountHeight = doc.heightOfString(ingredient.amount || '', { width: amountWidth, align: 'right' });
+            const amountHeight = doc.heightOfString(ingredient.amount || '', { width: amountWidth, align: amountAlignment });
             const rowHeight = Math.max(nameHeight, amountHeight, 14);
             doc.moveTo(column.x, rowTop + rowHeight + 4).lineTo(column.x + column.width, rowTop + rowHeight + 4).strokeColor(BORDER).lineWidth(0.75).stroke();
             column.y = rowTop + rowHeight + 9;
@@ -627,8 +634,9 @@ function drawInstructions(doc, recipe, column) {
             checkboxItems.forEach((item) => {
                 column.y = ensureSpace(doc, column.y, 18);
                 doc.rect(column.x + 36, column.y + 1, 8, 8).strokeColor('#bdbdbd').lineWidth(0.75).stroke();
-                doc.font('Helvetica').fontSize(8.5).fillColor(TEXT_DARK).text(item, column.x + 50, column.y - 1, {
-                    width: column.width - 50
+                doc.font('Helvetica-Bold').fontSize(9.5).fillColor(TEXT_DARK).text(item, column.x + 50, column.y - 1, {
+                    width: column.width - 50,
+                    lineGap: 2
                 });
                 column.y = doc.y + 3;
             });

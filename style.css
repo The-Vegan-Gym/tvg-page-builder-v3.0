@@ -408,8 +408,26 @@ body {
     gap: var(--spacing-sm);
 }
 
-.instruction-start-control {
+.instruction-start-control,
+.ingredient-start-control {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ingredient-alignment-control {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ingredient-alignment-button img {
+    width: 20px;
+    height: 20px;
+    display: block;
+    margin: 0 auto;
+    filter: invert(77%) sepia(9%) saturate(576%) hue-rotate(174deg) brightness(90%) contrast(85%);
+}
+
+.ingredient-alignment-button.is-active img,
+.ingredient-alignment-button:hover img {
+    filter: invert(91%) sepia(56%) saturate(688%) hue-rotate(48deg) brightness(98%) contrast(92%);
 }
 
 .segmented-control-button {
@@ -1618,16 +1636,64 @@ body {
     margin-top: var(--spacing-sm);
 }
 
+.instruction-section-actions,
 .ingredient-section-actions {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--spacing-sm);
 }
 
+.instruction-section-actions .btn-add-step-inline,
+.ingredient-section-actions .btn-add-ingredient-inline,
+.instruction-section-actions .btn-toggle-instruction-split,
+.ingredient-section-actions .btn-toggle-ingredient-split {
+    grid-column: 1 / -1;
+}
+
+.instruction-section-actions .btn-add,
 .ingredient-section-actions .btn-add {
     white-space: nowrap;
     padding-left: var(--spacing-sm);
     padding-right: var(--spacing-sm);
+}
+
+.instruction-section-actions .btn-add-step-inline,
+.ingredient-section-actions .btn-add-ingredient-inline {
+    border-color: rgba(66, 213, 59, 0.72);
+    background: rgba(66, 213, 59, 0.12);
+    color: #8ff087;
+    font-weight: 700;
+}
+
+.instruction-section-actions .btn-add-step-inline:hover,
+.ingredient-section-actions .btn-add-ingredient-inline:hover {
+    border-color: var(--color-primary);
+    background: rgba(66, 213, 59, 0.2);
+    color: #b8ffb2;
+}
+
+.btn-toggle-instruction-split.is-active,
+.btn-toggle-ingredient-split.is-active {
+    border-color: #ef5350;
+    color: #ff8a80;
+    background: rgba(239, 83, 80, 0.1);
+}
+
+.btn-icon-add img {
+    width: 18px;
+    height: 18px;
+    display: block;
+    margin: 0 auto;
+    filter: invert(77%) sepia(9%) saturate(576%) hue-rotate(174deg) brightness(90%) contrast(85%);
+}
+
+.btn-icon-add:hover img {
+    filter: invert(91%) sepia(56%) saturate(688%) hue-rotate(48deg) brightness(98%) contrast(92%);
+}
+
+.btn-toggle-instruction-split.is-active img,
+.btn-toggle-ingredient-split.is-active img {
+    filter: invert(59%) sepia(56%) saturate(1766%) hue-rotate(316deg) brightness(102%) contrast(101%);
 }
 
 .ingredient-row {
@@ -1689,6 +1755,47 @@ body {
     align-items: flex-start;
     transform-origin: left center;
     transition: transform 0.16s ease, opacity 0.16s ease, filter 0.16s ease;
+}
+
+.instruction-split-control,
+.ingredient-split-control {
+    display: grid;
+    grid-template-columns: 18px 28px minmax(0, 1fr) 28px;
+    gap: var(--spacing-sm);
+    align-items: center;
+    min-height: 18px;
+}
+
+.ingredient-split-control {
+    grid-template-columns: 18px minmax(0, 1.35fr) minmax(0, 1fr) 28px;
+}
+
+.btn-split-instruction-set,
+.btn-split-ingredient-set {
+    grid-column: 3;
+    height: 24px;
+    border: 1px dashed #ef5350;
+    border-radius: var(--radius-sm);
+    background: rgba(239, 83, 80, 0.06);
+    color: #ff8a80;
+    cursor: pointer;
+    font-family: var(--font-primary);
+    font-size: var(--editor-helper-size);
+    line-height: 1;
+    opacity: 0.72;
+    transition: border-color 0.2s, color 0.2s, opacity 0.2s, background 0.2s;
+}
+
+.btn-split-instruction-set:hover,
+.btn-split-ingredient-set:hover {
+    border-color: #ff8a80;
+    color: #ffcdd2;
+    background: rgba(239, 83, 80, 0.14);
+    opacity: 1;
+}
+
+.btn-split-ingredient-set {
+    grid-column: 2 / 4;
 }
 
 .row-drag-handle,
@@ -2428,10 +2535,10 @@ body {
     -webkit-backdrop-filter: blur(18px) saturate(130%);
 }
 
-.preview-header h2 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #8ff087;
+.preview-history-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
 }
 
 .preview-controls {
@@ -2448,6 +2555,46 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.btn-preview-history {
+    width: 36px;
+    height: 36px;
+    border: 1px solid #303943;
+    border-radius: var(--radius-sm);
+    background: #252c34;
+    color: #edf2f7;
+    cursor: pointer;
+    font-family: var(--font-primary);
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s, background 0.2s, color 0.2s, opacity 0.2s;
+}
+
+.btn-preview-history:hover:not(:disabled) {
+    border-color: rgba(66, 213, 59, 0.45);
+    background: rgba(66, 213, 59, 0.14);
+    color: #8ff087;
+}
+
+.btn-preview-history img {
+    width: 18px;
+    height: 18px;
+    display: block;
+    filter: invert(96%) sepia(7%) saturate(362%) hue-rotate(175deg) brightness(98%) contrast(97%);
+}
+
+.btn-preview-history:hover:not(:disabled) img {
+    filter: invert(91%) sepia(56%) saturate(688%) hue-rotate(48deg) brightness(98%) contrast(92%);
+}
+
+.btn-preview-history:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
 }
 
 .btn-preview-export,
@@ -2810,6 +2957,7 @@ body {
     line-height: 1.5;
     color: var(--color-gray-800);
     font-weight: 600;
+    white-space: pre-line;
 }
 
 /* Content Area */
@@ -2983,6 +3131,7 @@ body {
     letter-spacing: 0.5px;
     color: var(--color-black);
     margin-bottom: var(--spacing-12);
+    white-space: pre-line;
 }
 
 .material-icon-item {
@@ -3062,6 +3211,14 @@ body {
     font-size: var(--body-text-font-size, 12px);
 }
 
+.ingredient-item--align-left .ingredient-amount-cell {
+    text-align: left;
+}
+
+.ingredient-item--align-right .ingredient-amount-cell {
+    text-align: right;
+}
+
 .ingredient-item:last-child {
     border-bottom: none;
 }
@@ -3095,21 +3252,25 @@ body {
 }
 
 .ingredient-name-cell {
-    color: var(--color-gray-800);
+    color: #000000;
     flex: 1;
     min-width: 0;
     padding-right: var(--spacing-16);
-    font-weight: 600;
+    font-size: var(--body-text-font-size, 14px);
+    font-weight: 500;
+    font-style: normal;
     white-space: pre-line;
 }
 
 .ingredient-amount-cell {
-    color: var(--color-gray-800);
+    color: #000000;
     flex: 0 1 42%;
     min-width: 0;
     text-align: right;
     overflow-wrap: anywhere;
-    font-weight: 600;
+    font-size: var(--body-text-font-size, 14px);
+    font-weight: 500;
+    font-style: normal;
     white-space: pre-line;
 }
 
@@ -3147,7 +3308,7 @@ body {
     font-weight: 700;
     color: #000000;
     flex-shrink: 0;
-    margin-top: 1px;
+    margin-top: calc((var(--body-text-font-size, 14px) * 1.5 - 22px) / 2);
 }
 
 .instruction-bullet {
@@ -3169,10 +3330,12 @@ body {
 }
 
 .instruction-text {
-    font-size: var(--body-text-font-size, 12px);
+    font-size: var(--body-text-font-size, 14px);
     line-height: 1.5;
     color: #000000;
     font-weight: 500;
+    font-style: normal;
+    white-space: pre-line;
 }
 
 .instruction-checkbox-list {
@@ -3186,20 +3349,27 @@ body {
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    font-size: var(--body-text-font-size, 12px);
-    line-height: 1.4;
 }
 
 .checkbox-box {
-    font-size: var(--checkbox-box-font-size, 16px);
-    color: #000000;
+    width: var(--checkbox-box-font-size, 16px);
+    height: var(--checkbox-box-font-size, 16px);
+    border: 1.5px solid #c0c0c0;
+    border-radius: 3px;
+    color: #c0c0c0;
     flex-shrink: 0;
-    margin-top: -1px;
+    font-size: 0;
+    line-height: 1;
+    margin-top: calc((var(--body-text-font-size, 14px) * 1.5 - var(--checkbox-box-font-size, 16px)) / 2);
 }
 
 .checkbox-text {
+    font-size: var(--body-text-font-size, 14px);
+    line-height: 1.5;
     color: #000000;
     font-weight: 500;
+    font-style: normal;
+    white-space: pre-line;
 }
 
 /* Note Section */
@@ -3359,11 +3529,22 @@ body {
 
     /* Make exported text bold */
     .description-text,
-    .ingredient-name-cell,
-    .ingredient-amount-cell,
-    .instruction-text,
     .note-text {
         font-weight: 600;
+    }
+
+    .instruction-text,
+    .checkbox-text {
+        color: #000000 !important;
+        font-weight: 500;
+        font-style: normal;
+    }
+
+    .ingredient-name-cell,
+    .ingredient-amount-cell {
+        color: #000000 !important;
+        font-weight: 500;
+        font-style: normal;
     }
 
     /* Page break control */
@@ -3414,6 +3595,10 @@ body {
     .print-only .description-text,
     .print-only .ingredient-name-cell,
     .print-only .ingredient-amount-cell {
+        color: #000000 !important;
+    }
+
+    .print-only .description-text {
         color: #424242 !important;
     }
 

@@ -444,8 +444,8 @@
                         <div class="layout-control-group">
                             <div class="image-control-row">
                                 <label for="body-text-font-size">Ingredient/Instruction Text</label>
-                                <input type="range" id="body-text-font-size" min="8" max="22" step="1" value="12">
-                                <input type="number" id="body-text-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="12" aria-label="Ingredient and instruction text font size value">
+                                <input type="range" id="body-text-font-size" min="8" max="22" step="1" value="14">
+                                <input type="number" id="body-text-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="14" aria-label="Ingredient and instruction text font size value">
                             </div>
                         </div>
                         <div class="layout-control-group">
@@ -564,7 +564,14 @@
         <!-- ===================== -->
         <main class="preview-panel">
             <div class="preview-header">
-                <h2>Live Preview</h2>
+                <div class="preview-history-controls" aria-label="Edit history controls">
+                    <button type="button" id="btn-undo" class="btn-preview-history" title="Undo" aria-label="Undo" disabled>
+                        <img src="Icons/undo.svg" alt="">
+                    </button>
+                    <button type="button" id="btn-redo" class="btn-preview-history" title="Redo" aria-label="Redo" disabled>
+                        <img src="Icons/redo.svg" alt="">
+                    </button>
+                </div>
                 <div class="preview-controls">
                     <button type="button" id="btn-save-json-preview" class="btn-preview-secondary">Save</button>
                     <button type="button" id="btn-load-json-preview" class="btn-preview-secondary">Load</button>
