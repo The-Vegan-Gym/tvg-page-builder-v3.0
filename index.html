@@ -89,6 +89,12 @@
                         </span>
                         <span>Layout</span>
                     </button>
+                    <button type="button" class="editor-section-nav-button" data-section-target="overview" aria-label="Overview">
+                        <span class="editor-section-nav-icon" aria-hidden="true">
+                            <img src="Icons/info.svg" alt="">
+                        </span>
+                        <span>Overview</span>
+                    </button>
                     <button type="button" class="editor-section-nav-button" data-section-target="export" aria-label="Export">
                         <span class="editor-section-nav-icon" aria-hidden="true">
                             <img src="Icons/export.svg" alt="">
@@ -571,6 +577,18 @@
                         <button type="button" id="btn-print" class="btn-primary" hidden>Export PDF</button>
                         <button type="button" id="btn-export-editable-pdf" class="btn-primary" hidden>Export Editable PDF</button>
                         <button type="button" id="btn-export-jpg" class="btn-primary">Export JPG</button>
+                    </div>
+                </section>
+
+                <section class="form-section" data-section-key="overview">
+                    <h2>Overview</h2>
+                    <div class="overview-panel">
+                        <div class="overview-actions">
+                            <button type="button" id="btn-spellcheck-ai" class="btn-primary">Analyze</button>
+                            <button type="button" id="btn-apply-spellcheck-all" class="btn-secondary" disabled>Apply All</button>
+                        </div>
+                        <div id="spellcheck-status" class="master-paste-status"></div>
+                        <div id="spellcheck-results" class="spellcheck-results"></div>
                     </div>
                 </section>
 

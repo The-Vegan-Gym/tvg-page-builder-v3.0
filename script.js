@@ -131,7 +131,7 @@ const EMPTY_RECIPE = {
 
 const SECTION_SETTINGS_STORAGE_KEY = 'tvgRecipePageGenerator.sectionVisibility';
 const SECTION_SETTINGS_VERSION_KEY = 'tvgRecipePageGenerator.sectionVisibilityVersion';
-const SECTION_SETTINGS_VERSION = 2;
+const SECTION_SETTINGS_VERSION = 3;
 const RECENT_RECIPES_STORAGE_KEY = 'tvgRecipePageGenerator.recentRecipes';
 const SECTION_VISIBILITY_DEFAULTS = [
     { key: 'masterPaste', label: 'Master Paste', visible: true },
@@ -146,6 +146,7 @@ const SECTION_VISIBILITY_DEFAULTS = [
     { key: 'instructions', label: 'Instructions', visible: true },
     { key: 'notes', label: 'Notes/Callouts', visible: true },
     { key: 'pageLayout', label: 'Page Layout', visible: true },
+    { key: 'overview', label: 'Overview', visible: true },
     { key: 'export', label: 'Export', visible: true }
 ];
 
@@ -246,6 +247,14 @@ const SECTION_INFO_CONTENT = {
             'The sliders adjust title sizing, printer-friendly spacing, continuation-page spacing, and bottom flow clearance.'
         ]
     },
+    overview: {
+        title: 'Overview',
+        items: [
+            'Analyze reviews editable text for typos.',
+            'It can suggest missing equipment based on the method.',
+            'Suggestions can be reviewed before applying.'
+        ]
+    },
     export: {
         title: 'Export',
         items: [
@@ -273,6 +282,7 @@ let previewAutoCenterFrame = null;
 let previewAutoCenterTimer = null;
 let activeEditorSectionKey = 'basicInformation';
 let masterPasteAiImages = [];
+let spellcheckCorrections = [];
 const RECIPE_HISTORY_LIMIT = 80;
 let recipeHistory = [];
 let recipeHistoryIndex = -1;
@@ -442,6 +452,10 @@ const elements = {
     masterPasteAiFiles: () => document.getElementById('master-paste-ai-files'),
     btnMasterPasteAiImages: () => document.getElementById('btn-master-paste-ai-images'),
     btnGenerateMasterPasteAi: () => document.getElementById('btn-generate-master-paste-ai'),
+    btnSpellcheckAi: () => document.getElementById('btn-spellcheck-ai'),
+    btnApplySpellcheckAll: () => document.getElementById('btn-apply-spellcheck-all'),
+    spellcheckStatus: () => document.getElementById('spellcheck-status'),
+    spellcheckResults: () => document.getElementById('spellcheck-results'),
     btnMasterPasteInfo: () => document.getElementById('btn-master-paste-info'),
     btnCloseMasterPasteInfo: () => document.getElementById('btn-close-master-paste-info'),
     masterPasteInfoPanel: () => document.getElementById('master-paste-info-panel'),
@@ -1865,6 +1879,8 @@ function initializeButtonListeners() {
     initializeMasterPasteAiControls();
     elements.btnFillAll()?.addEventListener('click', handleFillAll);
     elements.btnGenerateMasterPasteAi()?.addEventListener('click', handleGenerateMasterPasteAi);
+    elements.btnSpellcheckAi()?.addEventListener('click', handleSpellcheckAi);
+    elements.btnApplySpellcheckAll()?.addEventListener('click', applyAllSpellcheckCorrections);
     elements.btnCopyAIInstructions()?.addEventListener('click', handleCopyAIInstructions);
     elements.btnCopyAIInfoInstructions()?.addEventListener('click', handleCopyAIInfoInstructions);
     elements.btnCopyAIDayInstructions()?.addEventListener('click', handleCopyAIDayInstructions);
@@ -5732,6 +5748,349 @@ async function handleGenerateMasterPasteAi() {
     }
 }
 
+function addSpellcheckItem(items, label, path, text) {
+    const value = String(text || '');
+    if (!value.trim()) return;
+    items.push({
+        id: `field-${items.length + 1}`,
+        label,
+        path,
+        text: value
+    });
+}
+
+function getSpellcheckItemsFromRecipe(recipe = currentRecipe) {
+    const items = [];
+
+    addSpellcheckItem(items, 'Recipe title', ['title'], recipe.title);
+    addSpellcheckItem(items, 'Description', ['description'], recipe.description);
+    addSpellcheckItem(items, 'Macro prefix', ['macroBarPrefix'], recipe.macroBarPrefix);
+    addSpellcheckItem(items, 'Ingredients title', ['servingsLabel'], recipe.servingsLabel);
+    addSpellcheckItem(items, 'Instructions title', ['instructionsLabel'], recipe.instructionsLabel);
+    addSpellcheckItem(items, 'Meals title', ['dayMealsTitle'], recipe.dayMealsTitle);
+    addSpellcheckItem(items, 'Breakdown title', ['dayBreakdownTitle'], recipe.dayBreakdownTitle);
+    addSpellcheckItem(items, 'Highlights title', ['dayHighlightsTitle'], recipe.dayHighlightsTitle);
+    addSpellcheckItem(items, 'Tips title', ['dayTipsTitle'], recipe.dayTipsTitle);
+    addSpellcheckItem(items, 'Totals title', ['dayTotalsTitle'], recipe.dayTotalsTitle);
+
+    (recipe.ingredientSections || []).forEach((section, sectionIndex) => {
+        addSpellcheckItem(items, `Ingredient set ${sectionIndex + 1} label`, ['ingredientSections', sectionIndex, 'label'], section.label);
+        (section.ingredients || []).forEach((ingredient, ingredientIndex) => {
+            if (ingredient?.type === 'header' || ingredient?.type === 'subtitle') {
+                addSpellcheckItem(items, `Ingredient ${ingredient.type}`, ['ingredientSections', sectionIndex, 'ingredients', ingredientIndex, 'text'], ingredient.text);
+            } else {
+                addSpellcheckItem(items, `Ingredient name`, ['ingredientSections', sectionIndex, 'ingredients', ingredientIndex, 'name'], ingredient?.name);
+            }
+        });
+    });
+
+    (recipe.instructionSections || []).forEach((section, sectionIndex) => {
+        addSpellcheckItem(items, `Instruction set ${sectionIndex + 1} label`, ['instructionSections', sectionIndex, 'label'], section.label);
+        (section.steps || []).forEach((step, stepIndex) => {
+            const labelType = getInstructionLabelType(step);
+            const label = labelType ? `Instruction ${labelType}` : 'Instruction step';
+            const path = typeof step === 'object' && step !== null
+                ? ['instructionSections', sectionIndex, 'steps', stepIndex, 'text']
+                : ['instructionSections', sectionIndex, 'steps', stepIndex];
+            addSpellcheckItem(items, label, path, getInstructionStepText(step));
+        });
+    });
+
+    (recipe.notes || []).forEach((note, index) => {
+        addSpellcheckItem(items, `Note ${index + 1}`, ['notes', index], note);
+    });
+
+    (recipe.dayMeals || []).forEach((meal, index) => {
+        addSpellcheckItem(items, `Meal ${index + 1} label`, ['dayMeals', index, 'label'], meal.label);
+        addSpellcheckItem(items, `Meal ${index + 1} name`, ['dayMeals', index, 'name'], meal.name);
+        addSpellcheckItem(items, `Meal ${index + 1} portion note`, ['dayMeals', index, 'portionNote'], meal.portionNote);
+    });
+
+    (recipe.dayHighlights || []).forEach((highlight, index) => {
+        addSpellcheckItem(items, `Highlight ${index + 1}`, ['dayHighlights', index], highlight);
+    });
+
+    (recipe.dayTips || []).forEach((tip, index) => {
+        addSpellcheckItem(items, `Tip ${index + 1}`, ['dayTips', index], tip);
+    });
+
+    (recipe.portionVariationSections || []).forEach((section, sectionIndex) => {
+        addSpellcheckItem(items, `Portion set ${sectionIndex + 1} label`, ['portionVariationSections', sectionIndex, 'label'], section.label);
+        (section.variations || []).forEach((variation, variationIndex) => {
+            addSpellcheckItem(items, `Portion variation ${variationIndex + 1}`, ['portionVariationSections', sectionIndex, 'variations', variationIndex, 'label'], variation.label);
+        });
+    });
+
+    return items;
+}
+
+function renderSpellcheckCorrections(corrections = spellcheckCorrections) {
+    const results = elements.spellcheckResults();
+    const applyAllButton = elements.btnApplySpellcheckAll();
+    if (!results) return;
+
+    if (applyAllButton) {
+        applyAllButton.disabled = corrections.length === 0;
+    }
+
+    if (corrections.length === 0) {
+        results.innerHTML = '<div class="spellcheck-empty">No suggestions yet.</div>';
+        return;
+    }
+
+    results.innerHTML = corrections.map((correction, index) => {
+        const location = getSuggestionPreviewLocation(correction);
+        const locationButton = location
+            ? `<button type="button" class="spellcheck-location" data-spellcheck-location="${index}">Page ${location.pageNumber}</button>`
+            : '<span class="spellcheck-location spellcheck-location--unknown">Page unknown</span>';
+
+        return `
+        <div class="spellcheck-card">
+            <div class="spellcheck-card-header">
+                <strong>${escapeHtml(correction.label || 'Text field')}</strong>
+                ${locationButton}
+                <button type="button" class="btn-secondary btn-spellcheck-apply" data-spellcheck-apply="${index}">Apply</button>
+            </div>
+            <div class="spellcheck-comparison">
+                <div>
+                    <span>Current</span>
+                    <p>${escapeHtml(correction.original)}</p>
+                </div>
+                <div>
+                    <span>Suggested</span>
+                    <p>${escapeHtml(correction.corrected)}</p>
+                </div>
+            </div>
+            ${correction.reason ? `<div class="spellcheck-reason">${escapeHtml(correction.reason)}</div>` : ''}
+        </div>
+    `;
+    }).join('');
+
+    results.querySelectorAll('[data-spellcheck-apply]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const index = Number.parseInt(button.dataset.spellcheckApply, 10);
+            applySpellcheckCorrections([spellcheckCorrections[index]]);
+        });
+    });
+
+    results.querySelectorAll('[data-spellcheck-location]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const index = Number.parseInt(button.dataset.spellcheckLocation, 10);
+            focusSuggestionInPreview(spellcheckCorrections[index]);
+        });
+    });
+}
+
+function normalizePreviewSearchText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function getSuggestionSearchText(correction) {
+    if (correction?.type === 'equipment') {
+        return correction.corrected || correction.reason || '';
+    }
+    return correction?.original || correction?.corrected || '';
+}
+
+function findPreviewElementForSuggestion(correction) {
+    const searchText = normalizePreviewSearchText(getSuggestionSearchText(correction));
+    if (!searchText) return null;
+
+    const pages = Array.from(elements.recipePage()?.querySelectorAll('.recipe-page') || []);
+    const selector = [
+        '.recipe-title',
+        '.description-text',
+        '.instructions-header',
+        '.section-title',
+        '.ingredient-name-cell',
+        '.ingredient-amount-cell',
+        '.instruction-text',
+        '.checkbox-text',
+        '.note-text',
+        '.day-meal-card',
+        '.day-list-item',
+        '.portion-variation-item'
+    ].join(', ');
+
+    for (const page of pages) {
+        const candidates = Array.from(page.querySelectorAll(selector));
+        const match = candidates.find((candidate) =>
+            normalizePreviewSearchText(candidate.textContent).includes(searchText)
+        );
+        if (match) {
+            return {
+                element: match,
+                pageNumber: pages.indexOf(page) + 1
+            };
+        }
+    }
+
+    return null;
+}
+
+function getSuggestionPreviewLocation(correction) {
+    const match = findPreviewElementForSuggestion(correction);
+    return match ? { pageNumber: match.pageNumber } : null;
+}
+
+function focusSuggestionInPreview(correction) {
+    const match = findPreviewElementForSuggestion(correction);
+    if (!match?.element) return;
+
+    centerPreviewOnElement(match.element);
+    match.element.classList.add('preview-location-highlight');
+    window.setTimeout(() => {
+        match.element.classList.remove('preview-location-highlight');
+    }, 1400);
+}
+
+async function handleSpellcheckAi() {
+    const statusEl = elements.spellcheckStatus();
+    const button = elements.btnSpellcheckAi();
+    const originalText = button?.textContent || 'Analyze';
+
+    updateRecipeFromForm();
+    const items = getSpellcheckItemsFromRecipe(currentRecipe);
+
+    if (items.length === 0) {
+        if (statusEl) {
+            statusEl.className = 'master-paste-status error';
+            statusEl.textContent = 'No editable text found to analyze.';
+        }
+        return;
+    }
+
+    try {
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Checking...';
+        }
+        if (statusEl) {
+            statusEl.className = 'master-paste-status';
+            statusEl.textContent = '';
+        }
+        spellcheckCorrections = [];
+        renderSpellcheckCorrections();
+
+        const response = await fetch('/api/spellcheck-recipe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                items: items.map(({ id, label, text }) => ({ id, label, text })),
+                currentEquipment: (currentRecipe.materials || []).map((materialId) => {
+                    const material = AVAILABLE_MATERIALS.find((entry) => entry.id === materialId);
+                    return { id: materialId, name: material?.name || materialId };
+                }),
+                availableEquipment: AVAILABLE_MATERIALS.map((material) => ({
+                    id: material.id,
+                    name: material.name
+                }))
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Unable to analyze recipe text.');
+        }
+
+        const itemById = new Map(items.map((item) => [item.id, item]));
+        spellcheckCorrections = (data.corrections || [])
+            .map((correction) => {
+                const item = itemById.get(correction.id);
+                if (!item) return null;
+                return {
+                    type: 'text',
+                    id: correction.id,
+                    label: correction.label || item.label,
+                    path: item.path,
+                    original: item.text,
+                    corrected: String(correction.corrected || ''),
+                    reason: correction.reason || ''
+                };
+            })
+            .filter((correction) => correction && correction.corrected.trim() && correction.corrected !== correction.original);
+        const currentMaterialIds = new Set(currentRecipe.materials || []);
+        const equipmentSuggestions = (data.equipmentSuggestions || [])
+            .map((suggestion) => {
+                const suggestedId = String(suggestion.id || '').trim();
+                const material = AVAILABLE_MATERIALS.find((entry) =>
+                    entry.id === suggestedId ||
+                    entry.name.toLowerCase() === String(suggestion.name || '').trim().toLowerCase()
+                );
+                if (!material || currentMaterialIds.has(material.id)) return null;
+                return {
+                    type: 'equipment',
+                    id: material.id,
+                    label: 'Equipment',
+                    original: 'Not selected',
+                    corrected: material.name,
+                    reason: suggestion.reason || 'Used in the recipe method.'
+                };
+            })
+            .filter(Boolean);
+        spellcheckCorrections = [...spellcheckCorrections, ...equipmentSuggestions];
+
+        renderSpellcheckCorrections();
+        if (statusEl) {
+            statusEl.className = 'master-paste-status success';
+            statusEl.textContent = spellcheckCorrections.length
+                ? `${spellcheckCorrections.length} suggestion${spellcheckCorrections.length === 1 ? '' : 's'} found.`
+                : 'No issues found.';
+        }
+    } catch (error) {
+        console.error('Spellcheck error:', error);
+        if (statusEl) {
+            statusEl.className = 'master-paste-status error';
+            statusEl.textContent = error.message || 'Unable to analyze recipe text.';
+        }
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    }
+}
+
+function setValueAtPath(target, path, value) {
+    if (!target || !Array.isArray(path) || path.length === 0) return;
+    let cursor = target;
+    path.slice(0, -1).forEach((key) => {
+        if (cursor?.[key] === undefined || cursor?.[key] === null) return;
+        cursor = cursor[key];
+    });
+    if (cursor && Object.prototype.hasOwnProperty.call(cursor, path[path.length - 1])) {
+        cursor[path[path.length - 1]] = value;
+    }
+}
+
+function applySpellcheckCorrections(corrections = []) {
+    const validCorrections = corrections.filter(Boolean);
+    if (validCorrections.length === 0) return;
+
+    const updatedRecipe = cloneRecipeHistoryState(serializeRecipeHistoryState(currentRecipe));
+    validCorrections.forEach((correction) => {
+        if (correction.type === 'equipment') {
+            const materials = Array.isArray(updatedRecipe.materials) ? updatedRecipe.materials : [];
+            if (!materials.includes(correction.id)) {
+                updatedRecipe.materials = [...materials, correction.id];
+            }
+            return;
+        }
+        setValueAtPath(updatedRecipe, correction.path, correction.corrected);
+    });
+    loadRecipeObject(updatedRecipe);
+    spellcheckCorrections = spellcheckCorrections.filter((correction) => !validCorrections.includes(correction));
+    renderSpellcheckCorrections();
+    if (elements.spellcheckStatus()) {
+        elements.spellcheckStatus().className = 'master-paste-status success';
+        elements.spellcheckStatus().textContent = `${validCorrections.length} correction${validCorrections.length === 1 ? '' : 's'} applied.`;
+    }
+}
+
+function applyAllSpellcheckCorrections() {
+    applySpellcheckCorrections([...spellcheckCorrections]);
+}
+
 /**
  * Parse master paste text into recipe data
  */
@@ -6394,6 +6753,8 @@ IMPORTANT RULES:
   14. Show instructions title: yes or no
 - If using the older 11-field or 13-field META format, the app still accepts it and defaults missing title toggles to yes.
 - For dietary flags, use: gf, sf, nf, wf (or leave blank)
+- Match the original source language as closely as possible. Preserve the source's wording, tone, ingredient names, direction phrasing, headers, and subtitles unless a format cleanup is required.
+- Only improvise when the source does not include the needed information. Do not invent details, steps, section names, subtitles, ingredients, or notes when the source provides usable text.
 - Serves examples: "4 Servings", "2-3 Servings", "1 Serving"
 - Times should include units: "15 min", "1 hour", "30-45 min"
 - META field 11 is a comma-separated or pipe-separated list of equipment/material names inferred from the image and recipe data
@@ -6424,13 +6785,16 @@ IMPORTANT RULES:
 - Examples of separate ingredient sets: smoothie + topping, salad + dressing, bowl + sauce, crust + filling, marinade + main recipe
 - Do NOT flatten multiple ingredient groups into one list when the source clearly separates them
 - Use ::TABLE Name:: for ingredient groups (optional when there is only one group, required when there are multiple groups)
+- If the source material includes ingredient subtitles or secondary labels, preserve them as ":SUBTITLE: Subtitle text" rows in the matching ingredient set.
 - Directions: one step per line, no bullets, no numbering for normal steps
 - The black instructions title is separate from instruction set labels. The black title comes from the app's Instructions Title field and defaults to "Instructions for X Servings" based on META serves. It can be hidden with META field 14 set to "no". Use "yes" by default for normal recipes.
 - A ::DIRECTIONS Label;step style;start mode:: label is an instruction set header. It renders like ingredient set headers, not like the black instructions title.
 - Use ::DIRECTIONS Label;numbered;auto:: when the source has major direction sections such as "Part 1: Prepare", "Part 2: Cook", "Sauce", "Assemble", or "Bake".
+- If the source instructions are broken into clearly separate sections, preserve those breaks as separate ::DIRECTIONS Label;numbered;auto:: blocks instead of flattening everything into one instruction set.
 - Do not repeat "Instructions for X Servings" as a ::DIRECTIONS label.
 - Use :HEADER: Header text on its own line to add an unnumbered instruction header in the middle of a direction set. These render like ingredient set headers.
 - Use :SUBTITLE: Subtitle text on its own line to add an unnumbered instruction subtitle. It follows the same layout/number-reset rules as :HEADER: but renders without bold styling. Subtitle capitalization can be controlled in the app.
+- If the source material includes subtitles inside directions, preserve them using ":SUBTITLE: Subtitle text" exactly where they appear.
 - Use instruction headers for recipe parts/components such as ":HEADER: Making the green goddess sauce", ":HEADER: Assemble the bowls", or ":HEADER: Bake the muffins".
 - Do not number :HEADER: or :SUBTITLE: lines and do not put checkbox items under either line type.
 - For a step that needs checkbox sub-items, put the parent step on its own line, then put each checkbox item immediately below it as: - [ ] Checkbox item text
@@ -6570,14 +6934,18 @@ IMPORTANT RULES:
 - Each portion variation row format is: Label;Calories;Protein;Carbs;Fat;Fiber;URL;Show Macros
 - Include URL when there is a product purchase page. Leave blank if not available.
 - Show Macros is optional and defaults to yes. Use "no" for link-only rows that should not show macro details.
+- Match the original source language as closely as possible. Preserve the source's wording, tone, direction phrasing, headers, and subtitles unless a format cleanup is required.
+- Only improvise when the source does not include the needed information. Do not invent details, steps, section names, subtitles, ingredients, or notes when the source provides usable text.
 - Each ::DIRECTIONS ...:: header format is: ::DIRECTIONS Label;step style;start mode::
 - The ::DIRECTIONS label is an instruction set header. It renders like ingredient set headers and is separate from the black Instructions Title.
+- If the source instructions are broken into clearly separate sections, preserve those breaks as separate ::DIRECTIONS Label;numbered;auto:: blocks instead of flattening everything into one instruction set.
 - Do not use "Instructions for X Servings" as a ::DIRECTIONS label.
 - step style must be either numbered or bulleted
 - start mode must be auto, force-right-column, or force-next-page
 - Use force-next-page when the directions should start at the top of the next page
 - Use :HEADER: Header text on its own line to add an unnumbered instruction header in the middle of any ::DIRECTIONS:: block. These render like ingredient set headers.
 - Use :SUBTITLE: Subtitle text on its own line to add an unnumbered instruction subtitle. It follows the same layout/number-reset rules as :HEADER: but renders without bold styling. Subtitle capitalization can be controlled in the app.
+- If the source material includes subtitles inside directions, preserve them using ":SUBTITLE: Subtitle text" exactly where they appear.
 - Do not number :HEADER: or :SUBTITLE: lines and do not put checkbox items under either line type.
 - For a direction step that needs checkbox sub-items, put the parent step on its own line, then put each checkbox item immediately below it as: - [ ] Checkbox item text
 - Checkbox item lines must always start with "- [ ]" and must directly follow the parent direction step they belong to
@@ -6674,6 +7042,8 @@ RULES:
 - Use EXACT section headers
 - META line must stay semicolon-separated
 - The second META field must be exactly: Day of Eating
+- Match the original source language as closely as possible. Preserve the source's wording, tone, meal names, headers, subtitles, notes, and tips unless a format cleanup is required.
+- Only improvise when the source does not include the needed information. Do not invent details, section names, subtitles, meals, or notes when the source provides usable text.
 - ::TEXT:: sections (optional, can have 0 or more):
   - First ::TEXT:: section = description (appears under title)
   - Additional ::TEXT:: sections = note callouts (appear as separate callout boxes with alert icons)
@@ -7009,6 +7379,20 @@ function centerPreviewWithBehavior(behavior = 'auto') {
     previewPanX += deltaX;
     previewPanY += deltaY;
     applyPreviewPan(behavior === 'smooth');
+}
+
+function centerPreviewOnElement(target) {
+    const container = elements.previewContainer();
+    if (!container || !target) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const deltaX = (containerRect.left + (containerRect.width / 2)) - (targetRect.left + (targetRect.width / 2));
+    const deltaY = (containerRect.top + (containerRect.height / 2)) - (targetRect.top + (targetRect.height / 2));
+
+    previewPanX += deltaX;
+    previewPanY += deltaY;
+    applyPreviewPan(true);
 }
 
 function hasVisiblePreviewPage(overscrollAllowance = 180) {

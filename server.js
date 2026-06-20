@@ -47,6 +47,11 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    if (req.method === 'POST' && req.url === '/api/spellcheck-recipe') {
+        handleRecipeSpellcheck(req, res);
+        return;
+    }
+
     serveStaticFile(req, res);
 });
 
@@ -230,6 +235,120 @@ async function handleMasterPasteGeneration(req, res) {
     }
 }
 
+async function handleRecipeSpellcheck(req, res) {
+    try {
+        loadEnvFile();
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+            throw new Error('OPENAI_API_KEY is missing. Add OPENAI_API_KEY=your_key to .env.');
+        }
+
+        const payload = await readJsonBody(req);
+        const currentEquipment = Array.isArray(payload.currentEquipment)
+            ? payload.currentEquipment.map((item) => ({
+                id: String(item?.id || '').trim(),
+                name: String(item?.name || '').trim()
+            })).filter((item) => item.id || item.name)
+            : [];
+        const availableEquipment = Array.isArray(payload.availableEquipment)
+            ? payload.availableEquipment.map((item) => ({
+                id: String(item?.id || '').trim(),
+                name: String(item?.name || '').trim()
+            })).filter((item) => item.id && item.name).slice(0, 300)
+            : [];
+        const items = Array.isArray(payload.items)
+            ? payload.items
+                .map((item) => ({
+                    id: String(item?.id || '').trim(),
+                    label: String(item?.label || '').trim(),
+                    text: String(item?.text || '')
+                }))
+                .filter((item) => item.id && item.text.trim())
+                .slice(0, 500)
+            : [];
+
+        if (items.length === 0) {
+            throw new Error('No editable text found to analyze.');
+        }
+
+        const response = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: OPENAI_MODEL,
+                input: [
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'input_text',
+                                text: `${getSpellcheckPrompt()}\n\nCurrently selected equipment:\n${JSON.stringify(currentEquipment, null, 2)}\n\nAvailable equipment choices:\n${JSON.stringify(availableEquipment, null, 2)}\n\nEditable text fields:\n${JSON.stringify(items, null, 2)}`
+                            }
+                        ]
+                    }
+                ],
+                temperature: 0
+            })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            const message = data?.error?.message || `OpenAI request failed with HTTP ${response.status}`;
+            throw new Error(message);
+        }
+
+        const responseText = extractResponseText(data);
+        const parsed = parseJsonOutput(responseText);
+        const itemById = new Map(items.map((item) => [item.id, item]));
+        const corrections = Array.isArray(parsed?.corrections)
+            ? parsed.corrections
+                .map((correction) => {
+                    const id = String(correction?.id || '').trim();
+                    const originalItem = itemById.get(id);
+                    const corrected = String(correction?.corrected || '');
+                    if (!originalItem || !corrected.trim() || corrected === originalItem.text) return null;
+                    return {
+                        id,
+                        label: originalItem.label,
+                        original: originalItem.text,
+                        corrected,
+                        reason: String(correction?.reason || '').trim()
+                    };
+                })
+                .filter(Boolean)
+            : [];
+        const selectedIds = new Set(currentEquipment.map((item) => item.id).filter(Boolean));
+        const availableById = new Map(availableEquipment.map((item) => [item.id, item]));
+        const availableByName = new Map(availableEquipment.map((item) => [item.name.toLowerCase(), item]));
+        const equipmentSuggestions = Array.isArray(parsed?.equipmentSuggestions)
+            ? parsed.equipmentSuggestions
+                .map((suggestion) => {
+                    const id = String(suggestion?.id || '').trim();
+                    const name = String(suggestion?.name || '').trim();
+                    const match = availableById.get(id) || availableByName.get(name.toLowerCase());
+                    if (!match || selectedIds.has(match.id)) return null;
+                    return {
+                        id: match.id,
+                        name: match.name,
+                        reason: String(suggestion?.reason || '').trim()
+                    };
+                })
+                .filter(Boolean)
+            : [];
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ corrections, equipmentSuggestions }));
+    } catch (error) {
+        console.error('Recipe analysis error:', error);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message || 'Unable to analyze recipe text' }));
+    }
+}
+
 function extractResponseText(response) {
     if (typeof response.output_text === 'string') {
         return response.output_text;
@@ -251,6 +370,53 @@ function cleanStructuredOutput(text) {
     const value = String(text || '').trim();
     const codeBlockMatch = value.match(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/);
     return (codeBlockMatch ? codeBlockMatch[1] : value).trim();
+}
+
+function parseJsonOutput(text) {
+    const value = cleanStructuredOutput(text);
+    try {
+        return JSON.parse(value);
+    } catch (error) {
+        const jsonMatch = value.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+        }
+        throw new Error('OpenAI returned invalid spellcheck JSON.');
+    }
+}
+
+function getSpellcheckPrompt() {
+    return `You are a careful spellchecker for a recipe page editor.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "corrections": [
+    {
+      "id": "field id from input",
+      "corrected": "full corrected field text",
+      "reason": "brief reason"
+    }
+  ],
+  "equipmentSuggestions": [
+    {
+      "id": "available equipment id",
+      "name": "available equipment name",
+      "reason": "brief reason"
+    }
+  ]
+}
+
+Rules:
+- Only correct spelling, obvious typos, accidental doubled letters, missing apostrophes, punctuation mistakes, and capitalization errors.
+- Preserve the original wording, tone, voice, recipe style, line breaks, units, abbreviations, and formatting.
+- Do not rewrite for style.
+- Do not change nutrition numbers, measurements, serving counts, URLs, brand names, dietary abbreviations, or intentional recipe terms.
+- If a field has no correction, omit it from corrections.
+- The corrected value must be the full field text, not a diff.
+- Also analyze the editable text for equipment used by the recipe method.
+- Suggest missing equipment only when it is clearly implied by the instructions or ingredients.
+- Only suggest equipment from the provided available equipment choices, and use that choice's exact id and name.
+- Do not suggest equipment already listed in the currently selected equipment.`;
 }
 
 function getMasterPasteAiPrompt() {
@@ -311,6 +477,8 @@ Rules:
 - If using the older 11-field or 13-field META format, the app still accepts it and defaults missing title toggles to yes.
 - If macros are unknown, use 0 for calories, protein, carbs, and fat.
 - If a non-macro field is unknown, leave it blank but keep delimiters intact.
+- Match the original source language as closely as possible. Preserve the source's wording, tone, ingredient names, direction phrasing, headers, and subtitles unless a format cleanup is required.
+- Only improvise when the source does not include the needed information. Do not invent details, steps, section names, subtitles, ingredients, or notes when the source provides usable text.
 - Serves examples: "4 Servings", "2-3 Servings", "1 Serving".
 - Times should include units: "15 min", "1 hour", "30-45 min".
 - Equipment names should be comma-separated and use common tool names.
@@ -324,6 +492,7 @@ Rules:
 - If the black title is hidden, still include the ::INGREDIENTS:: block so ingredient rows can be parsed.
 - Use ::TABLE Group Name:: only for ingredient set headers such as Sauce, Dressing, Bowl, Filling, or Topping.
 - Do not repeat "Ingredients for X Servings" as a ::TABLE name unless the source truly has an ingredient group with that exact name.
+- If the source material includes ingredient subtitles or secondary labels, preserve them as ":SUBTITLE: Subtitle text" rows in the matching ingredient set.
 - Use lowercase "tsp" and "tbsp".
 - Use single-character fraction glyphs for common fractions: ½, ¼, ¾, ⅓, ⅔, ⅛, ⅜, ⅝, ⅞.
 - Write mixed amounts like "1½ tsp", not "1 1/2 tsp".
@@ -331,9 +500,11 @@ Rules:
 - The black instructions title is separate from instruction set labels. The black title defaults to "Instructions for X Servings" based on META serves. It can be hidden with META field 14 set to "no". Use "yes" by default for normal recipes.
 - A ::DIRECTIONS Label;step style;start mode:: label is an instruction set header. It renders like ingredient set headers, not like the black instructions title.
 - Use ::DIRECTIONS Label;numbered;auto:: when the source has major direction sections such as "Part 1: Prepare", "Part 2: Cook", "Sauce", "Assemble", or "Bake".
+- If the source instructions are broken into clearly separate sections, preserve those breaks as separate ::DIRECTIONS Label;numbered;auto:: blocks instead of flattening everything into one instruction set.
 - Do not repeat "Instructions for X Servings" as a ::DIRECTIONS label.
 - To add an unnumbered instruction header in the middle of directions, put it on its own line as ":HEADER: Header text". These headers should divide directions into parts, such as ":HEADER: Making the green goddess sauce".
 - To add an unnumbered instruction subtitle, put it on its own line as ":SUBTITLE: Subtitle text". Subtitles follow the same layout and number-reset rules as headers but render without bold styling. Subtitle capitalization can be controlled in the app.
+- If the source material includes subtitles inside directions, preserve them using ":SUBTITLE: Subtitle text" exactly where they appear.
 - Checkbox item lines must start exactly with "- [ ]" and directly follow the parent step.`;
 }
 

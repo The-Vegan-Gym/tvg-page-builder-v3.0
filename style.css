@@ -829,6 +829,134 @@ body {
     border: 1px solid #ef5350;
 }
 
+.overview-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.overview-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.spellcheck-results {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.spellcheck-empty {
+    color: #8a96a3;
+    border: 1px dashed #35414d;
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-md);
+    text-align: center;
+}
+
+.spellcheck-card {
+    border: 1px solid #303943;
+    border-radius: var(--radius-md);
+    background: #10161c;
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.spellcheck-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.spellcheck-card-header strong {
+    color: #e5ebf2;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.btn-spellcheck-apply {
+    width: auto;
+    padding: 0.45rem 0.7rem;
+}
+
+.spellcheck-location {
+    border: 1px solid rgba(66, 213, 59, 0.45);
+    border-radius: var(--radius-sm);
+    background: rgba(66, 213, 59, 0.12);
+    color: #8ff087;
+    cursor: pointer;
+    font-family: var(--font-primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.42rem 0.6rem;
+    white-space: nowrap;
+}
+
+.spellcheck-location:hover {
+    background: rgba(66, 213, 59, 0.22);
+    border-color: rgba(66, 213, 59, 0.7);
+}
+
+.spellcheck-location--unknown {
+    border-color: #303943;
+    background: #151c23;
+    color: #7f8b98;
+    cursor: default;
+}
+
+.spellcheck-location--unknown:hover {
+    border-color: #303943;
+    background: #151c23;
+}
+
+.spellcheck-comparison {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+}
+
+.spellcheck-comparison div {
+    border: 1px solid #26313b;
+    border-radius: var(--radius-sm);
+    background: #0b1117;
+    padding: var(--spacing-sm);
+}
+
+.spellcheck-comparison span {
+    display: block;
+    color: #8a96a3;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+}
+
+.spellcheck-comparison p {
+    margin: 0;
+    color: #d7dee7;
+    font-size: 0.86rem;
+    line-height: 1.45;
+    white-space: pre-line;
+}
+
+.spellcheck-reason {
+    color: #9aa6b2;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.preview-location-highlight {
+    outline: 3px solid rgba(66, 213, 59, 0.75);
+    outline-offset: 5px;
+    border-radius: 4px;
+    transition: outline-color 0.2s;
+}
+
 /* Image Upload Area */
 .image-upload-area {
     border: 2px dashed var(--color-gray-300);
