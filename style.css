@@ -3300,7 +3300,7 @@ body {
 }
 
 .section-title {
-    font-size: var(--section-header-font-size, 12px);
+    font-size: var(--section-header-font-size, 14px);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -3372,7 +3372,7 @@ body {
 }
 
 .flow-section-title {
-    font-size: var(--section-header-font-size, 12px);
+    font-size: var(--section-header-font-size, 14px);
     margin: 0 0 var(--spacing-12);
     text-transform: uppercase;
     letter-spacing: 0.5px;

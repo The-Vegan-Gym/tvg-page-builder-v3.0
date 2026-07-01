@@ -37,7 +37,7 @@ const DEFAULT_PORTION_VARIATION_SVG = `<svg width="36" height="36" viewBox="0 0 
 const DEFAULT_TYPOGRAPHY_SIZES = {
     macroBar: 15,
     description: 13,
-    sectionHeader: 12,
+    sectionHeader: 14,
     bodyText: 14,
     blackBoxHeader: 13,
     instructionBadge: 12,
@@ -52,7 +52,7 @@ const DEFAULT_TYPOGRAPHY_SIZES = {
 const TYPOGRAPHY_SIZE_CONTROLS = [
     { key: 'macroBar', id: 'macro-bar-font-size', valueId: 'macro-bar-font-size-value', defaultValue: 15, min: 10, max: 24 },
     { key: 'description', id: 'description-font-size', valueId: 'description-font-size-value', defaultValue: 13, min: 9, max: 22 },
-    { key: 'sectionHeader', id: 'section-header-font-size', valueId: 'section-header-font-size-value', defaultValue: 12, min: 8, max: 22 },
+    { key: 'sectionHeader', id: 'section-header-font-size', valueId: 'section-header-font-size-value', defaultValue: 14, min: 8, max: 22 },
     { key: 'bodyText', id: 'body-text-font-size', valueId: 'body-text-font-size-value', defaultValue: 14, min: 8, max: 22 },
     { key: 'blackBoxHeader', id: 'black-box-header-font-size', valueId: 'black-box-header-font-size-value', defaultValue: 13, min: 9, max: 24 },
     { key: 'instructionBadge', id: 'instruction-badge-font-size', valueId: 'instruction-badge-font-size-value', defaultValue: 12, min: 8, max: 20 },
