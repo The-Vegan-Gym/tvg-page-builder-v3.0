@@ -3,10 +3,7 @@ const AIRTABLE_CONFIG = require('./airtable.config');
 const AIRTABLE_API_BASE = 'https://api.airtable.com/v0';
 const AIRTABLE_CONTENT_BASE = 'https://content.airtable.com/v0';
 const ATTACHMENT_FIELDS = {
-    recipePdf: 'Recipe PDF',
-    recipePdfNoMacros: 'Recipe PDF no macros',
-    printerFriendlyRecipePdf: 'Printer Friendly Recipe PDF',
-    printerFriendlyRecipePdfNoMacros: 'Printer Friendly Recipe PDF no macros',
+    recipePages: 'Recipe PDF',
     photo: 'Recipe Image',
     recipeFile: 'Recipe File'
 };
@@ -15,10 +12,6 @@ async function exportRecipeToMealPlanner(payload = {}, options = {}) {
     const token = process.env[AIRTABLE_CONFIG.tokenEnvKey];
     if (!token) {
         throw new Error(`${AIRTABLE_CONFIG.tokenEnvKey} is missing. Add it to your environment variables.`);
-    }
-
-    if (typeof options.createPdfBuffer !== 'function') {
-        throw new Error('PDF export is not configured.');
     }
 
     const recipe = payload.recipe || {};
@@ -34,7 +27,7 @@ async function exportRecipeToMealPlanner(payload = {}, options = {}) {
 
     const fields = buildAirtableFields(recipe, metadata);
     const record = await createAirtableRecord({ token, baseId, tableId, fields });
-    const attachments = await buildRecipeAttachments(recipe, options.createPdfBuffer);
+    const attachments = await buildRecipeAttachments(recipe, payload.pageAttachments || []);
 
     for (const attachment of attachments) {
         await uploadAirtableAttachment({
@@ -80,40 +73,9 @@ function buildAirtableFields(recipe = {}, metadata = {}) {
     return fields;
 }
 
-async function buildRecipeAttachments(recipe = {}, createPdfBuffer) {
+async function buildRecipeAttachments(recipe = {}, pageAttachments = []) {
     const baseTitle = sanitizeFilename(recipe.title || 'Recipe');
-    const variants = [
-        {
-            fieldName: ATTACHMENT_FIELDS.recipePdf,
-            filename: `${baseTitle}.pdf`,
-            recipe: { ...recipe, pageStyle: 'standard', showMacroBar: true }
-        },
-        {
-            fieldName: ATTACHMENT_FIELDS.recipePdfNoMacros,
-            filename: `${baseTitle} - no macros.pdf`,
-            recipe: { ...recipe, pageStyle: 'standard', showMacroBar: false }
-        },
-        {
-            fieldName: ATTACHMENT_FIELDS.printerFriendlyRecipePdf,
-            filename: `${baseTitle} - Printer Friendly.pdf`,
-            recipe: { ...recipe, pageStyle: 'printer-friendly', showMacroBar: true, image: '' }
-        },
-        {
-            fieldName: ATTACHMENT_FIELDS.printerFriendlyRecipePdfNoMacros,
-            filename: `${baseTitle} - Printer Friendly - no macros.pdf`,
-            recipe: { ...recipe, pageStyle: 'printer-friendly', showMacroBar: false, image: '' }
-        }
-    ];
-
-    const attachments = [];
-    for (const variant of variants) {
-        attachments.push({
-            fieldName: variant.fieldName,
-            filename: variant.filename,
-            contentType: 'application/pdf',
-            buffer: await createPdfBuffer(variant.recipe)
-        });
-    }
+    const attachments = normalizePageAttachments(pageAttachments, baseTitle);
 
     const photo = await imageSourceToAttachment(recipe.image, `${baseTitle} hero`);
     if (photo) {
@@ -131,6 +93,26 @@ async function buildRecipeAttachments(recipe = {}, createPdfBuffer) {
     });
 
     return attachments;
+}
+
+function normalizePageAttachments(pageAttachments = [], baseTitle = 'Recipe') {
+    if (!Array.isArray(pageAttachments) || pageAttachments.length === 0) {
+        throw new Error('No JPG pages were provided for Airtable export.');
+    }
+
+    return pageAttachments.map((attachment, index) => {
+        const dataUrl = parseDataUrl(attachment?.dataUrl);
+        if (!dataUrl || dataUrl.contentType !== 'image/jpeg') {
+            throw new Error(`Recipe page ${index + 1} was not a JPG image.`);
+        }
+
+        return {
+            fieldName: ATTACHMENT_FIELDS.recipePages,
+            filename: `${sanitizeFilename(baseTitle)} - Page ${index + 1}.jpg`,
+            contentType: 'image/jpeg',
+            buffer: dataUrl.buffer
+        };
+    });
 }
 
 async function createAirtableRecord({ token, baseId, tableId, fields }) {

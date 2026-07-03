@@ -5251,6 +5251,7 @@ async function handleExportJpg(options = {}) {
         const recipeTitleColor = printerFriendly ? '#222222' : '#ffffff';
 
         const baseFilename = getExportTitle();
+        const exportedFiles = [];
 
         for (let pageIndex = 0; pageIndex < recipePages.length; pageIndex += 1) {
             const recipePage = recipePages[pageIndex];
@@ -5508,18 +5509,29 @@ async function handleExportJpg(options = {}) {
                 }
             }
 
-            // Convert to JPG and download
+            // Convert to JPG and download or collect for API export
             const jpgDataUrl = finalCanvas.toDataURL('image/jpeg', 1);
-            const link = document.createElement('a');
-            link.href = jpgDataUrl;
-            link.download = recipePages.length === 1
-                ? `${baseFilename}.jpg`
-                : `${baseFilename} - Page ${pageIndex + 1}.jpg`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            const filename = options?.forcePageFilenames === true || recipePages.length > 1
+                ? `${baseFilename} - Page ${pageIndex + 1}.jpg`
+                : `${baseFilename}.jpg`;
+
+            if (options?.collectFiles === true) {
+                exportedFiles.push({
+                    filename,
+                    contentType: 'image/jpeg',
+                    dataUrl: jpgDataUrl
+                });
+            } else {
+                const link = document.createElement('a');
+                link.href = jpgDataUrl;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
         }
 
+        return exportedFiles;
     } catch (error) {
         console.error('Export error:', error);
         if (options?.rethrow === true) {
@@ -5594,6 +5606,17 @@ async function handleMealPlannerExportSubmit(event) {
         }
         updateMealPlannerExportStatus('Preparing hero image...', '');
         const exportRecipe = await prepareRecipeForMealPlannerExport(currentRecipe);
+        updateMealPlannerExportStatus('Rendering JPG pages...', '');
+        const pageAttachments = await handleExportJpg({
+            exportButton: submitButton,
+            manageButtonState: false,
+            rethrow: true,
+            collectFiles: true,
+            forcePageFilenames: true
+        });
+        if (!Array.isArray(pageAttachments) || pageAttachments.length === 0) {
+            throw new Error('No JPG pages were generated for Meal Planner export.');
+        }
         updateMealPlannerExportStatus('Creating Airtable recipe and uploading files...', '');
 
         const response = await fetch('/api/export-meal-planner', {
@@ -5601,7 +5624,8 @@ async function handleMealPlannerExportSubmit(event) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 recipe: exportRecipe,
-                metadata
+                metadata,
+                pageAttachments
             })
         });
         const data = await response.json().catch(() => ({}));
