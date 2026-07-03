@@ -2,7 +2,11 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
-const { exportRecipeToMealPlanner } = require('./meal-planner-export');
+const {
+    createMealPlannerRecord,
+    exportRecipeToMealPlanner,
+    uploadMealPlannerAttachments
+} = require('./meal-planner-export');
 
 loadEnvFile();
 
@@ -175,9 +179,7 @@ async function handleMealPlannerExport(req, res) {
     try {
         loadEnvFile();
         const payload = await readJsonBody(req);
-        const result = await exportRecipeToMealPlanner(payload, {
-            createPdfBuffer: createRecipePdfBuffer
-        });
+        const result = await handleMealPlannerAction(payload);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
@@ -186,6 +188,20 @@ async function handleMealPlannerExport(req, res) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: error.message || 'Unable to export to Meal Planner' }));
     }
+}
+
+function handleMealPlannerAction(payload = {}) {
+    if (payload.action === 'create-record') {
+        return createMealPlannerRecord(payload);
+    }
+
+    if (payload.action === 'upload-attachments') {
+        return uploadMealPlannerAttachments(payload);
+    }
+
+    return exportRecipeToMealPlanner(payload, {
+        createPdfBuffer: createRecipePdfBuffer
+    });
 }
 
 async function createRecipePdfBuffer(recipe) {

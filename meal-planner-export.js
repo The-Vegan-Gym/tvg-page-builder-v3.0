@@ -9,13 +9,55 @@ const ATTACHMENT_FIELDS = {
 };
 
 async function exportRecipeToMealPlanner(payload = {}, options = {}) {
+    const { token, baseId, tableId } = getAirtableEnvironment();
+    const { recipe, metadata } = normalizeMealPlannerPayload(payload);
+    const fields = buildAirtableFields(recipe, metadata);
+    const record = await createAirtableRecord({ token, baseId, tableId, fields });
+    const attachments = await buildRecipeAttachments(recipe, payload.pageAttachments || []);
+
+    await uploadAttachmentsToRecord({ token, baseId, recordId: record.id, attachments });
+
+    return {
+        id: record.id,
+        url: `https://airtable.com/${baseId}/${tableId}/${record.id}`
+    };
+}
+
+async function createMealPlannerRecord(payload = {}) {
+    const { token, baseId, tableId } = getAirtableEnvironment();
+    const { recipe, metadata } = normalizeMealPlannerPayload(payload);
+    const fields = buildAirtableFields(recipe, metadata);
+    const record = await createAirtableRecord({ token, baseId, tableId, fields });
+
+    return {
+        id: record.id,
+        url: `https://airtable.com/${baseId}/${tableId}/${record.id}`
+    };
+}
+
+async function uploadMealPlannerAttachments(payload = {}) {
+    const { token, baseId } = getAirtableEnvironment();
+    const recordId = String(payload.recordId || '').trim();
+    if (!recordId) {
+        throw new Error('Airtable record ID is missing for attachment upload.');
+    }
+
+    const options = payload.attachmentOptions || {};
+    const attachments = await buildRecipeAttachments(payload.recipe || {}, payload.pageAttachments || [], options);
+    await uploadAttachmentsToRecord({ token, baseId, recordId, attachments });
+
+    return {
+        id: recordId,
+        uploaded: attachments.length
+    };
+}
+
+function getAirtableEnvironment() {
     const token = process.env[AIRTABLE_CONFIG.tokenEnvKey];
     if (!token) {
         throw new Error(`${AIRTABLE_CONFIG.tokenEnvKey} is missing. Add it to your environment variables.`);
     }
 
-    const recipe = payload.recipe || {};
-    const metadata = payload.metadata || {};
     const baseId = normalizeEnvValue(process.env[AIRTABLE_CONFIG.baseIdEnvKey]);
     const tableId = normalizeEnvValue(process.env[AIRTABLE_CONFIG.tableEnvKeys.recipes]);
     if (!baseId) {
@@ -25,25 +67,13 @@ async function exportRecipeToMealPlanner(payload = {}, options = {}) {
         throw new Error(`${AIRTABLE_CONFIG.tableEnvKeys.recipes} is missing. Add it to your environment variables.`);
     }
 
-    const fields = buildAirtableFields(recipe, metadata);
-    const record = await createAirtableRecord({ token, baseId, tableId, fields });
-    const attachments = await buildRecipeAttachments(recipe, payload.pageAttachments || []);
+    return { token, baseId, tableId };
+}
 
-    for (const attachment of attachments) {
-        await uploadAirtableAttachment({
-            token,
-            baseId,
-            recordId: record.id,
-            fieldName: attachment.fieldName,
-            filename: attachment.filename,
-            contentType: attachment.contentType,
-            buffer: attachment.buffer
-        });
-    }
-
+function normalizeMealPlannerPayload(payload = {}) {
     return {
-        id: record.id,
-        url: `https://airtable.com/${baseId}/${tableId}/${record.id}`
+        recipe: payload.recipe || {},
+        metadata: payload.metadata || {}
     };
 }
 
@@ -70,26 +100,49 @@ function buildAirtableFields(recipe = {}, metadata = {}) {
     return fields;
 }
 
-async function buildRecipeAttachments(recipe = {}, pageAttachments = []) {
+async function buildRecipeAttachments(recipe = {}, pageAttachments = [], options = {}) {
     const baseTitle = sanitizeFilename(recipe.title || 'Recipe');
-    const attachments = normalizePageAttachments(pageAttachments, baseTitle);
+    const includePageAttachments = options.includePageAttachments !== false;
+    const includePhoto = options.includePhoto !== false;
+    const includeRecipeFile = options.includeRecipeFile !== false;
+    const attachments = includePageAttachments
+        ? normalizePageAttachments(pageAttachments, baseTitle)
+        : [];
 
-    const photo = await imageSourceToAttachment(recipe.image, `${baseTitle} hero`);
-    if (photo) {
+    if (includePhoto) {
+        const photo = await imageSourceToAttachment(recipe.image, `${baseTitle} hero`);
+        if (photo) {
+            attachments.push({
+                fieldName: ATTACHMENT_FIELDS.photo,
+                ...photo
+            });
+        }
+    }
+
+    if (includeRecipeFile) {
         attachments.push({
-            fieldName: ATTACHMENT_FIELDS.photo,
-            ...photo
+            fieldName: ATTACHMENT_FIELDS.recipeFile,
+            filename: `${baseTitle}.json`,
+            contentType: 'application/json',
+            buffer: Buffer.from(JSON.stringify(recipe, null, 2), 'utf8')
         });
     }
 
-    attachments.push({
-        fieldName: ATTACHMENT_FIELDS.recipeFile,
-        filename: `${baseTitle}.json`,
-        contentType: 'application/json',
-        buffer: Buffer.from(JSON.stringify(recipe, null, 2), 'utf8')
-    });
-
     return attachments;
+}
+
+async function uploadAttachmentsToRecord({ token, baseId, recordId, attachments }) {
+    for (const attachment of attachments) {
+        await uploadAirtableAttachment({
+            token,
+            baseId,
+            recordId,
+            fieldName: attachment.fieldName,
+            filename: attachment.filename,
+            contentType: attachment.contentType,
+            buffer: attachment.buffer
+        });
+    }
 }
 
 function normalizePageAttachments(pageAttachments = [], baseTitle = 'Recipe') {
@@ -105,11 +158,17 @@ function normalizePageAttachments(pageAttachments = [], baseTitle = 'Recipe') {
 
         return {
             fieldName: ATTACHMENT_FIELDS.recipePages,
-            filename: `${sanitizeFilename(baseTitle)} - Page ${index + 1}.jpg`,
+            filename: normalizeJpgFilename(attachment?.filename, `${baseTitle} - Page ${index + 1}`),
             contentType: 'image/jpeg',
             buffer: dataUrl.buffer
         };
     });
+}
+
+function normalizeJpgFilename(filename, fallbackName) {
+    const rawName = String(filename || fallbackName || 'Recipe Page').trim();
+    const withoutExtension = rawName.replace(/\.jpe?g$/i, '');
+    return `${sanitizeFilename(withoutExtension)}.jpg`;
 }
 
 async function createAirtableRecord({ token, baseId, tableId, fields }) {
@@ -253,6 +312,8 @@ function extensionFromContentType(contentType) {
 
 module.exports = {
     exportRecipeToMealPlanner,
+    createMealPlannerRecord,
+    uploadMealPlannerAttachments,
     buildAirtableFields,
     buildRecipeAttachments
 };

@@ -5259,9 +5259,9 @@ async function handleExportJpg(options = {}) {
             const cssPageWidth = recipePage.offsetWidth || Math.round(recipePage.getBoundingClientRect().width);
             const cssPageHeight = recipePage.offsetHeight || Math.round(recipePage.getBoundingClientRect().height);
 
-            // Target export dimensions (locked)
-            const targetWidth = 2480;
-            const targetHeight = 3508;
+            // Target export dimensions. Standard downloads stay print-sized; API exports can opt into smaller payloads.
+            const targetWidth = Number.isFinite(options?.targetWidth) ? options.targetWidth : 2480;
+            const targetHeight = Number.isFinite(options?.targetHeight) ? options.targetHeight : 3508;
 
             // Scale ratio for html2canvas
             const scaleRatio = Math.max(targetWidth / cssPageWidth, targetHeight / cssPageHeight);
@@ -5509,7 +5509,10 @@ async function handleExportJpg(options = {}) {
             }
 
             // Convert to JPG and download or collect for API export
-            const jpgDataUrl = finalCanvas.toDataURL('image/jpeg', 1);
+            const jpegQuality = Number.isFinite(options?.jpegQuality)
+                ? Math.min(1, Math.max(0.5, options.jpegQuality))
+                : 1;
+            const jpgDataUrl = finalCanvas.toDataURL('image/jpeg', jpegQuality);
             const filename = options?.forcePageFilenames === true || recipePages.length > 1
                 ? `${baseFilename} - Page ${pageIndex + 1}.jpg`
                 : `${baseFilename}.jpg`;
@@ -5601,28 +5604,47 @@ async function handleMealPlannerExportSubmit(event) {
         }
         updateMealPlannerExportStatus('Preparing hero image...', '');
         const exportRecipe = await prepareRecipeForMealPlannerExport(currentRecipe);
+        updateMealPlannerExportStatus('Creating Airtable recipe...', '');
+        const record = await postMealPlannerExport({
+            action: 'create-record',
+            recipe: {
+                ...exportRecipe,
+                image: ''
+            },
+            metadata
+        });
+
         const pageAttachments = await collectMealPlannerJpgAttachments(exportRecipe, submitButton);
         if (!Array.isArray(pageAttachments) || pageAttachments.length === 0) {
             throw new Error('No JPG pages were generated for Meal Planner export.');
         }
-        updateMealPlannerExportStatus('Creating Airtable recipe and uploading files...', '');
 
-        const response = await fetch('/api/export-meal-planner', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                recipe: exportRecipe,
-                metadata,
-                pageAttachments
-            })
-        });
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-            throw new Error(data.error || `Unable to export to Meal Planner. HTTP ${response.status}`);
+        for (let index = 0; index < pageAttachments.length; index += 1) {
+            updateMealPlannerExportStatus(`Uploading JPG page ${index + 1}/${pageAttachments.length}...`, '');
+            await postMealPlannerExport({
+                action: 'upload-attachments',
+                recordId: record.id,
+                recipe: { title: exportRecipe.title },
+                pageAttachments: [pageAttachments[index]],
+                attachmentOptions: {
+                    includePhoto: false,
+                    includeRecipeFile: false
+                }
+            });
         }
 
-        updateMealPlannerExportStatus(`Exported to Meal Planner${data.id ? ` (${data.id})` : ''}.`, 'success');
+        updateMealPlannerExportStatus('Uploading recipe image and save file...', '');
+        await postMealPlannerExport({
+            action: 'upload-attachments',
+            recordId: record.id,
+            recipe: exportRecipe,
+            pageAttachments: [],
+            attachmentOptions: {
+                includePageAttachments: false
+            }
+        });
+
+        updateMealPlannerExportStatus(`Exported to Meal Planner${record.id ? ` (${record.id})` : ''}.`, 'success');
     } catch (error) {
         console.error('Meal planner export error:', error);
         updateMealPlannerExportStatus(error.message || 'Unable to export to Meal Planner.', 'error');
@@ -5632,6 +5654,21 @@ async function handleMealPlannerExportSubmit(event) {
             submitButton.textContent = originalText;
         }
     }
+}
+
+async function postMealPlannerExport(payload) {
+    const response = await fetch('/api/export-meal-planner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(data.error || `Unable to export to Meal Planner. HTTP ${response.status}`);
+    }
+
+    return data;
 }
 
 function updateMealPlannerExportStatus(message, status = '') {
@@ -5694,7 +5731,10 @@ async function collectMealPlannerJpgAttachments(exportRecipe, submitButton) {
                 rethrow: true,
                 collectFiles: true,
                 forcePageFilenames: true,
-                filenameBase: getExportTitle()
+                filenameBase: getExportTitle(),
+                targetWidth: 1240,
+                targetHeight: 1754,
+                jpegQuality: 0.82
             });
             pageAttachments.push(...files);
         }
@@ -5724,7 +5764,7 @@ async function prepareRecipeForMealPlannerExport(recipe = currentRecipe) {
 
 async function normalizeHeroImageForServer(imageSource) {
     const image = await loadImageElement(imageSource);
-    const maxDimension = 2200;
+    const maxDimension = 1600;
     const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
     const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
     const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
@@ -5737,7 +5777,7 @@ async function normalizeHeroImageForServer(imageSource) {
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(image, 0, 0, width, height);
 
-    return canvas.toDataURL('image/jpeg', 0.86);
+    return canvas.toDataURL('image/jpeg', 0.82);
 }
 
 async function handleExportAll() {

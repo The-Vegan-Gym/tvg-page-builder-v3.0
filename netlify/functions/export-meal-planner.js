@@ -1,4 +1,8 @@
-const { exportRecipeToMealPlanner } = require('../../meal-planner-export');
+const {
+    createMealPlannerRecord,
+    exportRecipeToMealPlanner,
+    uploadMealPlannerAttachments
+} = require('../../meal-planner-export');
 const { createRecipePdfBuffer, loadEnvFile } = require('../../server');
 
 exports.handler = async (event) => {
@@ -13,9 +17,7 @@ exports.handler = async (event) => {
     try {
         loadEnvFile();
         const payload = parseBody(event);
-        const result = await exportRecipeToMealPlanner(payload, {
-            createPdfBuffer: createRecipePdfBuffer
-        });
+        const result = await handleMealPlannerAction(payload);
 
         return jsonResponse(200, result);
     } catch (error) {
@@ -23,6 +25,20 @@ exports.handler = async (event) => {
         return jsonResponse(400, { error: error.message || 'Unable to export to Meal Planner' });
     }
 };
+
+function handleMealPlannerAction(payload = {}) {
+    if (payload.action === 'create-record') {
+        return createMealPlannerRecord(payload);
+    }
+
+    if (payload.action === 'upload-attachments') {
+        return uploadMealPlannerAttachments(payload);
+    }
+
+    return exportRecipeToMealPlanner(payload, {
+        createPdfBuffer: createRecipePdfBuffer
+    });
+}
 
 function parseBody(event) {
     const body = event.isBase64Encoded
