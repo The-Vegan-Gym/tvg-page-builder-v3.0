@@ -4,9 +4,18 @@ const AIRTABLE_API_BASE = 'https://api.airtable.com/v0';
 const AIRTABLE_CONTENT_BASE = 'https://content.airtable.com/v0';
 const ATTACHMENT_FIELDS = {
     recipePages: 'Recipe PDF',
+    recipePagesNoMacros: 'Recipe PDF no macros',
+    printerFriendlyRecipePages: 'Printer Friendly Recipe PDF',
+    printerFriendlyRecipePagesNoMacros: 'Printer Friendly Recipe PDF no macros',
     photo: 'Recipe Image',
     recipeFile: 'Recipe File'
 };
+const PAGE_ATTACHMENT_FIELDS = new Set([
+    ATTACHMENT_FIELDS.recipePages,
+    ATTACHMENT_FIELDS.recipePagesNoMacros,
+    ATTACHMENT_FIELDS.printerFriendlyRecipePages,
+    ATTACHMENT_FIELDS.printerFriendlyRecipePagesNoMacros
+]);
 
 async function exportRecipeToMealPlanner(payload = {}, options = {}) {
     const { token, baseId, tableId } = getAirtableEnvironment();
@@ -157,12 +166,19 @@ function normalizePageAttachments(pageAttachments = [], baseTitle = 'Recipe') {
         }
 
         return {
-            fieldName: ATTACHMENT_FIELDS.recipePages,
+            fieldName: normalizePageAttachmentField(attachment?.fieldName),
             filename: normalizeJpgFilename(attachment?.filename, `${baseTitle} - Page ${index + 1}`),
             contentType: 'image/jpeg',
             buffer: dataUrl.buffer
         };
     });
+}
+
+function normalizePageAttachmentField(fieldName) {
+    const normalizedFieldName = String(fieldName || '').trim();
+    return PAGE_ATTACHMENT_FIELDS.has(normalizedFieldName)
+        ? normalizedFieldName
+        : ATTACHMENT_FIELDS.recipePages;
 }
 
 function normalizeJpgFilename(filename, fallbackName) {

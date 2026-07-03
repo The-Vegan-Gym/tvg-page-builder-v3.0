@@ -5703,10 +5703,10 @@ function getMealPlannerIngredientNames(recipe = currentRecipe) {
 async function collectMealPlannerJpgAttachments(exportRecipe, submitButton) {
     const originalRecipe = JSON.parse(JSON.stringify(currentRecipe));
     const variants = [
-        { label: 'Standard', pageStyle: 'standard', showMacroBar: true, clearHeroImage: false },
-        { label: 'No Macros', pageStyle: 'standard', showMacroBar: false, clearHeroImage: false },
-        { label: 'Printer Friendly', pageStyle: 'printer-friendly', showMacroBar: true, clearHeroImage: true },
-        { label: 'Printer Friendly No Macros', pageStyle: 'printer-friendly', showMacroBar: false, clearHeroImage: true }
+        { label: 'Standard', pageStyle: 'standard', showMacroBar: true, clearHeroImage: false, fieldName: 'Recipe PDF' },
+        { label: 'No Macros', pageStyle: 'standard', showMacroBar: false, clearHeroImage: false, fieldName: 'Recipe PDF no macros' },
+        { label: 'Printer Friendly', pageStyle: 'printer-friendly', showMacroBar: true, clearHeroImage: true, fieldName: 'Printer Friendly Recipe PDF' },
+        { label: 'Printer Friendly No Macros', pageStyle: 'printer-friendly', showMacroBar: false, clearHeroImage: true, fieldName: 'Printer Friendly Recipe PDF no macros' }
     ];
     const pageAttachments = [];
 
@@ -5736,7 +5736,10 @@ async function collectMealPlannerJpgAttachments(exportRecipe, submitButton) {
                 targetHeight: 1754,
                 jpegQuality: 0.82
             });
-            pageAttachments.push(...files);
+            pageAttachments.push(...files.map((file) => ({
+                ...file,
+                fieldName: variant.fieldName
+            })));
         }
     } finally {
         currentRecipe = normalizeRecipe(originalRecipe);
