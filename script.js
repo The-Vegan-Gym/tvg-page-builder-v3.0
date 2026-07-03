@@ -5605,7 +5605,7 @@ async function handleMealPlannerExportSubmit(event) {
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-            throw new Error(data.error || 'Unable to export to Meal Planner.');
+            throw new Error(data.error || `Unable to export to Meal Planner. HTTP ${response.status}`);
         }
 
         updateMealPlannerExportStatus(`Exported to Meal Planner${data.id ? ` (${data.id})` : ''}.`, 'success');

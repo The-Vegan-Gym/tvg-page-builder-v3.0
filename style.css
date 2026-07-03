@@ -1432,6 +1432,55 @@ body {
     overflow-y: auto;
 }
 
+.meal-planner-export-modal .equipment-modal-header h3 {
+    color: var(--color-gray-900);
+}
+
+.meal-planner-export-body .form-group {
+    margin-bottom: 0;
+}
+
+.meal-planner-export-body label {
+    color: var(--color-gray-700);
+    font-size: var(--editor-label-size);
+    font-weight: 700;
+}
+
+.meal-planner-export-body input,
+.meal-planner-export-body select,
+.meal-planner-export-body textarea {
+    width: 100%;
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-300);
+    border-radius: var(--radius-sm);
+    color: var(--color-gray-900);
+    font-family: var(--font-primary);
+    font-size: var(--editor-body-size);
+    line-height: 1.4;
+    padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.meal-planner-export-body textarea {
+    resize: vertical;
+}
+
+.meal-planner-export-body input:focus,
+.meal-planner-export-body select:focus,
+.meal-planner-export-body textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(66, 213, 59, 0.16);
+    outline: none;
+}
+
+.meal-planner-export-body .equipment-modal-footer {
+    margin: var(--spacing-sm) calc(var(--spacing-lg) * -1) calc(var(--spacing-lg) * -1);
+}
+
+.meal-planner-export-body .equipment-modal-footer .btn-primary,
+.meal-planner-export-body .equipment-modal-footer .btn-secondary {
+    flex: 1;
+}
+
 .load-recipe-section-title {
     color: var(--color-gray-700);
     font-size: var(--editor-heading-size);
