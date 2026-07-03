@@ -1,8 +1,8 @@
 const AIRTABLE_CONFIG = {
     tokenEnvKey: 'AIRTABLE_TOKEN',
-    baseId: 'appLBH1pqlKq7z0al',
-    tables: {
-        recipes: 'tblVMYnWxAZw3cxSN'
+    baseIdEnvKey: 'BASE_ID',
+    tableEnvKeys: {
+        recipes: 'TABLE_ID'
     }
 };
 

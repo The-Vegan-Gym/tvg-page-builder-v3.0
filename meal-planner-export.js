@@ -23,8 +23,15 @@ async function exportRecipeToMealPlanner(payload = {}, options = {}) {
 
     const recipe = payload.recipe || {};
     const metadata = payload.metadata || {};
-    const baseId = AIRTABLE_CONFIG.baseId;
-    const tableId = AIRTABLE_CONFIG.tables.recipes;
+    const baseId = process.env[AIRTABLE_CONFIG.baseIdEnvKey];
+    const tableId = process.env[AIRTABLE_CONFIG.tableEnvKeys.recipes];
+    if (!baseId) {
+        throw new Error(`${AIRTABLE_CONFIG.baseIdEnvKey} is missing. Add it to your environment variables.`);
+    }
+    if (!tableId) {
+        throw new Error(`${AIRTABLE_CONFIG.tableEnvKeys.recipes} is missing. Add it to your environment variables.`);
+    }
+
     const fields = buildAirtableFields(recipe, metadata);
     const record = await createAirtableRecord({ token, baseId, tableId, fields });
     const attachments = await buildRecipeAttachments(recipe, options.createPdfBuffer);
