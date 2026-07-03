@@ -15,3 +15,8 @@ status = 200
 from = "/api/export-meal-planner"
 to = "/.netlify/functions/export-meal-planner"
 status = 200
+
+[[redirects]]
+from = "/api/generate-meal-planner-metadata"
+to = "/.netlify/functions/generate-meal-planner-metadata"
+status = 200

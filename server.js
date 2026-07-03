@@ -7,6 +7,7 @@ const {
     exportRecipeToMealPlanner,
     uploadMealPlannerAttachments
 } = require('./meal-planner-export');
+const { generateMealPlannerMetadata } = require('./meal-planner-metadata');
 
 loadEnvFile();
 
@@ -44,6 +45,11 @@ const server = http.createServer((req, res) => {
 
     if (req.method === 'POST' && req.url === '/api/export-meal-planner') {
         handleMealPlannerExport(req, res);
+        return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/generate-meal-planner-metadata') {
+        handleMealPlannerMetadataGeneration(req, res);
         return;
     }
 
@@ -187,6 +193,24 @@ async function handleMealPlannerExport(req, res) {
         console.error('Meal planner export error:', error);
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: error.message || 'Unable to export to Meal Planner' }));
+    }
+}
+
+async function handleMealPlannerMetadataGeneration(req, res) {
+    try {
+        loadEnvFile();
+        const payload = await readJsonBody(req);
+        const metadata = await generateMealPlannerMetadata({
+            apiKey: process.env.OPENAI_API_KEY,
+            recipe: payload.recipe || {}
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(metadata));
+    } catch (error) {
+        console.error('Meal Planner metadata generation error:', error);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message || 'Unable to generate Meal Planner metadata' }));
     }
 }
 

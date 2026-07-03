@@ -1436,6 +1436,11 @@ body {
     margin-bottom: 0;
 }
 
+.meal-planner-export-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
 .meal-planner-export-body label {
     font-size: var(--editor-label-size);
     font-weight: 700;

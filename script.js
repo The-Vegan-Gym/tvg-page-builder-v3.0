@@ -578,6 +578,7 @@ const elements = {
     mealPlannerExportStatus: () => document.getElementById('meal-planner-export-status'),
     btnCloseMealPlannerExport: () => document.getElementById('btn-close-meal-planner-export'),
     btnCancelMealPlannerExport: () => document.getElementById('btn-cancel-meal-planner-export'),
+    btnGenerateMealPlannerMetadata: () => document.getElementById('btn-generate-meal-planner-metadata'),
     btnSubmitMealPlannerExport: () => document.getElementById('btn-submit-meal-planner-export'),
     btnClear: () => document.getElementById('btn-clear'),
     btnZoomIn: () => document.getElementById('btn-zoom-in'),
@@ -1902,6 +1903,7 @@ function initializeButtonListeners() {
     elements.btnExportAll()?.addEventListener('click', handleExportAll);
     elements.btnExportMealPlanner()?.addEventListener('click', openMealPlannerExportOverlay);
     elements.mealPlannerExportForm()?.addEventListener('submit', handleMealPlannerExportSubmit);
+    elements.btnGenerateMealPlannerMetadata()?.addEventListener('click', handleGenerateMealPlannerMetadata);
     elements.btnCloseMealPlannerExport()?.addEventListener('click', closeMealPlannerExportOverlay);
     elements.btnCancelMealPlannerExport()?.addEventListener('click', closeMealPlannerExportOverlay);
     elements.mealPlannerExportOverlay()?.addEventListener('click', (event) => {
@@ -5578,6 +5580,66 @@ function openMealPlannerExportOverlay() {
 
 function closeMealPlannerExportOverlay() {
     elements.mealPlannerExportOverlay()?.classList.remove('active');
+}
+
+async function handleGenerateMealPlannerMetadata() {
+    updateRecipeFromForm();
+
+    const generateButton = elements.btnGenerateMealPlannerMetadata();
+    const originalText = generateButton?.textContent || 'Generate';
+
+    try {
+        if (generateButton) {
+            generateButton.disabled = true;
+            generateButton.textContent = 'Generating...';
+        }
+        updateMealPlannerExportStatus('Generating Meal Planner fields...', '');
+
+        const metadata = await postMealPlannerMetadata({
+            recipe: buildMealPlannerMetadataRecipePayload(currentRecipe)
+        });
+
+        if (metadata.category && elements.mealPlannerCategory()) {
+            elements.mealPlannerCategory().value = metadata.category;
+        }
+        if (Array.isArray(metadata.ingredients) && elements.mealPlannerIngredients()) {
+            elements.mealPlannerIngredients().value = metadata.ingredients.join('\n');
+        }
+        if (Array.isArray(metadata.allergy) && elements.mealPlannerAllergy()) {
+            elements.mealPlannerAllergy().value = metadata.allergy.join('\n');
+        }
+
+        updateMealPlannerExportStatus('Meal Planner fields generated.', 'success');
+    } catch (error) {
+        console.error('Meal Planner metadata generation error:', error);
+        updateMealPlannerExportStatus(error.message || 'Unable to generate Meal Planner fields.', 'error');
+    } finally {
+        if (generateButton) {
+            generateButton.disabled = false;
+            generateButton.textContent = originalText;
+        }
+    }
+}
+
+function buildMealPlannerMetadataRecipePayload(recipe = currentRecipe) {
+    const payload = JSON.parse(JSON.stringify(recipe || {}));
+    payload.image = '';
+    return payload;
+}
+
+async function postMealPlannerMetadata(payload) {
+    const response = await fetch('/api/generate-meal-planner-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(data.error || `Unable to generate Meal Planner fields. HTTP ${response.status}`);
+    }
+
+    return data;
 }
 
 async function handleMealPlannerExportSubmit(event) {
