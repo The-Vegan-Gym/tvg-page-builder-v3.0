@@ -7,7 +7,7 @@ const ATTACHMENT_FIELDS = {
     recipePdfNoMacros: 'Recipe PDF no macros',
     printerFriendlyRecipePdf: 'Printer Friendly Recipe PDF',
     printerFriendlyRecipePdfNoMacros: 'Printer Friendly Recipe PDF no macros',
-    photo: 'Photo',
+    photo: 'Recipe Image',
     recipeFile: 'Recipe File'
 };
 
