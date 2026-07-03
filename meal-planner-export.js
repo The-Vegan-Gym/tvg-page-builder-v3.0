@@ -23,8 +23,8 @@ async function exportRecipeToMealPlanner(payload = {}, options = {}) {
 
     const recipe = payload.recipe || {};
     const metadata = payload.metadata || {};
-    const baseId = process.env[AIRTABLE_CONFIG.baseIdEnvKey];
-    const tableId = process.env[AIRTABLE_CONFIG.tableEnvKeys.recipes];
+    const baseId = normalizeEnvValue(process.env[AIRTABLE_CONFIG.baseIdEnvKey]);
+    const tableId = normalizeEnvValue(process.env[AIRTABLE_CONFIG.tableEnvKeys.recipes]);
     if (!baseId) {
         throw new Error(`${AIRTABLE_CONFIG.baseIdEnvKey} is missing. Add it to your environment variables.`);
     }
@@ -148,7 +148,12 @@ async function createAirtableRecord({ token, baseId, tableId, fields }) {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-        throw new Error(data?.error?.message || `Airtable create failed with HTTP ${response.status}`);
+        throw new Error(formatAirtableError(
+            'Airtable record creation failed',
+            response.status,
+            data,
+            'Check that AIRTABLE_TOKEN has access to BASE_ID/TABLE_ID and includes data.records:write.'
+        ));
     }
 
     const record = data?.records?.[0];
@@ -175,7 +180,12 @@ async function uploadAirtableAttachment({ token, baseId, recordId, fieldName, fi
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-        throw new Error(data?.error?.message || `Airtable attachment upload failed for "${fieldName}" with HTTP ${response.status}`);
+        throw new Error(formatAirtableError(
+            `Airtable attachment upload failed for "${fieldName}"`,
+            response.status,
+            data,
+            'Check that the attachment field exists and AIRTABLE_TOKEN includes data.records:write.'
+        ));
     }
 
     return data;
@@ -221,6 +231,17 @@ function parseDataUrl(value) {
         contentType: match[1],
         buffer: Buffer.from(match[2], 'base64')
     };
+}
+
+function normalizeEnvValue(value) {
+    return String(value || '')
+        .trim()
+        .replace(/^["']|["']$/g, '');
+}
+
+function formatAirtableError(prefix, status, data, hint) {
+    const message = data?.error?.message || data?.error?.type || `HTTP ${status}`;
+    return `${prefix}: ${message} ${hint}`;
 }
 
 function parseList(value) {
