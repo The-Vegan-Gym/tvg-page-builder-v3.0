@@ -106,6 +106,9 @@ function buildAirtableFields(recipe = {}, metadata = {}) {
     const allergy = parseList(metadata.allergy);
     if (allergy.length > 0) fields.Allergy = allergy;
 
+    const cronometer = String(metadata.cronometer || '').trim();
+    if (cronometer) fields.Cronometer = cronometer;
+
     return fields;
 }
 

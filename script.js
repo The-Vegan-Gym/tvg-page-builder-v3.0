@@ -574,6 +574,7 @@ const elements = {
     mealPlannerExportForm: () => document.getElementById('meal-planner-export-form'),
     mealPlannerCategory: () => document.getElementById('meal-planner-category'),
     mealPlannerIngredients: () => document.getElementById('meal-planner-ingredients'),
+    mealPlannerCronometer: () => document.getElementById('meal-planner-cronometer'),
     mealPlannerAllergy: () => document.getElementById('meal-planner-allergy'),
     mealPlannerExportStatus: () => document.getElementById('meal-planner-export-status'),
     btnCloseMealPlannerExport: () => document.getElementById('btn-close-meal-planner-export'),
@@ -5570,6 +5571,9 @@ function openMealPlannerExportOverlay() {
     if (elements.mealPlannerAllergy()) {
         elements.mealPlannerAllergy().value = '';
     }
+    if (elements.mealPlannerCronometer()) {
+        elements.mealPlannerCronometer().value = '';
+    }
     if (elements.mealPlannerCategory()) {
         elements.mealPlannerCategory().value = '';
     }
@@ -5607,6 +5611,11 @@ async function handleGenerateMealPlannerMetadata() {
         }
         if (Array.isArray(metadata.allergy) && elements.mealPlannerAllergy()) {
             elements.mealPlannerAllergy().value = metadata.allergy.join('\n');
+        }
+        if (Array.isArray(metadata.cronometer) && elements.mealPlannerCronometer()) {
+            elements.mealPlannerCronometer().value = metadata.cronometer.join('\n');
+        } else if (typeof metadata.cronometer === 'string' && elements.mealPlannerCronometer()) {
+            elements.mealPlannerCronometer().value = metadata.cronometer;
         }
 
         updateMealPlannerExportStatus('Meal Planner fields generated.', 'success');
@@ -5651,6 +5660,7 @@ async function handleMealPlannerExportSubmit(event) {
     const metadata = {
         category: elements.mealPlannerCategory()?.value || '',
         ingredients: elements.mealPlannerIngredients()?.value || '',
+        cronometer: elements.mealPlannerCronometer()?.value || '',
         allergy: elements.mealPlannerAllergy()?.value || ''
     };
 

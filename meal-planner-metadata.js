@@ -56,21 +56,24 @@ function buildRecipePayload(recipe = {}) {
     return {
         title: String(recipe.title || '').trim(),
         description: String(recipe.description || '').trim(),
-        ingredients: getIngredientNames(recipe).slice(0, 120),
+        ingredients: getIngredients(recipe).slice(0, 120),
         instructions: getInstructionTexts(recipe).slice(0, 80),
         macros: recipe.macros || {}
     };
 }
 
-function getIngredientNames(recipe = {}) {
+function getIngredients(recipe = {}) {
     const sections = Array.isArray(recipe.ingredientSections) && recipe.ingredientSections.length > 0
         ? recipe.ingredientSections
         : [{ ingredients: recipe.ingredients || [] }];
 
     return sections.flatMap((section) => section.ingredients || [])
         .filter((ingredient) => ingredient && ingredient.type !== 'header' && ingredient.type !== 'subtitle')
-        .map((ingredient) => String(ingredient.name || '').trim())
-        .filter(Boolean);
+        .map((ingredient) => ({
+            name: String(ingredient.name || '').trim(),
+            amount: String(ingredient.amount || '').trim()
+        }))
+        .filter((ingredient) => ingredient.name || ingredient.amount);
 }
 
 function getInstructionTexts(recipe = {}) {
@@ -89,15 +92,25 @@ function normalizeMealPlannerMetadata(parsed, recipePayload) {
         : inferFallbackCategory(recipePayload);
 
     const ingredients = normalizeStringList(parsed?.ingredients);
+    const cronometer = normalizeStringList(parsed?.cronometer);
     const allergy = normalizeStringList(parsed?.allergy)
         .map((item) => item.toLowerCase())
         .filter((item, index, items) => items.indexOf(item) === index);
 
     return {
         category,
-        ingredients: ingredients.length > 0 ? ingredients : recipePayload.ingredients,
+        ingredients: ingredients.length > 0
+            ? ingredients
+            : recipePayload.ingredients.map((ingredient) => ingredient.name).filter(Boolean),
+        cronometer: cronometer.length > 0 ? cronometer : buildFallbackCronometerLines(recipePayload.ingredients),
         allergy
     };
+}
+
+function buildFallbackCronometerLines(ingredients = []) {
+    return ingredients
+        .map((ingredient) => `${ingredient.amount} ${ingredient.name}`.trim())
+        .filter(Boolean);
 }
 
 function normalizeStringList(value) {
@@ -170,6 +183,7 @@ Return ONLY valid JSON in this exact shape:
 {
   "category": "Breakfast",
   "ingredients": ["Ground Flaxseed"],
+  "cronometer": ["1 cup rolled oats"],
   "allergy": ["soy"]
 }
 
@@ -183,6 +197,10 @@ Rules:
 - Examples: "Bob's Red Mill Premium Whole-Ground Flaxseed Meal" becomes "Ground Flaxseed"; "PBfit Peanut Butter Powder, Original" becomes "Peanut Butter Powder"; "Original Unsweetened Soymilk" becomes "Soy Milk".
 - Return one ingredient per array item.
 - Do not include amounts, measurements, brands, or duplicate ingredients.
+- Also return "cronometer" as one import-ready ingredient line per array item.
+- Cronometer lines must include the recipe amount followed by the simplified ingredient name, like "1 cup rolled oats" or "5 tbsp almond butter".
+- Use the provided ingredient amount when it exists. Do not invent amounts.
+- Remove parenthetical gram weights from Cronometer lines when another usable household amount is present.
 - Add allergy tags only when clearly present from ingredients.
 - Use simple lowercase allergy tags such as "soy", "peanut", "tree nut", "gluten", "wheat", or "sesame".
 - If there are no clear allergy tags, return an empty allergy array.`;
