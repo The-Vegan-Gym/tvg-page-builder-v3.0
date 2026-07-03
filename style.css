@@ -1432,16 +1432,11 @@ body {
     overflow-y: auto;
 }
 
-.meal-planner-export-modal .equipment-modal-header h3 {
-    color: var(--color-gray-900);
-}
-
 .meal-planner-export-body .form-group {
     margin-bottom: 0;
 }
 
 .meal-planner-export-body label {
-    color: var(--color-gray-700);
     font-size: var(--editor-label-size);
     font-weight: 700;
 }
@@ -1462,14 +1457,6 @@ body {
 
 .meal-planner-export-body textarea {
     resize: vertical;
-}
-
-.meal-planner-export-body input:focus,
-.meal-planner-export-body select:focus,
-.meal-planner-export-body textarea:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(66, 213, 59, 0.16);
-    outline: none;
 }
 
 .meal-planner-export-body .equipment-modal-footer {
@@ -2584,7 +2571,8 @@ body {
 }
 
 .equipment-modal,
-.load-recipe-modal {
+.load-recipe-modal,
+.meal-planner-export-modal {
     background: #171c22;
     border: 1px solid #2c343d;
 }
@@ -2596,6 +2584,31 @@ body {
 
 .equipment-modal-header h3 {
     color: #f5f7fa;
+}
+
+.meal-planner-export-body label {
+    color: #b7c2ce;
+}
+
+.meal-planner-export-body input,
+.meal-planner-export-body select,
+.meal-planner-export-body textarea {
+    background: #0f1318;
+    border-color: #303943;
+    color: #edf2f7;
+}
+
+.meal-planner-export-body input::placeholder,
+.meal-planner-export-body textarea::placeholder {
+    color: #728091;
+}
+
+.meal-planner-export-body input:focus,
+.meal-planner-export-body select:focus,
+.meal-planner-export-body textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(66, 213, 59, 0.18);
+    outline: none;
 }
 
 .load-recipe-section-title {
