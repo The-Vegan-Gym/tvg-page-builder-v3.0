@@ -61,9 +61,6 @@ function buildAirtableFields(recipe = {}, metadata = {}) {
     const category = String(metadata.category || '').trim();
     if (category) fields.Category = category;
 
-    const cuisine = String(metadata.cuisine || '').trim();
-    if (cuisine) fields.Cuisine = cuisine;
-
     const ingredients = parseList(metadata.ingredients);
     if (ingredients.length > 0) fields.Ingredients = ingredients;
 

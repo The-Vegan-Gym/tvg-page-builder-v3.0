@@ -573,7 +573,6 @@ const elements = {
     mealPlannerExportOverlay: () => document.getElementById('meal-planner-export-overlay'),
     mealPlannerExportForm: () => document.getElementById('meal-planner-export-form'),
     mealPlannerCategory: () => document.getElementById('meal-planner-category'),
-    mealPlannerCuisine: () => document.getElementById('meal-planner-cuisine'),
     mealPlannerIngredients: () => document.getElementById('meal-planner-ingredients'),
     mealPlannerAllergy: () => document.getElementById('meal-planner-allergy'),
     mealPlannerExportStatus: () => document.getElementById('meal-planner-export-status'),
@@ -5250,7 +5249,7 @@ async function handleExportJpg(options = {}) {
         const macroBarColor = printerFriendly ? '#d9d9d9' : brandPrimary;
         const recipeTitleColor = printerFriendly ? '#222222' : '#ffffff';
 
-        const baseFilename = getExportTitle();
+        const baseFilename = options?.filenameBase || getExportTitle();
         const exportedFiles = [];
 
         for (let pageIndex = 0; pageIndex < recipePages.length; pageIndex += 1) {
@@ -5563,9 +5562,6 @@ function openMealPlannerExportOverlay() {
     if (elements.mealPlannerIngredients()) {
         elements.mealPlannerIngredients().value = getMealPlannerIngredientNames(currentRecipe).join('\n');
     }
-    if (elements.mealPlannerCuisine()) {
-        elements.mealPlannerCuisine().value = '';
-    }
     if (elements.mealPlannerAllergy()) {
         elements.mealPlannerAllergy().value = '';
     }
@@ -5589,7 +5585,6 @@ async function handleMealPlannerExportSubmit(event) {
     const originalText = submitButton?.textContent || 'Export';
     const metadata = {
         category: elements.mealPlannerCategory()?.value || '',
-        cuisine: elements.mealPlannerCuisine()?.value || '',
         ingredients: elements.mealPlannerIngredients()?.value || '',
         allergy: elements.mealPlannerAllergy()?.value || ''
     };
@@ -5606,14 +5601,7 @@ async function handleMealPlannerExportSubmit(event) {
         }
         updateMealPlannerExportStatus('Preparing hero image...', '');
         const exportRecipe = await prepareRecipeForMealPlannerExport(currentRecipe);
-        updateMealPlannerExportStatus('Rendering JPG pages...', '');
-        const pageAttachments = await handleExportJpg({
-            exportButton: submitButton,
-            manageButtonState: false,
-            rethrow: true,
-            collectFiles: true,
-            forcePageFilenames: true
-        });
+        const pageAttachments = await collectMealPlannerJpgAttachments(exportRecipe, submitButton);
         if (!Array.isArray(pageAttachments) || pageAttachments.length === 0) {
             throw new Error('No JPG pages were generated for Meal Planner export.');
         }
@@ -5673,6 +5661,50 @@ function getMealPlannerIngredientNames(recipe = currentRecipe) {
     });
 
     return names;
+}
+
+async function collectMealPlannerJpgAttachments(exportRecipe, submitButton) {
+    const originalRecipe = JSON.parse(JSON.stringify(currentRecipe));
+    const variants = [
+        { label: 'Standard', pageStyle: 'standard', showMacroBar: true, clearHeroImage: false },
+        { label: 'No Macros', pageStyle: 'standard', showMacroBar: false, clearHeroImage: false },
+        { label: 'Printer Friendly', pageStyle: 'printer-friendly', showMacroBar: true, clearHeroImage: true },
+        { label: 'Printer Friendly No Macros', pageStyle: 'printer-friendly', showMacroBar: false, clearHeroImage: true }
+    ];
+    const pageAttachments = [];
+
+    try {
+        for (let index = 0; index < variants.length; index += 1) {
+            const variant = variants[index];
+            updateMealPlannerExportStatus(`Rendering JPG pages ${index + 1}/4...`, '');
+
+            currentRecipe = normalizeRecipe({
+                ...exportRecipe,
+                pageStyle: variant.pageStyle,
+                showMacroBar: variant.showMacroBar,
+                image: variant.clearHeroImage ? '' : exportRecipe.image
+            });
+            loadRecipeToForm(currentRecipe);
+            renderRecipePage();
+            await waitForPreviewRender();
+
+            const files = await handleExportJpg({
+                exportButton: submitButton,
+                manageButtonState: false,
+                rethrow: true,
+                collectFiles: true,
+                forcePageFilenames: true,
+                filenameBase: getExportTitle()
+            });
+            pageAttachments.push(...files);
+        }
+    } finally {
+        currentRecipe = normalizeRecipe(originalRecipe);
+        loadRecipeToForm(currentRecipe);
+        renderRecipePage();
+    }
+
+    return pageAttachments;
 }
 
 async function prepareRecipeForMealPlannerExport(recipe = currentRecipe) {
