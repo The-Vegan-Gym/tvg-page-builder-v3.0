@@ -124,7 +124,7 @@ const EMPTY_RECIPE = {
     instructionSections: [],
     instructions: [],
     notes: [],
-    pageBottomMargin: 0,
+    pageBottomMargin: 20,
     continuationContentSpacing: 50,
     pageNumber: ""
 };
@@ -556,6 +556,7 @@ const elements = {
     btnExportAll: () => document.getElementById('btn-export-all'),
     btnExportJpg: () => document.getElementById('btn-export-jpg'),
     btnExportJpgPreview: () => document.getElementById('btn-export-jpg-preview'),
+    btnExportMealPlanner: () => document.getElementById('btn-export-meal-planner'),
     btnExportEditablePdf: () => document.getElementById('btn-export-editable-pdf'),
     btnPrint: () => document.getElementById('btn-print'),
     btnUndo: () => document.getElementById('btn-undo'),
@@ -569,6 +570,16 @@ const elements = {
     recentRecipesList: () => document.getElementById('recent-recipes-list'),
     btnCloseLoadRecipe: () => document.getElementById('btn-close-load-recipe'),
     btnLoadFromComputer: () => document.getElementById('btn-load-from-computer'),
+    mealPlannerExportOverlay: () => document.getElementById('meal-planner-export-overlay'),
+    mealPlannerExportForm: () => document.getElementById('meal-planner-export-form'),
+    mealPlannerCategory: () => document.getElementById('meal-planner-category'),
+    mealPlannerCuisine: () => document.getElementById('meal-planner-cuisine'),
+    mealPlannerIngredients: () => document.getElementById('meal-planner-ingredients'),
+    mealPlannerAllergy: () => document.getElementById('meal-planner-allergy'),
+    mealPlannerExportStatus: () => document.getElementById('meal-planner-export-status'),
+    btnCloseMealPlannerExport: () => document.getElementById('btn-close-meal-planner-export'),
+    btnCancelMealPlannerExport: () => document.getElementById('btn-cancel-meal-planner-export'),
+    btnSubmitMealPlannerExport: () => document.getElementById('btn-submit-meal-planner-export'),
     btnClear: () => document.getElementById('btn-clear'),
     btnZoomIn: () => document.getElementById('btn-zoom-in'),
     btnZoomOut: () => document.getElementById('btn-zoom-out'),
@@ -1890,6 +1901,15 @@ function initializeButtonListeners() {
     elements.btnExportJpg()?.addEventListener('click', handleExportJpg);
     elements.btnExportJpgPreview()?.addEventListener('click', handleExportJpg);
     elements.btnExportAll()?.addEventListener('click', handleExportAll);
+    elements.btnExportMealPlanner()?.addEventListener('click', openMealPlannerExportOverlay);
+    elements.mealPlannerExportForm()?.addEventListener('submit', handleMealPlannerExportSubmit);
+    elements.btnCloseMealPlannerExport()?.addEventListener('click', closeMealPlannerExportOverlay);
+    elements.btnCancelMealPlannerExport()?.addEventListener('click', closeMealPlannerExportOverlay);
+    elements.mealPlannerExportOverlay()?.addEventListener('click', (event) => {
+        if (event.target === elements.mealPlannerExportOverlay()) {
+            closeMealPlannerExportOverlay();
+        }
+    });
 
     // Editable PDF button
     elements.btnExportEditablePdf()?.addEventListener('click', handleExportEditablePdf);
@@ -2240,7 +2260,7 @@ function parseNumericValue(value) {
 function getPageBottomMargin(recipe = currentRecipe) {
     const parsed = Number.parseInt(recipe?.pageBottomMargin, 10);
     if (!Number.isFinite(parsed)) {
-        return 0;
+        return 20;
     }
     return Math.max(0, Math.min(200, parsed));
 }
@@ -5521,6 +5541,112 @@ function waitForPreviewRender() {
             requestAnimationFrame(resolve);
         });
     });
+}
+
+function openMealPlannerExportOverlay() {
+    updateRecipeFromForm();
+    const overlay = elements.mealPlannerExportOverlay();
+    if (!overlay) return;
+
+    if (elements.mealPlannerIngredients()) {
+        elements.mealPlannerIngredients().value = getMealPlannerIngredientNames(currentRecipe).join('\n');
+    }
+    if (elements.mealPlannerCuisine()) {
+        elements.mealPlannerCuisine().value = '';
+    }
+    if (elements.mealPlannerAllergy()) {
+        elements.mealPlannerAllergy().value = '';
+    }
+    if (elements.mealPlannerCategory()) {
+        elements.mealPlannerCategory().value = '';
+    }
+
+    updateMealPlannerExportStatus('', '');
+    overlay.classList.add('active');
+}
+
+function closeMealPlannerExportOverlay() {
+    elements.mealPlannerExportOverlay()?.classList.remove('active');
+}
+
+async function handleMealPlannerExportSubmit(event) {
+    event.preventDefault();
+    updateRecipeFromForm();
+
+    const submitButton = elements.btnSubmitMealPlannerExport();
+    const originalText = submitButton?.textContent || 'Export';
+    const metadata = {
+        category: elements.mealPlannerCategory()?.value || '',
+        cuisine: elements.mealPlannerCuisine()?.value || '',
+        ingredients: elements.mealPlannerIngredients()?.value || '',
+        allergy: elements.mealPlannerAllergy()?.value || ''
+    };
+
+    if (!metadata.category) {
+        updateMealPlannerExportStatus('Choose a category before exporting.', 'error');
+        return;
+    }
+
+    try {
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Exporting...';
+        }
+        updateMealPlannerExportStatus('Creating Airtable recipe and uploading files...', '');
+
+        const response = await fetch('/api/export-meal-planner', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                recipe: currentRecipe,
+                metadata
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Unable to export to Meal Planner.');
+        }
+
+        updateMealPlannerExportStatus(`Exported to Meal Planner${data.id ? ` (${data.id})` : ''}.`, 'success');
+    } catch (error) {
+        console.error('Meal planner export error:', error);
+        updateMealPlannerExportStatus(error.message || 'Unable to export to Meal Planner.', 'error');
+    } finally {
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+        }
+    }
+}
+
+function updateMealPlannerExportStatus(message, status = '') {
+    const statusEl = elements.mealPlannerExportStatus();
+    if (!statusEl) return;
+
+    statusEl.className = status ? `master-paste-status ${status}` : 'master-paste-status';
+    statusEl.textContent = message;
+}
+
+function getMealPlannerIngredientNames(recipe = currentRecipe) {
+    const sections = Array.isArray(recipe.ingredientSections) && recipe.ingredientSections.length > 0
+        ? recipe.ingredientSections
+        : [{ ingredients: recipe.ingredients || [] }];
+    const names = [];
+    const seen = new Set();
+
+    sections.forEach((section) => {
+        (section.ingredients || []).forEach((ingredient) => {
+            if (!ingredient || ingredient.type === 'header' || ingredient.type === 'subtitle') return;
+            const name = String(ingredient.name || '').trim();
+            const key = name.toLowerCase();
+            if (!name || seen.has(key)) return;
+            seen.add(key);
+            names.push(name);
+        });
+    });
+
+    return names;
 }
 
 async function handleExportAll() {

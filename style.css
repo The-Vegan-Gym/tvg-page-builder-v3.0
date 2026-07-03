@@ -1272,7 +1272,8 @@ body {
 
 /* Equipment Selection Overlay */
 .equipment-overlay,
-.load-recipe-overlay {
+.load-recipe-overlay,
+.meal-planner-export-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -1287,12 +1288,14 @@ body {
 }
 
 .equipment-overlay.active,
-.load-recipe-overlay.active {
+.load-recipe-overlay.active,
+.meal-planner-export-overlay.active {
     display: flex;
 }
 
 .equipment-modal,
-.load-recipe-modal {
+.load-recipe-modal,
+.meal-planner-export-modal {
     background: var(--color-white);
     border-radius: var(--radius-lg);
     width: 100%;
@@ -1308,6 +1311,10 @@ body {
 
 .load-recipe-modal {
     max-width: 520px;
+}
+
+.meal-planner-export-modal {
+    max-width: 560px;
 }
 
 .equipment-modal-header {
@@ -1401,6 +1408,7 @@ body {
     padding: var(--spacing-lg);
     border-top: 1px solid var(--color-gray-200);
     display: flex;
+    gap: var(--spacing-sm);
     justify-content: flex-end;
 }
 
@@ -1409,6 +1417,14 @@ body {
 }
 
 .load-recipe-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    overflow-y: auto;
+}
+
+.meal-planner-export-body {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);

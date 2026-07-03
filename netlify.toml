@@ -10,3 +10,8 @@ status = 200
 from = "/api/spellcheck-recipe"
 to = "/.netlify/functions/spellcheck-recipe"
 status = 200
+
+[[redirects]]
+from = "/api/export-meal-planner"
+to = "/.netlify/functions/export-meal-planner"
+status = 200

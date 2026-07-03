@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const { exportRecipeToMealPlanner } = require('./meal-planner-export');
 
 loadEnvFile();
 
@@ -34,6 +35,11 @@ const MIME_TYPES = {
 const server = http.createServer((req, res) => {
     if (req.method === 'POST' && req.url === '/export-pdf') {
         handlePdfExport(req, res);
+        return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/export-meal-planner') {
+        handleMealPlannerExport(req, res);
         return;
     }
 
@@ -147,24 +153,54 @@ function serveStaticFile(req, res) {
 
 function handlePdfExport(req, res) {
     readJsonBody(req)
-        .then((recipe) => {
-            const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
+        .then(async (recipe) => {
             const filename = `${getExportTitle(recipe)}.pdf`.replace(/"/g, '');
+            const buffer = await createRecipePdfBuffer(recipe);
 
             res.writeHead(200, {
                 'Content-Type': 'application/pdf',
                 'Content-Disposition': `attachment; filename="${filename}"`
             });
 
-            doc.pipe(res);
-            return drawRecipePdf(doc, normalizeRecipe(recipe))
-                .then(() => doc.end());
+            res.end(buffer);
         })
         .catch((error) => {
             console.error('PDF export error:', error);
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message || 'Unable to export PDF' }));
         });
+}
+
+async function handleMealPlannerExport(req, res) {
+    try {
+        loadEnvFile();
+        const payload = await readJsonBody(req);
+        const result = await exportRecipeToMealPlanner(payload, {
+            createPdfBuffer: createRecipePdfBuffer
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+    } catch (error) {
+        console.error('Meal planner export error:', error);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message || 'Unable to export to Meal Planner' }));
+    }
+}
+
+async function createRecipePdfBuffer(recipe) {
+    return new Promise((resolve, reject) => {
+        const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
+        const chunks = [];
+
+        doc.on('data', (chunk) => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        drawRecipePdf(doc, normalizeRecipe(recipe))
+            .then(() => doc.end())
+            .catch(reject);
+    });
 }
 
 async function handleMasterPasteGeneration(req, res) {
@@ -984,6 +1020,15 @@ function getExportTitle(recipe = {}) {
     return [title, ...suffixes].join(' - ');
 }
 
-server.listen(PORT, () => {
-    console.log(`\nRecipe Page Generator running at http://localhost:${PORT}\n`);
-});
+if (require.main === module) {
+    server.listen(PORT, () => {
+        console.log(`\nRecipe Page Generator running at http://localhost:${PORT}\n`);
+    });
+}
+
+module.exports = {
+    createRecipePdfBuffer,
+    getExportTitle,
+    loadEnvFile,
+    normalizeRecipe
+};

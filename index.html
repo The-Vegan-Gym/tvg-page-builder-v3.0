@@ -577,6 +577,7 @@
                         <button type="button" id="btn-print" class="btn-primary" hidden>Export PDF</button>
                         <button type="button" id="btn-export-editable-pdf" class="btn-primary" hidden>Export Editable PDF</button>
                         <button type="button" id="btn-export-jpg" class="btn-primary">Export JPG</button>
+                        <button type="button" id="btn-export-meal-planner" class="btn-primary">Export to Meal Planner</button>
                     </div>
                 </section>
 
@@ -675,6 +676,45 @@
         </div>
     </div>
 
+    <div class="meal-planner-export-overlay" id="meal-planner-export-overlay">
+        <div class="meal-planner-export-modal">
+            <div class="equipment-modal-header">
+                <h3>Export to Meal Planner</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-meal-planner-export">&times;</button>
+            </div>
+            <form id="meal-planner-export-form" class="meal-planner-export-body">
+                <div class="form-group">
+                    <label for="meal-planner-category">Category</label>
+                    <select id="meal-planner-category" name="category" required>
+                        <option value="">Select category</option>
+                        <option value="Breakfast">Breakfast</option>
+                        <option value="Lunch / Dinner">Lunch / Dinner</option>
+                        <option value="Dessert">Dessert</option>
+                        <option value="Snack">Snack</option>
+                        <option value="Sauce">Sauce</option>
+                        <option value="Sides">Sides</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="meal-planner-cuisine">Cuisine</label>
+                    <input type="text" id="meal-planner-cuisine" name="cuisine" placeholder="e.g., Mexican">
+                </div>
+                <div class="form-group">
+                    <label for="meal-planner-ingredients">Ingredients</label>
+                    <textarea id="meal-planner-ingredients" name="ingredients" rows="6" placeholder="One ingredient per line"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="meal-planner-allergy">Allergy</label>
+                    <textarea id="meal-planner-allergy" name="allergy" rows="3" placeholder="One allergy tag per line"></textarea>
+                </div>
+                <div id="meal-planner-export-status" class="master-paste-status"></div>
+                <div class="equipment-modal-footer">
+                    <button type="button" id="btn-cancel-meal-planner-export" class="btn-secondary">Cancel</button>
+                    <button type="submit" id="btn-submit-meal-planner-export" class="btn-primary">Export</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js"></script>
     <script src="script.js"></script>
