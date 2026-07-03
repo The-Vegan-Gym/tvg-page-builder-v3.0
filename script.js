@@ -5592,13 +5592,15 @@ async function handleMealPlannerExportSubmit(event) {
             submitButton.disabled = true;
             submitButton.textContent = 'Exporting...';
         }
+        updateMealPlannerExportStatus('Preparing hero image...', '');
+        const exportRecipe = await prepareRecipeForMealPlannerExport(currentRecipe);
         updateMealPlannerExportStatus('Creating Airtable recipe and uploading files...', '');
 
         const response = await fetch('/api/export-meal-planner', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                recipe: currentRecipe,
+                recipe: exportRecipe,
                 metadata
             })
         });
@@ -5647,6 +5649,39 @@ function getMealPlannerIngredientNames(recipe = currentRecipe) {
     });
 
     return names;
+}
+
+async function prepareRecipeForMealPlannerExport(recipe = currentRecipe) {
+    const exportRecipe = JSON.parse(JSON.stringify(recipe));
+    if (!exportRecipe.image || !String(exportRecipe.image).startsWith('data:image/')) {
+        return exportRecipe;
+    }
+
+    try {
+        exportRecipe.image = await normalizeHeroImageForServer(exportRecipe.image);
+        return exportRecipe;
+    } catch (error) {
+        console.error('Unable to prepare hero image for Meal Planner export:', error);
+        throw new Error('Unable to prepare the hero image for export. Try uploading a JPG or PNG image.');
+    }
+}
+
+async function normalizeHeroImageForServer(imageSource) {
+    const image = await loadImageElement(imageSource);
+    const maxDimension = 2200;
+    const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+    const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+    const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = width;
+    canvas.height = height;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
+
+    return canvas.toDataURL('image/jpeg', 0.86);
 }
 
 async function handleExportAll() {
