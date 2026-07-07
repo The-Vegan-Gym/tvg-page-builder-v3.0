@@ -2370,6 +2370,15 @@ body {
     background: var(--color-primary-dark);
 }
 
+#btn-export-meal-planner {
+    background: #2f80ed;
+    color: var(--color-white);
+}
+
+#btn-export-meal-planner:hover {
+    background: #1f6fd1;
+}
+
 .btn-secondary {
     background: var(--color-gray-800);
     color: var(--color-white);
