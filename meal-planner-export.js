@@ -94,7 +94,8 @@ function buildAirtableFields(recipe = {}, metadata = {}) {
         Calories: parseInteger(macros.calories),
         Protein: parseInteger(macros.protein),
         Carbs: parseInteger(macros.carbs),
-        Fat: parseInteger(macros.fat)
+        Fat: parseInteger(macros.fat),
+        Exclude: true
     };
 
     const category = String(metadata.category || '').trim();
