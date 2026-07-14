@@ -6005,17 +6005,49 @@ async function handleMyPagesExportSubmit() {
             submitButton.disabled = true;
             submitButton.textContent = 'Exporting...';
         }
+        updateMealPlannerExportStatus('Preparing hero image...', '');
+        const exportRecipe = await prepareRecipeForMealPlannerExport(currentRecipe);
         updateMealPlannerExportStatus('Creating Page Record...', '');
 
         const record = await postMealPlannerExport({
             action: 'create-page-record',
             recipe: {
-                ...currentRecipe,
+                ...exportRecipe,
                 image: ''
             },
             metadata: {
                 coachProfileId,
                 category
+            }
+        });
+
+        const pageAttachments = await collectMyPagesJpgAttachments(exportRecipe, submitButton);
+        if (!Array.isArray(pageAttachments) || pageAttachments.length === 0) {
+            throw new Error('No JPG pages were generated for My Pages export.');
+        }
+
+        for (let index = 0; index < pageAttachments.length; index += 1) {
+            updateMealPlannerExportStatus(`Uploading Page JPG ${index + 1}/${pageAttachments.length}...`, '');
+            await postMealPlannerExport({
+                action: 'upload-page-record-attachments',
+                recordId: record.id,
+                recipe: { title: exportRecipe.title },
+                pageAttachments: [pageAttachments[index]],
+                attachmentOptions: {
+                    includePhoto: false,
+                    includePageFile: false
+                }
+            });
+        }
+
+        updateMealPlannerExportStatus('Uploading hero image...', '');
+        await postMealPlannerExport({
+            action: 'upload-page-record-attachments',
+            recordId: record.id,
+            recipe: exportRecipe,
+            pageAttachments: [],
+            attachmentOptions: {
+                includePageAttachments: false
             }
         });
 
@@ -6107,6 +6139,56 @@ async function collectMealPlannerJpgAttachments(exportRecipe, submitButton) {
                 collectFiles: true,
                 forcePageFilenames: true,
                 filenameBase: getExportTitle(),
+                targetWidth: 1240,
+                targetHeight: 1754,
+                jpegQuality: 0.82
+            });
+            pageAttachments.push(...files.map((file) => ({
+                ...file,
+                fieldName: variant.fieldName
+            })));
+        }
+    } finally {
+        currentRecipe = normalizeRecipe(originalRecipe);
+        loadRecipeToForm(currentRecipe);
+        renderRecipePage();
+    }
+
+    return pageAttachments;
+}
+
+async function collectMyPagesJpgAttachments(exportRecipe, submitButton) {
+    const originalRecipe = JSON.parse(JSON.stringify(currentRecipe));
+    const variants = [
+        { label: 'Standard', pageStyle: 'standard', showMacroBar: true, clearHeroImage: false, fieldName: 'Page' },
+        { label: 'Printer Friendly', pageStyle: 'printer-friendly', showMacroBar: true, clearHeroImage: true, fieldName: 'Page Printer Friendly' }
+    ];
+    const pageAttachments = [];
+
+    try {
+        for (let index = 0; index < variants.length; index += 1) {
+            const variant = variants[index];
+            updateMealPlannerExportStatus(`Rendering My Pages JPGs ${index + 1}/2...`, '');
+
+            currentRecipe = normalizeRecipe({
+                ...exportRecipe,
+                pageStyle: variant.pageStyle,
+                showMacroBar: variant.showMacroBar,
+                image: variant.clearHeroImage ? '' : exportRecipe.image
+            });
+            loadRecipeToForm(currentRecipe);
+            renderRecipePage();
+            await waitForPreviewRender();
+
+            const files = await handleExportJpg({
+                exportButton: submitButton,
+                manageButtonState: false,
+                rethrow: true,
+                collectFiles: true,
+                forcePageFilenames: true,
+                filenameBase: variant.label === 'Printer Friendly'
+                    ? `${getExportTitle()} - Printer Friendly`
+                    : getExportTitle(),
                 targetWidth: 1240,
                 targetHeight: 1754,
                 jpegQuality: 0.82

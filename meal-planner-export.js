@@ -30,6 +30,16 @@ const PAGE_ATTACHMENT_FIELDS = new Set([
     ATTACHMENT_FIELDS.printerFriendlyRecipePages,
     ATTACHMENT_FIELDS.printerFriendlyRecipePagesNoMacros
 ]);
+const PAGE_RECORD_ATTACHMENT_FIELDS = {
+    page: 'Page',
+    printerFriendlyPage: 'Page Printer Friendly',
+    photo: 'Photo',
+    pageFile: 'Page File'
+};
+const PAGE_RECORD_PAGE_ATTACHMENT_FIELDS = new Set([
+    PAGE_RECORD_ATTACHMENT_FIELDS.page,
+    PAGE_RECORD_ATTACHMENT_FIELDS.printerFriendlyPage
+]);
 
 async function exportRecipeToMealPlanner(payload = {}, options = {}) {
     const { token, baseId, tableId } = getAirtableEnvironment();
@@ -134,6 +144,23 @@ async function createPageRecord(payload = {}) {
     };
 }
 
+async function uploadPageRecordAttachments(payload = {}) {
+    const { token, baseId } = getAirtableEnvironment();
+    const recordId = String(payload.recordId || '').trim();
+    if (!recordId) {
+        throw new Error('Airtable record ID is missing for Page Record attachment upload.');
+    }
+
+    const options = payload.attachmentOptions || {};
+    const attachments = await buildPageRecordAttachments(payload.recipe || {}, payload.pageAttachments || [], options);
+    await uploadAttachmentsToRecord({ token, baseId, recordId, attachments });
+
+    return {
+        id: recordId,
+        uploaded: attachments.length
+    };
+}
+
 function getAirtableEnvironment() {
     const token = process.env[AIRTABLE_CONFIG.tokenEnvKey];
     if (!token) {
@@ -214,9 +241,39 @@ function buildPageRecordFields(recipe = {}, metadata = {}) {
         Protein: parseInteger(macros.protein),
         Carbs: parseInteger(macros.carbs),
         Fat: parseInteger(macros.fat),
-        Exclude: true,
         'Coach Profiles': [coachProfileId]
     };
+}
+
+async function buildPageRecordAttachments(recipe = {}, pageAttachments = [], options = {}) {
+    const baseTitle = sanitizeFilename(recipe.title || 'Recipe');
+    const includePageAttachments = options.includePageAttachments !== false;
+    const includePhoto = options.includePhoto !== false;
+    const includePageFile = options.includePageFile !== false;
+    const attachments = includePageAttachments
+        ? normalizePageRecordAttachments(pageAttachments, baseTitle)
+        : [];
+
+    if (includePhoto) {
+        const photo = await imageSourceToAttachment(recipe.image, `${baseTitle} hero`);
+        if (photo) {
+            attachments.push({
+                fieldName: PAGE_RECORD_ATTACHMENT_FIELDS.photo,
+                ...photo
+            });
+        }
+    }
+
+    if (includePageFile) {
+        attachments.push({
+            fieldName: PAGE_RECORD_ATTACHMENT_FIELDS.pageFile,
+            filename: `${baseTitle}.json`,
+            contentType: 'application/json',
+            buffer: Buffer.from(JSON.stringify(recipe, null, 2), 'utf8')
+        });
+    }
+
+    return attachments;
 }
 
 async function buildRecipeAttachments(recipe = {}, pageAttachments = [], options = {}) {
@@ -282,6 +339,33 @@ function normalizePageAttachments(pageAttachments = [], baseTitle = 'Recipe') {
             buffer: dataUrl.buffer
         };
     });
+}
+
+function normalizePageRecordAttachments(pageAttachments = [], baseTitle = 'Recipe') {
+    if (!Array.isArray(pageAttachments) || pageAttachments.length === 0) {
+        throw new Error('No JPG pages were provided for Page Record export.');
+    }
+
+    return pageAttachments.map((attachment, index) => {
+        const dataUrl = parseDataUrl(attachment?.dataUrl);
+        if (!dataUrl || dataUrl.contentType !== 'image/jpeg') {
+            throw new Error(`Page Record page ${index + 1} was not a JPG image.`);
+        }
+
+        return {
+            fieldName: normalizePageRecordAttachmentField(attachment?.fieldName),
+            filename: normalizeJpgFilename(attachment?.filename, `${baseTitle} - Page ${index + 1}`),
+            contentType: 'image/jpeg',
+            buffer: dataUrl.buffer
+        };
+    });
+}
+
+function normalizePageRecordAttachmentField(fieldName) {
+    const normalizedFieldName = String(fieldName || '').trim();
+    return PAGE_RECORD_PAGE_ATTACHMENT_FIELDS.has(normalizedFieldName)
+        ? normalizedFieldName
+        : PAGE_RECORD_ATTACHMENT_FIELDS.page;
 }
 
 function normalizePageAttachmentField(fieldName) {
@@ -514,8 +598,10 @@ module.exports = {
     createPageRecord,
     listCoachProfiles,
     listPageRecordCategories,
+    uploadPageRecordAttachments,
     uploadMealPlannerAttachments,
     buildAirtableFields,
     buildPageRecordFields,
+    buildPageRecordAttachments,
     buildRecipeAttachments
 };

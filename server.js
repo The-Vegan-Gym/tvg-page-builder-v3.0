@@ -8,6 +8,7 @@ const {
     exportRecipeToMealPlanner,
     listCoachProfiles,
     listPageRecordCategories,
+    uploadPageRecordAttachments,
     uploadMealPlannerAttachments
 } = require('./meal-planner-export');
 const { generateMealPlannerMetadata } = require('./meal-planner-metadata');
@@ -228,6 +229,10 @@ function handleMealPlannerAction(payload = {}) {
 
     if (payload.action === 'create-page-record') {
         return createPageRecord(payload);
+    }
+
+    if (payload.action === 'upload-page-record-attachments') {
+        return uploadPageRecordAttachments(payload);
     }
 
     if (payload.action === 'create-record') {
