@@ -236,6 +236,7 @@ function buildPageRecordFields(recipe = {}, metadata = {}) {
 
     const fields = {
         'Page Title': String(recipe.title || metadata.title || 'Untitled Page').trim(),
+        Builder: 'Recipe Builder',
         Category: category,
         Calories: parseInteger(macros.calories),
         Protein: parseInteger(macros.protein),
