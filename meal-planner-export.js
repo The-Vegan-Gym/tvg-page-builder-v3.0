@@ -34,7 +34,7 @@ const PAGE_RECORD_ATTACHMENT_FIELDS = {
     page: 'Page',
     printerFriendlyPage: 'Page Printer Friendly',
     photo: 'Photo',
-    pageFile: 'Page File'
+    pageFile: 'Page file'
 };
 const PAGE_RECORD_PAGE_ATTACHMENT_FIELDS = new Set([
     PAGE_RECORD_ATTACHMENT_FIELDS.page,
@@ -234,7 +234,7 @@ function buildPageRecordFields(recipe = {}, metadata = {}) {
         throw new Error('Choose a category before exporting to My Pages.');
     }
 
-    return {
+    const fields = {
         'Page Title': String(recipe.title || metadata.title || 'Untitled Page').trim(),
         Category: category,
         Calories: parseInteger(macros.calories),
@@ -243,6 +243,14 @@ function buildPageRecordFields(recipe = {}, metadata = {}) {
         Fat: parseInteger(macros.fat),
         'Coach Profiles': [coachProfileId]
     };
+
+    const ingredients = parseList(metadata.ingredients);
+    if (ingredients.length > 0) fields.Ingredients = ingredients;
+
+    const allergy = parseList(metadata.allergy);
+    if (allergy.length > 0) fields.Allergy = allergy;
+
+    return fields;
 }
 
 async function buildPageRecordAttachments(recipe = {}, pageAttachments = [], options = {}) {

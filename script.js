@@ -5732,11 +5732,11 @@ function openAirtableExportOverlay(mode = 'meal-planner') {
     if (elements.btnSubmitMealPlannerExport()) {
         elements.btnSubmitMealPlannerExport().textContent = isMyPagesExport ? 'Export to My Pages' : 'Export';
     }
-    elements.btnGenerateMealPlannerMetadata()?.toggleAttribute('hidden', isMyPagesExport);
+    elements.btnGenerateMealPlannerMetadata()?.removeAttribute('hidden');
     elements.myPagesCoachProfileGroup()?.toggleAttribute('hidden', !isMyPagesExport);
-    elements.mealPlannerIngredients()?.closest('.form-group')?.toggleAttribute('hidden', isMyPagesExport);
+    elements.mealPlannerIngredients()?.closest('.form-group')?.removeAttribute('hidden');
     elements.mealPlannerCronometer()?.closest('.form-group')?.toggleAttribute('hidden', isMyPagesExport);
-    elements.mealPlannerAllergy()?.closest('.form-group')?.toggleAttribute('hidden', isMyPagesExport);
+    elements.mealPlannerAllergy()?.closest('.form-group')?.removeAttribute('hidden');
     if (elements.mealPlannerCategory()) {
         elements.mealPlannerCategory().required = true;
         setCategoryOptions(MEAL_PLANNER_CATEGORY_OPTIONS);
@@ -5849,13 +5849,15 @@ async function handleGenerateMealPlannerMetadata() {
             generateButton.disabled = true;
             generateButton.textContent = 'Generating...';
         }
-        updateMealPlannerExportStatus('Generating Meal Planner fields...', '');
+        updateMealPlannerExportStatus(activeAirtableExportMode === 'my-pages'
+            ? 'Cleaning ingredients and allergy tags...'
+            : 'Generating Meal Planner fields...', '');
 
         const metadata = await postMealPlannerMetadata({
             recipe: buildMealPlannerMetadataRecipePayload(currentRecipe)
         });
 
-        if (metadata.category && elements.mealPlannerCategory()) {
+        if (activeAirtableExportMode !== 'my-pages' && metadata.category && elements.mealPlannerCategory()) {
             elements.mealPlannerCategory().value = metadata.category;
         }
         if (Array.isArray(metadata.ingredients) && elements.mealPlannerIngredients()) {
@@ -5864,13 +5866,15 @@ async function handleGenerateMealPlannerMetadata() {
         if (Array.isArray(metadata.allergy) && elements.mealPlannerAllergy()) {
             elements.mealPlannerAllergy().value = metadata.allergy.join('\n');
         }
-        if (Array.isArray(metadata.cronometer) && elements.mealPlannerCronometer()) {
+        if (activeAirtableExportMode !== 'my-pages' && Array.isArray(metadata.cronometer) && elements.mealPlannerCronometer()) {
             elements.mealPlannerCronometer().value = metadata.cronometer.join('\n');
-        } else if (typeof metadata.cronometer === 'string' && elements.mealPlannerCronometer()) {
+        } else if (activeAirtableExportMode !== 'my-pages' && typeof metadata.cronometer === 'string' && elements.mealPlannerCronometer()) {
             elements.mealPlannerCronometer().value = metadata.cronometer;
         }
 
-        updateMealPlannerExportStatus('Meal Planner fields generated.', 'success');
+        updateMealPlannerExportStatus(activeAirtableExportMode === 'my-pages'
+            ? 'Ingredients and allergy tags cleaned.'
+            : 'Meal Planner fields generated.', 'success');
     } catch (error) {
         console.error('Meal Planner metadata generation error:', error);
         updateMealPlannerExportStatus(error.message || 'Unable to generate Meal Planner fields.', 'error');
@@ -5990,6 +5994,8 @@ async function handleMyPagesExportSubmit() {
     const originalText = submitButton?.textContent || 'Export to My Pages';
     const coachProfileId = elements.myPagesCoachProfile()?.value || '';
     const category = elements.mealPlannerCategory()?.value || '';
+    const ingredients = elements.mealPlannerIngredients()?.value || '';
+    const allergy = elements.mealPlannerAllergy()?.value || '';
 
     if (!coachProfileId) {
         updateMealPlannerExportStatus('Choose a coach profile before exporting.', 'error');
@@ -6017,7 +6023,9 @@ async function handleMyPagesExportSubmit() {
             },
             metadata: {
                 coachProfileId,
-                category
+                category,
+                ingredients,
+                allergy
             }
         });
 
