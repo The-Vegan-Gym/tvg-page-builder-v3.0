@@ -3,8 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
 const {
+    createPageRecord,
     createMealPlannerRecord,
     exportRecipeToMealPlanner,
+    listCoachProfiles,
+    listPageRecordCategories,
     uploadMealPlannerAttachments
 } = require('./meal-planner-export');
 const { generateMealPlannerMetadata } = require('./meal-planner-metadata');
@@ -215,6 +218,18 @@ async function handleMealPlannerMetadataGeneration(req, res) {
 }
 
 function handleMealPlannerAction(payload = {}) {
+    if (payload.action === 'list-coach-profiles') {
+        return listCoachProfiles();
+    }
+
+    if (payload.action === 'list-page-record-categories') {
+        return listPageRecordCategories();
+    }
+
+    if (payload.action === 'create-page-record') {
+        return createPageRecord(payload);
+    }
+
     if (payload.action === 'create-record') {
         return createMealPlannerRecord(payload);
     }

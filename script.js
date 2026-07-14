@@ -16,6 +16,7 @@
 let AVAILABLE_MATERIALS = [];
 let AVAILABLE_PORTION_VARIATION_ICONS = [];
 
+const CUSTOM_EQUIPMENT_STORAGE_KEY = 'tvg-recipe-custom-equipment-icons';
 const CUSTOM_PORTION_VARIATION_ICON_FILES = [
     { id: 'cart', name: 'Cart', path: 'Icons/cart.svg' },
     { id: 'link', name: 'Link', path: 'Icons/link.svg' }
@@ -283,10 +284,20 @@ let previewAutoCenterTimer = null;
 let activeEditorSectionKey = 'basicInformation';
 let masterPasteAiImages = [];
 let spellcheckCorrections = [];
+let activeAirtableExportMode = 'meal-planner';
 const RECIPE_HISTORY_LIMIT = 80;
 let recipeHistory = [];
 let recipeHistoryIndex = -1;
 let isApplyingRecipeHistory = false;
+
+const MEAL_PLANNER_CATEGORY_OPTIONS = [
+    'Breakfast',
+    'Lunch / Dinner',
+    'Dessert',
+    'Snack',
+    'Sauce',
+    'Sides'
+];
 
 function normalizeRecipe(recipe = {}) {
     const normalized = {
@@ -529,6 +540,8 @@ const elements = {
     btnSelectEquipment: () => document.getElementById('btn-select-equipment'),
     equipmentOverlay: () => document.getElementById('equipment-overlay'),
     equipmentGrid: () => document.getElementById('equipment-grid'),
+    customEquipmentUpload: () => document.getElementById('custom-equipment-upload'),
+    customEquipmentUploadStatus: () => document.getElementById('custom-equipment-upload-status'),
     btnCloseEquipment: () => document.getElementById('btn-close-equipment'),
     btnSaveEquipment: () => document.getElementById('btn-save-equipment'),
     ingredientsList: () => document.getElementById('ingredients-list'),
@@ -557,6 +570,7 @@ const elements = {
     btnExportJpg: () => document.getElementById('btn-export-jpg'),
     btnExportJpgPreview: () => document.getElementById('btn-export-jpg-preview'),
     btnExportMealPlanner: () => document.getElementById('btn-export-meal-planner'),
+    btnExportMyPages: () => document.getElementById('btn-export-my-pages'),
     btnExportEditablePdf: () => document.getElementById('btn-export-editable-pdf'),
     btnPrint: () => document.getElementById('btn-print'),
     btnUndo: () => document.getElementById('btn-undo'),
@@ -570,8 +584,11 @@ const elements = {
     recentRecipesList: () => document.getElementById('recent-recipes-list'),
     btnCloseLoadRecipe: () => document.getElementById('btn-close-load-recipe'),
     btnLoadFromComputer: () => document.getElementById('btn-load-from-computer'),
+    mealPlannerExportTitle: () => document.getElementById('meal-planner-export-title'),
     mealPlannerExportOverlay: () => document.getElementById('meal-planner-export-overlay'),
     mealPlannerExportForm: () => document.getElementById('meal-planner-export-form'),
+    myPagesCoachProfileGroup: () => document.getElementById('my-pages-coach-profile-group'),
+    myPagesCoachProfile: () => document.getElementById('my-pages-coach-profile'),
     mealPlannerCategory: () => document.getElementById('meal-planner-category'),
     mealPlannerIngredients: () => document.getElementById('meal-planner-ingredients'),
     mealPlannerCronometer: () => document.getElementById('meal-planner-cronometer'),
@@ -1159,19 +1176,25 @@ function initializePreviewPanning() {
  * Load icons from the equipment folder, falling back to the legacy JSON database
  */
 async function loadIconsDatabase() {
+    let folderIcons = [];
     try {
-        AVAILABLE_MATERIALS = await loadIconsFromFolder();
-        console.log(`Loaded ${AVAILABLE_MATERIALS.length} equipment icons from equipment folder`);
+        folderIcons = await loadIconsFromFolder();
+        console.log(`Loaded ${folderIcons.length} equipment icons from equipment folder`);
     } catch (error) {
         console.warn('Unable to load equipment folder through /api/icons. Trying static icon manifest.', error);
         try {
-            AVAILABLE_MATERIALS = await loadIconsFromManifest();
-            console.log(`Loaded ${AVAILABLE_MATERIALS.length} equipment icons from equipment manifest`);
+            folderIcons = await loadIconsFromManifest();
+            console.log(`Loaded ${folderIcons.length} equipment icons from equipment manifest`);
         } catch (manifestError) {
             console.warn('Unable to load equipment manifest. Falling back to icons-database.json.', manifestError);
-            AVAILABLE_MATERIALS = await loadIconsFromDatabase();
+            folderIcons = await loadIconsFromDatabase();
         }
     }
+
+    AVAILABLE_MATERIALS = dedupeIconsById([
+        ...loadCustomEquipmentIcons(),
+        ...folderIcons
+    ]);
 
     const customIcons = await loadCustomPortionVariationIcons();
     AVAILABLE_PORTION_VARIATION_ICONS = dedupeIconsById([
@@ -1259,6 +1282,39 @@ function dedupeIconsById(icons) {
     });
 }
 
+function loadCustomEquipmentIcons() {
+    try {
+        const icons = JSON.parse(localStorage.getItem(CUSTOM_EQUIPMENT_STORAGE_KEY) || '[]');
+        if (!Array.isArray(icons)) return [];
+
+        return icons
+            .map((icon) => {
+                const name = String(icon?.name || '').trim();
+                const svg = sanitizeInlineSvg(icon?.svg || '');
+                if (!name || !svg) return null;
+
+                return {
+                    id: icon.id || `custom-${slugify(name)}`,
+                    name,
+                    svg: getSafeEquipmentSvg({ name, svg })
+                };
+            })
+            .filter(Boolean);
+    } catch (error) {
+        console.warn('Unable to load custom equipment icons.', error);
+        return [];
+    }
+}
+
+function saveCustomEquipmentIcons(icons) {
+    const savedIcons = icons.map((icon) => ({
+        id: icon.id,
+        name: icon.name,
+        svg: sanitizeInlineSvg(icon.svg)
+    }));
+    localStorage.setItem(CUSTOM_EQUIPMENT_STORAGE_KEY, JSON.stringify(savedIcons));
+}
+
 function titleizeFileName(value) {
     const fileName = String(value || '').split('/').pop() || '';
     return fileName
@@ -1321,6 +1377,12 @@ function sanitizeInlineSvg(svg) {
     return String(svg || '')
         .replace(/<\?xml[^>]*>/gi, '')
         .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
+        .replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, '')
+        .replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, '')
+        .replace(/\s+(?:href|xlink:href)\s*=\s*"javascript:[^"]*"/gi, '')
+        .replace(/\s+(?:href|xlink:href)\s*=\s*'javascript:[^']*'/gi, '')
         .trim();
 }
 
@@ -1354,9 +1416,40 @@ let tempSelectedMaterials = [];
  * Initialize the equipment overlay and its event listeners
  */
 function initializeMaterialsSelector() {
-    // Populate the equipment grid in the overlay
+    renderEquipmentGrid();
+
+    // Open overlay button
+    elements.btnSelectEquipment()?.addEventListener('click', openEquipmentOverlay);
+
+    // Custom SVG upload
+    elements.customEquipmentUpload()?.addEventListener('change', handleCustomEquipmentUpload);
+
+    // Close overlay button
+    elements.btnCloseEquipment()?.addEventListener('click', closeEquipmentOverlay);
+
+    // Save selection button
+    elements.btnSaveEquipment()?.addEventListener('click', saveEquipmentSelection);
+
+    // Close on overlay background click
+    elements.equipmentOverlay()?.addEventListener('click', (e) => {
+        if (e.target === elements.equipmentOverlay()) {
+            closeEquipmentOverlay();
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && elements.equipmentOverlay()?.classList.contains('active')) {
+            closeEquipmentOverlay();
+        }
+    });
+}
+
+function renderEquipmentGrid() {
     const grid = elements.equipmentGrid();
     if (!grid) return;
+
+    grid.innerHTML = '';
 
     AVAILABLE_MATERIALS.forEach(material => {
         const div = document.createElement('div');
@@ -1381,29 +1474,91 @@ function initializeMaterialsSelector() {
 
         grid.appendChild(div);
     });
+}
 
-    // Open overlay button
-    elements.btnSelectEquipment()?.addEventListener('click', openEquipmentOverlay);
+async function handleCustomEquipmentUpload(event) {
+    const input = event.target;
+    const files = Array.from(input?.files || []);
+    const status = elements.customEquipmentUploadStatus();
 
-    // Close overlay button
-    elements.btnCloseEquipment()?.addEventListener('click', closeEquipmentOverlay);
+    if (files.length === 0) return;
 
-    // Save selection button
-    elements.btnSaveEquipment()?.addEventListener('click', saveEquipmentSelection);
+    try {
+        const existingCustomIcons = loadCustomEquipmentIcons();
+        const uploadedIcons = [];
 
-    // Close on overlay background click
-    elements.equipmentOverlay()?.addEventListener('click', (e) => {
-        if (e.target === elements.equipmentOverlay()) {
-            closeEquipmentOverlay();
+        for (const file of files) {
+            if (!/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') {
+                throw new Error(`${file.name} is not an SVG file.`);
+            }
+
+            const name = titleizeFileName(file.name);
+            const svg = sanitizeInlineSvg(await file.text());
+            const safeSvg = getSafeEquipmentSvg({ name, svg });
+            if (safeSvg === FALLBACK_EQUIPMENT_SVG) {
+                throw new Error(`${file.name} is not valid SVG markup.`);
+            }
+
+            uploadedIcons.push({
+                id: buildUniqueCustomEquipmentId(name, [...existingCustomIcons, ...uploadedIcons]),
+                name,
+                svg: safeSvg
+            });
         }
-    });
 
-    // Close on Escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && elements.equipmentOverlay()?.classList.contains('active')) {
-            closeEquipmentOverlay();
+        const nextCustomIcons = dedupeIconsById([
+            ...uploadedIcons,
+            ...existingCustomIcons
+        ]);
+        saveCustomEquipmentIcons(nextCustomIcons);
+
+        AVAILABLE_MATERIALS = dedupeIconsById([
+            ...nextCustomIcons,
+            ...AVAILABLE_MATERIALS
+        ]);
+        AVAILABLE_PORTION_VARIATION_ICONS = dedupeIconsById([
+            ...AVAILABLE_PORTION_VARIATION_ICONS,
+            ...nextCustomIcons
+        ]);
+
+        uploadedIcons.forEach((icon) => {
+            if (!tempSelectedMaterials.includes(icon.id)) {
+                tempSelectedMaterials.push(icon.id);
+            }
+        });
+        renderEquipmentGrid();
+        syncEquipmentGridSelection();
+
+        if (status) {
+            status.textContent = `${uploadedIcons.length} SVG${uploadedIcons.length === 1 ? '' : 's'} uploaded.`;
         }
-    });
+    } catch (error) {
+        console.error('Custom equipment upload error:', error);
+        if (status) {
+            status.textContent = error.message || 'Unable to upload SVG.';
+        }
+    } finally {
+        if (input) {
+            input.value = '';
+        }
+    }
+}
+
+function buildUniqueCustomEquipmentId(name, existingIcons = []) {
+    const baseId = `custom-${slugify(name || 'equipment')}`;
+    const existingIds = new Set([
+        ...AVAILABLE_MATERIALS.map((icon) => icon.id),
+        ...existingIcons.map((icon) => icon.id)
+    ]);
+    let id = baseId;
+    let index = 2;
+
+    while (existingIds.has(id)) {
+        id = `${baseId}-${index}`;
+        index += 1;
+    }
+
+    return id;
 }
 
 /**
@@ -1413,15 +1568,18 @@ function openEquipmentOverlay() {
     // Initialize temp selection with current recipe materials
     tempSelectedMaterials = [...(currentRecipe.materials || [])];
 
-    // Update grid selection state
+    syncEquipmentGridSelection();
+
+    elements.equipmentOverlay()?.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function syncEquipmentGridSelection() {
     const items = elements.equipmentGrid()?.querySelectorAll('.equipment-item');
     items?.forEach(item => {
         const isSelected = tempSelectedMaterials.includes(item.dataset.materialId);
         item.classList.toggle('selected', isSelected);
     });
-
-    elements.equipmentOverlay()?.classList.add('active');
-    document.body.style.overflow = 'hidden';
 }
 
 /**
@@ -1902,7 +2060,8 @@ function initializeButtonListeners() {
     elements.btnExportJpg()?.addEventListener('click', handleExportJpg);
     elements.btnExportJpgPreview()?.addEventListener('click', handleExportJpg);
     elements.btnExportAll()?.addEventListener('click', handleExportAll);
-    elements.btnExportMealPlanner()?.addEventListener('click', openMealPlannerExportOverlay);
+    elements.btnExportMealPlanner()?.addEventListener('click', () => openAirtableExportOverlay('meal-planner'));
+    elements.btnExportMyPages()?.addEventListener('click', () => openAirtableExportOverlay('my-pages'));
     elements.mealPlannerExportForm()?.addEventListener('submit', handleMealPlannerExportSubmit);
     elements.btnGenerateMealPlannerMetadata()?.addEventListener('click', handleGenerateMealPlannerMetadata);
     elements.btnCloseMealPlannerExport()?.addEventListener('click', closeMealPlannerExportOverlay);
@@ -5560,10 +5719,28 @@ function waitForPreviewRender() {
     });
 }
 
-function openMealPlannerExportOverlay() {
+function openAirtableExportOverlay(mode = 'meal-planner') {
     updateRecipeFromForm();
+    activeAirtableExportMode = mode;
     const overlay = elements.mealPlannerExportOverlay();
     if (!overlay) return;
+
+    const isMyPagesExport = mode === 'my-pages';
+    if (elements.mealPlannerExportTitle()) {
+        elements.mealPlannerExportTitle().textContent = isMyPagesExport ? 'Export to My Pages' : 'Export to Meal Planner';
+    }
+    if (elements.btnSubmitMealPlannerExport()) {
+        elements.btnSubmitMealPlannerExport().textContent = isMyPagesExport ? 'Export to My Pages' : 'Export';
+    }
+    elements.btnGenerateMealPlannerMetadata()?.toggleAttribute('hidden', isMyPagesExport);
+    elements.myPagesCoachProfileGroup()?.toggleAttribute('hidden', !isMyPagesExport);
+    elements.mealPlannerIngredients()?.closest('.form-group')?.toggleAttribute('hidden', isMyPagesExport);
+    elements.mealPlannerCronometer()?.closest('.form-group')?.toggleAttribute('hidden', isMyPagesExport);
+    elements.mealPlannerAllergy()?.closest('.form-group')?.toggleAttribute('hidden', isMyPagesExport);
+    if (elements.mealPlannerCategory()) {
+        elements.mealPlannerCategory().required = true;
+        setCategoryOptions(MEAL_PLANNER_CATEGORY_OPTIONS);
+    }
 
     if (elements.mealPlannerIngredients()) {
         elements.mealPlannerIngredients().value = getMealPlannerIngredientNames(currentRecipe).join('\n');
@@ -5577,13 +5754,88 @@ function openMealPlannerExportOverlay() {
     if (elements.mealPlannerCategory()) {
         elements.mealPlannerCategory().value = '';
     }
+    if (isMyPagesExport) {
+        loadPageRecordCategoriesForMyPages();
+        loadCoachProfilesForMyPages();
+    }
 
     updateMealPlannerExportStatus('', '');
     overlay.classList.add('active');
 }
 
+function openMealPlannerExportOverlay() {
+    openAirtableExportOverlay('meal-planner');
+}
+
 function closeMealPlannerExportOverlay() {
     elements.mealPlannerExportOverlay()?.classList.remove('active');
+}
+
+function setCategoryOptions(categories = [], placeholder = 'Select category') {
+    const select = elements.mealPlannerCategory();
+    if (!select) return;
+
+    select.innerHTML = '';
+    const placeholderOption = document.createElement('option');
+    placeholderOption.value = '';
+    placeholderOption.textContent = placeholder;
+    select.appendChild(placeholderOption);
+
+    categories.forEach((category) => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        select.appendChild(option);
+    });
+}
+
+async function loadPageRecordCategoriesForMyPages() {
+    const select = elements.mealPlannerCategory();
+    if (!select) return;
+
+    setCategoryOptions([], 'Loading categories...');
+    select.disabled = true;
+
+    try {
+        const categories = await postMealPlannerExport({ action: 'list-page-record-categories' });
+        setCategoryOptions(categories || [], 'Select category');
+    } catch (error) {
+        console.error('Page Record category load error:', error);
+        setCategoryOptions([], 'Unable to load categories');
+        updateMealPlannerExportStatus(error.message || 'Unable to load Page Record categories.', 'error');
+    } finally {
+        select.disabled = false;
+    }
+}
+
+async function loadCoachProfilesForMyPages() {
+    const select = elements.myPagesCoachProfile();
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Loading coach profiles...</option>';
+    select.disabled = true;
+
+    try {
+        const coaches = await postMealPlannerExport({ action: 'list-coach-profiles' });
+        select.innerHTML = '<option value="">Select coach profile</option>';
+
+        (coaches || []).forEach((coach) => {
+            const option = document.createElement('option');
+            option.value = coach.id;
+            option.textContent = coach.email ? `${coach.name} (${coach.email})` : coach.name;
+            select.appendChild(option);
+        });
+
+        if (select.options.length === 1) {
+            select.innerHTML = '<option value="">No coach profiles found</option>';
+        }
+    } catch (error) {
+        console.error('Coach profile load error:', error);
+        select.innerHTML = '<option value="">Unable to load coach profiles</option>';
+        updateMealPlannerExportStatus(error.message || 'Unable to load coach profiles.', 'error');
+    } finally {
+        select.disabled = false;
+    }
 }
 
 async function handleGenerateMealPlannerMetadata() {
@@ -5655,6 +5907,11 @@ async function handleMealPlannerExportSubmit(event) {
     event.preventDefault();
     updateRecipeFromForm();
 
+    if (activeAirtableExportMode === 'my-pages') {
+        await handleMyPagesExportSubmit();
+        return;
+    }
+
     const submitButton = elements.btnSubmitMealPlannerExport();
     const originalText = submitButton?.textContent || 'Export';
     const metadata = {
@@ -5720,6 +5977,52 @@ async function handleMealPlannerExportSubmit(event) {
     } catch (error) {
         console.error('Meal planner export error:', error);
         updateMealPlannerExportStatus(error.message || 'Unable to export to Meal Planner.', 'error');
+    } finally {
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+        }
+    }
+}
+
+async function handleMyPagesExportSubmit() {
+    const submitButton = elements.btnSubmitMealPlannerExport();
+    const originalText = submitButton?.textContent || 'Export to My Pages';
+    const coachProfileId = elements.myPagesCoachProfile()?.value || '';
+    const category = elements.mealPlannerCategory()?.value || '';
+
+    if (!coachProfileId) {
+        updateMealPlannerExportStatus('Choose a coach profile before exporting.', 'error');
+        return;
+    }
+    if (!category) {
+        updateMealPlannerExportStatus('Choose a category before exporting.', 'error');
+        return;
+    }
+
+    try {
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Exporting...';
+        }
+        updateMealPlannerExportStatus('Creating Page Record...', '');
+
+        const record = await postMealPlannerExport({
+            action: 'create-page-record',
+            recipe: {
+                ...currentRecipe,
+                image: ''
+            },
+            metadata: {
+                coachProfileId,
+                category
+            }
+        });
+
+        updateMealPlannerExportStatus(`Exported to My Pages${record.id ? ` (${record.id})` : ''}.`, 'success');
+    } catch (error) {
+        console.error('My Pages export error:', error);
+        updateMealPlannerExportStatus(error.message || 'Unable to export to My Pages.', 'error');
     } finally {
         if (submitButton) {
             submitButton.disabled = false;

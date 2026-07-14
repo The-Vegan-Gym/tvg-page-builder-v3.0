@@ -578,6 +578,7 @@
                         <button type="button" id="btn-export-editable-pdf" class="btn-primary" hidden>Export Editable PDF</button>
                         <button type="button" id="btn-export-jpg" class="btn-primary">Export JPG</button>
                         <button type="button" id="btn-export-meal-planner" class="btn-primary">Export to Meal Planner</button>
+                        <button type="button" id="btn-export-my-pages" class="btn-primary">Export to My Pages</button>
                     </div>
                 </section>
 
@@ -650,6 +651,11 @@
                 <h3>Select Equipment</h3>
                 <button type="button" class="btn-close-modal" id="btn-close-equipment">&times;</button>
             </div>
+            <div class="equipment-upload-bar">
+                <label for="custom-equipment-upload" class="btn-secondary equipment-upload-button">Upload SVG</label>
+                <input type="file" id="custom-equipment-upload" accept=".svg,image/svg+xml" multiple>
+                <span id="custom-equipment-upload-status" class="equipment-upload-status"></span>
+            </div>
             <div class="equipment-grid" id="equipment-grid">
                 <!-- Equipment icons will be populated by JS -->
             </div>
@@ -679,12 +685,18 @@
     <div class="meal-planner-export-overlay" id="meal-planner-export-overlay">
         <div class="meal-planner-export-modal">
             <div class="equipment-modal-header">
-                <h3>Export to Meal Planner</h3>
+                <h3 id="meal-planner-export-title">Export to Meal Planner</h3>
                 <button type="button" class="btn-close-modal" id="btn-close-meal-planner-export">&times;</button>
             </div>
             <form id="meal-planner-export-form" class="meal-planner-export-body">
                 <div class="meal-planner-export-actions">
                     <button type="button" id="btn-generate-meal-planner-metadata" class="btn-secondary">Generate</button>
+                </div>
+                <div class="form-group" id="my-pages-coach-profile-group" hidden>
+                    <label for="my-pages-coach-profile">Coach Profile</label>
+                    <select id="my-pages-coach-profile" name="coachProfile">
+                        <option value="">Select coach profile</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="meal-planner-category">Category</label>

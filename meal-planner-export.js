@@ -2,6 +2,20 @@ const AIRTABLE_CONFIG = require('./airtable.config');
 
 const AIRTABLE_API_BASE = 'https://api.airtable.com/v0';
 const AIRTABLE_CONTENT_BASE = 'https://content.airtable.com/v0';
+const AIRTABLE_META_BASE = 'https://api.airtable.com/v0/meta';
+const PAGE_RECORD_CATEGORY_FALLBACK_OPTIONS = [
+    'Info Page',
+    'Meals',
+    'Custom',
+    'Cover Page',
+    'Substitutions',
+    'Client Recipes',
+    'Custom Recipe',
+    'Snack Page',
+    'Supplement Page',
+    'Smoothie Page',
+    'Oatmeal'
+];
 const ATTACHMENT_FIELDS = {
     recipePages: 'Recipe PDF',
     recipePagesNoMacros: 'Recipe PDF no macros',
@@ -61,6 +75,65 @@ async function uploadMealPlannerAttachments(payload = {}) {
     };
 }
 
+async function listCoachProfiles() {
+    const { token, baseId } = getAirtableEnvironment();
+    const tableId = getRequiredTableId('coachProfiles');
+    const records = await listAirtableRecords({
+        token,
+        baseId,
+        tableId,
+        fields: ['Coach', 'Email', 'Role'],
+        sortField: 'Coach'
+    });
+
+    return records
+        .map((record) => {
+            const name = String(record.fields?.Coach || '').trim();
+            const email = String(record.fields?.Email || '').trim();
+            const role = String(record.fields?.Role || '').trim();
+            if (!name) return null;
+
+            return {
+                id: record.id,
+                name,
+                email,
+                role
+            };
+        })
+        .filter(Boolean);
+}
+
+async function listPageRecordCategories() {
+    const { token, baseId } = getAirtableEnvironment();
+    const tableId = getRequiredTableId('pageRecords');
+
+    try {
+        return await listSingleSelectOptions({
+            token,
+            baseId,
+            tableId,
+            fieldName: 'Category'
+        });
+    } catch (error) {
+        console.warn('Unable to load Page Records category options from Airtable metadata. Using fallback options.', error);
+        return PAGE_RECORD_CATEGORY_FALLBACK_OPTIONS;
+    }
+}
+
+async function createPageRecord(payload = {}) {
+    const { token, baseId } = getAirtableEnvironment();
+    const tableId = getRequiredTableId('pageRecords');
+    const recipe = payload.recipe || {};
+    const metadata = payload.metadata || {};
+    const fields = buildPageRecordFields(recipe, metadata);
+    const record = await createAirtableRecord({ token, baseId, tableId, fields });
+
+    return {
+        id: record.id,
+        url: `https://airtable.com/${baseId}/${tableId}/${record.id}`
+    };
+}
+
 function getAirtableEnvironment() {
     const token = process.env[AIRTABLE_CONFIG.tokenEnvKey];
     if (!token) {
@@ -77,6 +150,16 @@ function getAirtableEnvironment() {
     }
 
     return { token, baseId, tableId };
+}
+
+function getRequiredTableId(tableKey) {
+    const envKey = AIRTABLE_CONFIG.tableEnvKeys[tableKey];
+    const tableId = normalizeEnvValue(process.env[envKey]);
+    if (!tableId) {
+        throw new Error(`${envKey} is missing. Add it to your environment variables.`);
+    }
+
+    return tableId;
 }
 
 function normalizeMealPlannerPayload(payload = {}) {
@@ -111,6 +194,29 @@ function buildAirtableFields(recipe = {}, metadata = {}) {
     if (cronometer) fields.Cronometer = cronometer;
 
     return fields;
+}
+
+function buildPageRecordFields(recipe = {}, metadata = {}) {
+    const macros = recipe.macros || {};
+    const coachProfileId = String(metadata.coachProfileId || '').trim();
+    const category = String(metadata.category || '').trim();
+    if (!coachProfileId) {
+        throw new Error('Choose a coach profile before exporting to My Pages.');
+    }
+    if (!category) {
+        throw new Error('Choose a category before exporting to My Pages.');
+    }
+
+    return {
+        'Page Title': String(recipe.title || metadata.title || 'Untitled Page').trim(),
+        Category: category,
+        Calories: parseInteger(macros.calories),
+        Protein: parseInteger(macros.protein),
+        Carbs: parseInteger(macros.carbs),
+        Fat: parseInteger(macros.fat),
+        Exclude: true,
+        'Coach Profiles': [coachProfileId]
+    };
 }
 
 async function buildRecipeAttachments(recipe = {}, pageAttachments = [], options = {}) {
@@ -220,6 +326,78 @@ async function createAirtableRecord({ token, baseId, tableId, fields }) {
     }
 
     return record;
+}
+
+async function listAirtableRecords({ token, baseId, tableId, fields = [], sortField = '' }) {
+    const params = new URLSearchParams({ pageSize: '100' });
+    fields.forEach((field) => params.append('fields[]', field));
+    if (sortField) {
+        params.append('sort[0][field]', sortField);
+        params.append('sort[0][direction]', 'asc');
+    }
+
+    const records = [];
+    let offset = '';
+
+    do {
+        if (offset) {
+            params.set('offset', offset);
+        } else {
+            params.delete('offset');
+        }
+
+        const response = await fetch(`${AIRTABLE_API_BASE}/${baseId}/${tableId}?${params.toString()}`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(formatAirtableError(
+                'Airtable coach profile lookup failed',
+                response.status,
+                data,
+                'Check that COACH_PROFILES_TABLE_ID is correct and AIRTABLE_TOKEN includes data.records:read.'
+            ));
+        }
+
+        records.push(...(data.records || []));
+        offset = data.offset || '';
+    } while (offset);
+
+    return records;
+}
+
+async function listSingleSelectOptions({ token, baseId, tableId, fieldName }) {
+    const response = await fetch(`${AIRTABLE_META_BASE}/bases/${baseId}/tables`, {
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(formatAirtableError(
+            'Airtable metadata lookup failed',
+            response.status,
+            data,
+            'Check that AIRTABLE_TOKEN includes schema.bases:read.'
+        ));
+    }
+
+    const table = (data.tables || []).find((item) => item.id === tableId);
+    const field = (table?.fields || []).find((item) => item.name === fieldName);
+    const choices = field?.options?.choices || [];
+    const names = choices
+        .map((choice) => String(choice?.name || '').trim())
+        .filter(Boolean);
+
+    if (names.length === 0) {
+        throw new Error(`No options found for "${fieldName}" in Page Records.`);
+    }
+
+    return names;
 }
 
 async function uploadAirtableAttachment({ token, baseId, recordId, fieldName, filename, contentType, buffer }) {
@@ -333,7 +511,11 @@ function extensionFromContentType(contentType) {
 module.exports = {
     exportRecipeToMealPlanner,
     createMealPlannerRecord,
+    createPageRecord,
+    listCoachProfiles,
+    listPageRecordCategories,
     uploadMealPlannerAttachments,
     buildAirtableFields,
+    buildPageRecordFields,
     buildRecipeAttachments
 };

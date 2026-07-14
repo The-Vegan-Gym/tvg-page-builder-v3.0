@@ -1,6 +1,9 @@
 const {
+    createPageRecord,
     createMealPlannerRecord,
     exportRecipeToMealPlanner,
+    listCoachProfiles,
+    listPageRecordCategories,
     uploadMealPlannerAttachments
 } = require('../../meal-planner-export');
 const { createRecipePdfBuffer, loadEnvFile } = require('../../server');
@@ -27,6 +30,18 @@ exports.handler = async (event) => {
 };
 
 function handleMealPlannerAction(payload = {}) {
+    if (payload.action === 'list-coach-profiles') {
+        return listCoachProfiles();
+    }
+
+    if (payload.action === 'list-page-record-categories') {
+        return listPageRecordCategories();
+    }
+
+    if (payload.action === 'create-page-record') {
+        return createPageRecord(payload);
+    }
+
     if (payload.action === 'create-record') {
         return createMealPlannerRecord(payload);
     }

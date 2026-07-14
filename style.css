@@ -1233,6 +1233,11 @@ body {
     height: 36px;
 }
 
+.selected-material-item svg#freezer-block-trays-icon {
+    width: 48px;
+    height: 48px;
+}
+
 .selected-material-item.is-dragging {
     opacity: 0.45;
     transform: scale(0.96);
@@ -1360,6 +1365,34 @@ body {
     flex: 1;
 }
 
+.equipment-upload-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--color-gray-200);
+}
+
+.equipment-upload-bar input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.equipment-upload-button {
+    flex: 0 0 auto;
+    min-width: 120px;
+    text-align: center;
+}
+
+.equipment-upload-status {
+    min-width: 0;
+    color: var(--color-gray-600);
+    font-size: var(--editor-helper-size);
+}
+
 .equipment-item {
     display: flex;
     flex-direction: column;
@@ -1395,6 +1428,13 @@ body {
 .equipment-item .equipment-icon svg {
     width: 100%;
     height: 100%;
+}
+
+.equipment-item .equipment-icon svg#freezer-block-trays-icon {
+    width: 132%;
+    height: 132%;
+    max-width: none;
+    max-height: none;
 }
 
 .equipment-item .equipment-name {
@@ -2370,12 +2410,14 @@ body {
     background: var(--color-primary-dark);
 }
 
-#btn-export-meal-planner {
+#btn-export-meal-planner,
+#btn-export-my-pages {
     background: #2f80ed;
     color: var(--color-white);
 }
 
-#btn-export-meal-planner:hover {
+#btn-export-meal-planner:hover,
+#btn-export-my-pages:hover {
     background: #1f6fd1;
 }
 
@@ -2594,6 +2636,14 @@ body {
 .equipment-modal-header,
 .equipment-modal-footer {
     border-color: #2c343d;
+}
+
+.equipment-upload-bar {
+    border-color: #2c343d;
+}
+
+.equipment-upload-status {
+    color: #8b98a7;
 }
 
 .equipment-modal-header h3 {
@@ -3412,6 +3462,13 @@ body {
 .material-icon-item svg {
     width: 100%;
     height: 100%;
+}
+
+.material-icon-item svg#freezer-block-trays-icon {
+    width: 132%;
+    height: 132%;
+    max-width: none;
+    max-height: none;
 }
 
 .material-icon-item img {
