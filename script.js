@@ -317,6 +317,7 @@ function normalizeRecipe(recipe = {}) {
         },
         typographySizes: getTypographySizes(recipe),
         materials: Array.isArray(recipe.materials) ? recipe.materials : [],
+        materialCounts: normalizeMaterialCounts(recipe.materialCounts),
         dayMeals: Array.isArray(recipe.dayMeals) ? recipe.dayMeals : [],
         dayHighlights: Array.isArray(recipe.dayHighlights) ? recipe.dayHighlights : [],
         dayTips: Array.isArray(recipe.dayTips) ? recipe.dayTips : [],
@@ -405,6 +406,23 @@ function normalizeRecipe(recipe = {}) {
     }
 
     return normalized;
+}
+
+function normalizeMaterialCounts(value = {}) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+    return Object.entries(value).reduce((counts, [materialId, count]) => {
+        const normalizedCount = normalizeMaterialCount(count);
+        if (normalizedCount > 1) {
+            counts[materialId] = normalizedCount;
+        }
+        return counts;
+    }, {});
+}
+
+function normalizeMaterialCount(value) {
+    const parsed = Number.parseInt(String(value || '').trim(), 10);
+    return Number.isFinite(parsed) && parsed > 1 ? parsed : 0;
 }
 
 function normalizePortionVariation(variation = {}) {
@@ -1659,6 +1677,7 @@ function closeEquipmentOverlay() {
  */
 function saveEquipmentSelection() {
     currentRecipe.materials = [...tempSelectedMaterials];
+    currentRecipe.materialCounts = getSelectedMaterialCounts();
     updateSelectedMaterialsPreview();
     renderRecipePage();
     closeEquipmentOverlay();
@@ -1681,14 +1700,68 @@ function updateSelectedMaterialsPreview() {
         preview.innerHTML = materials.map(materialId => {
             const material = AVAILABLE_MATERIALS.find(m => m.id === materialId);
             if (!material) return '';
+            const count = getMaterialCount(material.id);
             return `
-                <div class="selected-material-item" title="${material.name}" draggable="true" data-material-id="${material.id}">
+                <div class="selected-material-item" title="Double-click to set count for ${escapeHtml(material.name)}" draggable="true" data-material-id="${material.id}">
                     ${material.svg}
+                    ${createMaterialCountBadgeMarkup(count)}
                 </div>
             `;
         }).join('');
+        initializeSelectedMaterialCountEditing();
         initializeSelectedMaterialsDrag();
     }
+}
+
+function initializeSelectedMaterialCountEditing() {
+    const preview = elements.selectedMaterialsPreview();
+    if (!preview) return;
+
+    preview.querySelectorAll('.selected-material-item').forEach((item) => {
+        item.addEventListener('dblclick', (event) => {
+            event.preventDefault();
+            const materialId = item.dataset.materialId || '';
+            if (!materialId) return;
+            promptForMaterialCount(materialId);
+        });
+    });
+}
+
+function promptForMaterialCount(materialId) {
+    const material = AVAILABLE_MATERIALS.find((entry) => entry.id === materialId);
+    const currentCount = getMaterialCount(materialId);
+    const response = prompt(
+        `Equipment count for ${material?.name || 'this item'}.\n\nEnter a number greater than 1, or leave blank to remove the badge.`,
+        currentCount ? String(currentCount) : ''
+    );
+    if (response === null) return;
+
+    const nextCount = normalizeMaterialCount(response);
+    currentRecipe.materialCounts = normalizeMaterialCounts(currentRecipe.materialCounts);
+    if (nextCount > 1) {
+        currentRecipe.materialCounts[materialId] = nextCount;
+    } else {
+        delete currentRecipe.materialCounts[materialId];
+    }
+
+    updateSelectedMaterialsPreview();
+    renderRecipePage();
+    recordRecipeHistory(currentRecipe);
+}
+
+function getMaterialCount(materialId, recipe = currentRecipe) {
+    return normalizeMaterialCount(recipe?.materialCounts?.[materialId]);
+}
+
+function createMaterialCountBadgeMarkup(count) {
+    return count > 1 ? `<span class="material-count-badge">${count}</span>` : '';
+}
+
+function createMaterialIconMarkup(material, recipe = currentRecipe) {
+    if (!material) return '';
+    const count = getMaterialCount(material.id, recipe);
+
+    return `<div class="material-icon-item" title="${escapeHtml(material.name)}">${material.svg}${createMaterialCountBadgeMarkup(count)}</div>`;
 }
 
 function initializeSelectedMaterialsDrag() {
@@ -2314,6 +2387,7 @@ function loadRecipeToForm(recipe) {
     // Load materials and update preview
     currentRecipe = recipe;
     currentRecipe.materials = recipe.materials || [];
+    currentRecipe.materialCounts = normalizeMaterialCounts(recipe.materialCounts);
     updateSelectedMaterialsPreview();
 
     // Load portion variations
@@ -2441,6 +2515,7 @@ function updateRecipeFromForm() {
         showMaterials: elements.showMaterials()?.checked !== false,
         materialsAutoSpacing: elements.materialsAutoSpacing()?.checked === true,
         materials: getSelectedMaterials(),
+        materialCounts: getSelectedMaterialCounts(),
         ingredients: primaryIngredientSection.ingredients || [],
         ingredientSections,
         instructionSections,
@@ -2467,6 +2542,18 @@ function updateRecipeFromForm() {
  */
 function getSelectedMaterials() {
     return currentRecipe.materials || [];
+}
+
+function getSelectedMaterialCounts() {
+    const selectedMaterials = new Set(getSelectedMaterials());
+    const counts = normalizeMaterialCounts(currentRecipe.materialCounts);
+
+    return Object.entries(counts).reduce((selectedCounts, [materialId, count]) => {
+        if (selectedMaterials.has(materialId)) {
+            selectedCounts[materialId] = count;
+        }
+        return selectedCounts;
+    }, {});
 }
 
 function parseLineList(text) {
@@ -4309,8 +4396,7 @@ function renderRecipePage() {
     const materialsAutoSpacing = recipe.materialsAutoSpacing === true;
     const materialsHtml = showMaterials ? recipe.materials?.map(materialId => {
         const material = AVAILABLE_MATERIALS.find(m => m.id === materialId);
-        if (!material) return '';
-        return `<div class="material-icon-item" title="${material.name}">${material.svg}</div>`;
+        return createMaterialIconMarkup(material, recipe);
     }).join('') || '' : '';
 
     // Materials section HTML
@@ -5178,8 +5264,7 @@ function paginateRecipeFlow(noteHtml = '') {
     const materialsAutoSpacing = currentRecipe.materialsAutoSpacing === true;
     const materialsHtml = currentRecipe.showMaterials !== false ? (currentRecipe.materials || []).map((materialId) => {
         const material = AVAILABLE_MATERIALS.find(m => m.id === materialId);
-        if (!material) return '';
-        return `<div class="material-icon-item" title="${material.name}">${material.svg}</div>`;
+        return createMaterialIconMarkup(material, currentRecipe);
     }).join('') : '';
 
     if (materialsLayout === 'column' && materialsHtml) {
