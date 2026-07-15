@@ -1227,17 +1227,17 @@ body {
 
 .selected-material-item .material-count-badge {
     position: absolute;
-    right: -7px;
-    bottom: -7px;
-    min-width: 24px;
-    height: 24px;
-    padding: 0 6px;
+    right: -6px;
+    bottom: -6px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
     border-radius: 999px;
     background: #bdbdbd;
     color: #000000;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 500;
-    line-height: 24px;
+    line-height: 20px;
     text-align: center;
     pointer-events: none;
 }
@@ -1295,6 +1295,7 @@ body {
 
 /* Equipment Selection Overlay */
 .equipment-overlay,
+.equipment-count-overlay,
 .load-recipe-overlay,
 .meal-planner-export-overlay {
     position: fixed;
@@ -1311,12 +1312,14 @@ body {
 }
 
 .equipment-overlay.active,
+.equipment-count-overlay.active,
 .load-recipe-overlay.active,
 .meal-planner-export-overlay.active {
     display: flex;
 }
 
 .equipment-modal,
+.equipment-count-modal,
 .load-recipe-modal,
 .meal-planner-export-modal {
     background: var(--color-white);
@@ -1334,6 +1337,10 @@ body {
 
 .load-recipe-modal {
     max-width: 520px;
+}
+
+.equipment-count-modal {
+    max-width: 420px;
 }
 
 .meal-planner-export-modal {
@@ -1472,6 +1479,92 @@ body {
 
 .equipment-modal-footer .btn-primary {
     min-width: 150px;
+}
+
+.equipment-count-body {
+    padding: var(--spacing-lg);
+}
+
+.equipment-count-preview {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    background: var(--color-gray-100);
+}
+
+.equipment-count-preview-icon {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-300);
+    border-radius: var(--radius-sm);
+}
+
+.equipment-count-preview-icon svg {
+    width: 42px;
+    height: 42px;
+}
+
+.equipment-count-preview-icon svg#freezer-block-trays-icon {
+    width: 54px;
+    height: 54px;
+}
+
+.equipment-count-preview-icon svg,
+.equipment-count-preview-icon svg * {
+    stroke: #ffffff !important;
+}
+
+.equipment-count-preview-icon svg [fill]:not([fill="none"]) {
+    fill: #ffffff !important;
+}
+
+.equipment-count-preview-icon .material-count-badge {
+    position: absolute;
+    right: -6px;
+    bottom: -6px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #bdbdbd;
+    color: #000000;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 20px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.equipment-count-preview-name {
+    color: var(--color-gray-900);
+    font-size: var(--editor-body-size);
+    font-weight: 700;
+}
+
+.equipment-count-body input[type="number"] {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--color-gray-300);
+    border-radius: var(--radius-md);
+    color: var(--color-gray-900);
+    font-family: var(--font-primary);
+    font-size: 1rem;
+}
+
+.equipment-count-body input[type="number"]:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(66, 213, 59, 0.18);
 }
 
 .load-recipe-body {
@@ -2646,12 +2739,14 @@ body {
 
 .equipment-modal,
 .load-recipe-modal,
+.equipment-count-modal,
 .meal-planner-export-modal {
     background: #171c22;
     border: 1px solid #2c343d;
 }
 
 .equipment-modal-header,
+.equipment-count-body .equipment-modal-footer,
 .equipment-modal-footer {
     border-color: #2c343d;
 }
@@ -2666,6 +2761,40 @@ body {
 
 .equipment-modal-header h3 {
     color: #f5f7fa;
+}
+
+.equipment-count-preview {
+    background: #11161c;
+    border-color: #303943;
+}
+
+.equipment-count-preview-icon {
+    background: #0f1318;
+    border-color: #303943;
+}
+
+.equipment-count-preview-name,
+.equipment-count-body label {
+    color: #edf2f7;
+}
+
+.equipment-count-body .form-hint {
+    color: #8b98a7;
+}
+
+.equipment-count-body input[type="number"] {
+    background: #0f1318;
+    border-color: #303943;
+    color: #edf2f7;
+}
+
+.equipment-count-body input[type="number"]::placeholder {
+    color: #728091;
+}
+
+.equipment-count-body input[type="number"]:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(66, 213, 59, 0.18);
 }
 
 .meal-planner-export-body label {
@@ -3480,17 +3609,17 @@ body {
 
 .material-icon-item .material-count-badge {
     position: absolute;
-    right: -9px;
-    bottom: -9px;
-    min-width: 26px;
-    height: 26px;
-    padding: 0 7px;
+    right: -8px;
+    bottom: -8px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
     border-radius: 999px;
     background: #bdbdbd;
     color: #000000;
-    font-size: 19px;
+    font-size: 16px;
     font-weight: 500;
-    line-height: 26px;
+    line-height: 22px;
     text-align: center;
     pointer-events: none;
 }

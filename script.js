@@ -566,6 +566,13 @@ const elements = {
     customEquipmentUploadStatus: () => document.getElementById('custom-equipment-upload-status'),
     btnCloseEquipment: () => document.getElementById('btn-close-equipment'),
     btnSaveEquipment: () => document.getElementById('btn-save-equipment'),
+    equipmentCountOverlay: () => document.getElementById('equipment-count-overlay'),
+    equipmentCountForm: () => document.getElementById('equipment-count-form'),
+    equipmentCountPreview: () => document.getElementById('equipment-count-preview'),
+    equipmentCountInput: () => document.getElementById('equipment-count-input'),
+    equipmentCountLabel: () => document.getElementById('equipment-count-label'),
+    btnCloseEquipmentCount: () => document.getElementById('btn-close-equipment-count'),
+    btnClearEquipmentCount: () => document.getElementById('btn-clear-equipment-count'),
     ingredientsList: () => document.getElementById('ingredients-list'),
     servingsLabel: () => document.getElementById('servings-label'),
     showIngredientsHeader: () => document.getElementById('show-ingredients-header'),
@@ -1493,6 +1500,7 @@ function populatePortionVariationIconOptions() {
  * Temporary selection state for the equipment overlay
  */
 let tempSelectedMaterials = [];
+let activeEquipmentCountMaterialId = '';
 
 /**
  * Initialize the equipment overlay and its event listeners
@@ -1511,6 +1519,12 @@ function initializeMaterialsSelector() {
 
     // Save selection button
     elements.btnSaveEquipment()?.addEventListener('click', saveEquipmentSelection);
+    elements.btnCloseEquipmentCount()?.addEventListener('click', closeEquipmentCountOverlay);
+    elements.btnClearEquipmentCount()?.addEventListener('click', () => saveMaterialCountFromOverlay(true));
+    elements.equipmentCountForm()?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        saveMaterialCountFromOverlay(false);
+    });
 
     // Close on overlay background click
     elements.equipmentOverlay()?.addEventListener('click', (e) => {
@@ -1518,9 +1532,18 @@ function initializeMaterialsSelector() {
             closeEquipmentOverlay();
         }
     });
+    elements.equipmentCountOverlay()?.addEventListener('click', (e) => {
+        if (e.target === elements.equipmentCountOverlay()) {
+            closeEquipmentCountOverlay();
+        }
+    });
 
     // Close on Escape key
     document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && elements.equipmentCountOverlay()?.classList.contains('active')) {
+            closeEquipmentCountOverlay();
+            return;
+        }
         if (e.key === 'Escape' && elements.equipmentOverlay()?.classList.contains('active')) {
             closeEquipmentOverlay();
         }
@@ -1722,28 +1745,57 @@ function initializeSelectedMaterialCountEditing() {
             event.preventDefault();
             const materialId = item.dataset.materialId || '';
             if (!materialId) return;
-            promptForMaterialCount(materialId);
+            openEquipmentCountOverlay(materialId);
         });
     });
 }
 
-function promptForMaterialCount(materialId) {
+function openEquipmentCountOverlay(materialId) {
     const material = AVAILABLE_MATERIALS.find((entry) => entry.id === materialId);
-    const currentCount = getMaterialCount(materialId);
-    const response = prompt(
-        `Equipment count for ${material?.name || 'this item'}.\n\nEnter a number greater than 1, or leave blank to remove the badge.`,
-        currentCount ? String(currentCount) : ''
-    );
-    if (response === null) return;
+    if (!material) return;
 
-    const nextCount = normalizeMaterialCount(response);
-    currentRecipe.materialCounts = normalizeMaterialCounts(currentRecipe.materialCounts);
-    if (nextCount > 1) {
-        currentRecipe.materialCounts[materialId] = nextCount;
-    } else {
-        delete currentRecipe.materialCounts[materialId];
+    activeEquipmentCountMaterialId = materialId;
+    const currentCount = getMaterialCount(materialId);
+    if (elements.equipmentCountLabel()) {
+        elements.equipmentCountLabel().textContent = `${material.name} quantity`;
+    }
+    if (elements.equipmentCountPreview()) {
+        elements.equipmentCountPreview().innerHTML = `
+            <div class="equipment-count-preview-icon">
+                ${material.svg}
+                ${createMaterialCountBadgeMarkup(currentCount)}
+            </div>
+            <div class="equipment-count-preview-name">${escapeHtml(material.name)}</div>
+        `;
+    }
+    if (elements.equipmentCountInput()) {
+        elements.equipmentCountInput().value = currentCount ? String(currentCount) : '';
     }
 
+    elements.equipmentCountOverlay()?.classList.add('active');
+    elements.equipmentCountInput()?.focus();
+    elements.equipmentCountInput()?.select();
+}
+
+function closeEquipmentCountOverlay() {
+    elements.equipmentCountOverlay()?.classList.remove('active');
+    activeEquipmentCountMaterialId = '';
+}
+
+function saveMaterialCountFromOverlay(clearBadge = false) {
+    if (!activeEquipmentCountMaterialId) return;
+
+    const nextCount = clearBadge
+        ? 0
+        : normalizeMaterialCount(elements.equipmentCountInput()?.value || '');
+    currentRecipe.materialCounts = normalizeMaterialCounts(currentRecipe.materialCounts);
+    if (nextCount > 1) {
+        currentRecipe.materialCounts[activeEquipmentCountMaterialId] = nextCount;
+    } else {
+        delete currentRecipe.materialCounts[activeEquipmentCountMaterialId];
+    }
+
+    closeEquipmentCountOverlay();
     updateSelectedMaterialsPreview();
     renderRecipePage();
     recordRecipeHistory(currentRecipe);

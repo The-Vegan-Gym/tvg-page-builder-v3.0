@@ -665,6 +665,28 @@
         </div>
     </div>
 
+    <!-- Equipment Count Overlay -->
+    <div class="equipment-count-overlay" id="equipment-count-overlay">
+        <div class="equipment-count-modal">
+            <div class="equipment-modal-header">
+                <h3>Equipment Quantity</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-equipment-count">&times;</button>
+            </div>
+            <form id="equipment-count-form" class="equipment-count-body">
+                <div class="equipment-count-preview" id="equipment-count-preview"></div>
+                <div class="form-group">
+                    <label for="equipment-count-input" id="equipment-count-label">Quantity</label>
+                    <input type="number" id="equipment-count-input" min="2" step="1" inputmode="numeric" placeholder="No badge">
+                    <p class="form-hint">Use a number greater than 1. Leave blank to remove the badge.</p>
+                </div>
+                <div class="equipment-modal-footer">
+                    <button type="button" id="btn-clear-equipment-count" class="btn-secondary">Remove Badge</button>
+                    <button type="submit" class="btn-primary">Save Quantity</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Load Recipe Overlay -->
     <div class="load-recipe-overlay" id="load-recipe-overlay">
         <div class="load-recipe-modal">
