@@ -40,6 +40,8 @@ const PAGE_RECORD_PAGE_ATTACHMENT_FIELDS = new Set([
     PAGE_RECORD_ATTACHMENT_FIELDS.page,
     PAGE_RECORD_ATTACHMENT_FIELDS.printerFriendlyPage
 ]);
+const EASTERN_TIME_ZONE = 'America/New_York';
+const AIRTABLE_EXPORT_CATEGORY = 'Client Recipes';
 
 async function exportRecipeToMealPlanner(payload = {}, options = {}) {
     const { token, baseId, tableId } = getAirtableEnvironment();
@@ -144,6 +146,25 @@ async function createPageRecord(payload = {}) {
     };
 }
 
+async function updatePageRecord(payload = {}) {
+    const recordId = String(payload.recordId || payload.pageRecordId || '').trim();
+    if (!recordId) {
+        throw new Error('Airtable Page Record ID is missing for update.');
+    }
+
+    const { token, baseId } = getAirtableEnvironment();
+    const tableId = getRequiredTableId('pageRecords');
+    const recipe = payload.recipe || {};
+    const metadata = payload.metadata || {};
+    const fields = buildPageRecordFields(recipe, metadata);
+    const record = await updateAirtableRecord({ token, baseId, tableId, recordId, fields });
+
+    return {
+        id: record.id,
+        url: `https://airtable.com/${baseId}/${tableId}/${record.id}`
+    };
+}
+
 async function uploadPageRecordAttachments(payload = {}) {
     const { token, baseId } = getAirtableEnvironment();
     const recordId = String(payload.recordId || '').trim();
@@ -159,6 +180,97 @@ async function uploadPageRecordAttachments(payload = {}) {
         id: recordId,
         uploaded: attachments.length
     };
+}
+
+async function getPageRecord(payload = {}) {
+    const recordId = String(payload.pageRecordId || '').trim();
+    if (!recordId) {
+        throw new Error('pageRecordId is missing.');
+    }
+
+    const { token, baseId } = getAirtableEnvironment();
+    const tableId = getRequiredTableId('pageRecords');
+    const record = await getAirtableRecord({ token, baseId, tableId, recordId });
+    const fields = record.fields || {};
+    const pageFileAttachments = Array.isArray(fields[PAGE_RECORD_ATTACHMENT_FIELDS.pageFile])
+        ? fields[PAGE_RECORD_ATTACHMENT_FIELDS.pageFile]
+        : [];
+    const pageFileAttachment = pageFileAttachments[0] || null;
+    if (!pageFileAttachment?.url) {
+        throw new Error(`Page file is missing for Page Record ${recordId}.`);
+    }
+
+    return {
+        id: record.id,
+        fields,
+        pageFileAttachment: {
+            id: pageFileAttachment.id,
+            url: pageFileAttachment.url,
+            filename: pageFileAttachment.filename || '',
+            type: pageFileAttachment.type || '',
+            size: pageFileAttachment.size || 0
+        }
+    };
+}
+
+async function getAirtableRecord({ token, baseId, tableId, recordId }) {
+    const response = await fetch(`${AIRTABLE_API_BASE}/${baseId}/${tableId}/${recordId}`, {
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        if (response.status === 404) {
+            throw new Error(`Pages record was not found: ${recordId}.`);
+        }
+        throw new Error(formatAirtableError(
+            'Airtable Page Record lookup failed',
+            response.status,
+            data,
+            'Check that PAGE_RECORDS_TABLE_ID is correct and AIRTABLE_TOKEN includes data.records:read.'
+        ));
+    }
+
+    if (!data?.id) {
+        throw new Error(`Pages record was not found: ${recordId}.`);
+    }
+
+    return data;
+}
+
+async function updateAirtableRecord({ token, baseId, tableId, recordId, fields }) {
+    const response = await fetch(`${AIRTABLE_API_BASE}/${baseId}/${tableId}/${recordId}`, {
+        method: 'PATCH',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            fields,
+            typecast: true
+        })
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        if (response.status === 404) {
+            throw new Error(`Pages record was not found: ${recordId}.`);
+        }
+        throw new Error(formatAirtableError(
+            'Airtable Page Record update failed',
+            response.status,
+            data,
+            'Check that PAGE_RECORDS_TABLE_ID is correct and AIRTABLE_TOKEN includes data.records:write.'
+        ));
+    }
+
+    if (!data?.id) {
+        throw new Error('Airtable did not return an updated Page Record id.');
+    }
+
+    return data;
 }
 
 function getAirtableEnvironment() {
@@ -208,8 +320,7 @@ function buildAirtableFields(recipe = {}, metadata = {}) {
         Exclude: true
     };
 
-    const category = String(metadata.category || '').trim();
-    if (category) fields.Category = category;
+    fields.Category = AIRTABLE_EXPORT_CATEGORY;
 
     const ingredients = parseList(metadata.ingredients);
     if (ingredients.length > 0) fields.Ingredients = ingredients;
@@ -226,18 +337,16 @@ function buildAirtableFields(recipe = {}, metadata = {}) {
 function buildPageRecordFields(recipe = {}, metadata = {}) {
     const macros = recipe.macros || {};
     const coachProfileId = String(metadata.coachProfileId || '').trim();
-    const category = String(metadata.category || '').trim();
+    const category = AIRTABLE_EXPORT_CATEGORY;
     if (!coachProfileId) {
         throw new Error('Choose a coach profile before exporting to My Pages.');
-    }
-    if (!category) {
-        throw new Error('Choose a category before exporting to My Pages.');
     }
 
     const fields = {
         'Page Title': String(recipe.title || metadata.title || 'Untitled Page').trim(),
         Builder: 'Recipe Builder',
         Category: category,
+        'Created At': formatEasternTimestamp(),
         Calories: parseInteger(macros.calories),
         Protein: parseInteger(macros.protein),
         Carbs: parseInteger(macros.carbs),
@@ -585,6 +694,38 @@ function parseInteger(value) {
     return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function formatEasternTimestamp(date = new Date()) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: EASTERN_TIME_ZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    const parts = Object.fromEntries(
+        formatter.formatToParts(date)
+            .filter((part) => part.type !== 'literal')
+            .map((part) => [part.type, part.value])
+    );
+    const year = parts.year;
+    const month = parts.month;
+    const day = parts.day;
+    const hour = parts.hour === '24' ? '00' : parts.hour;
+    const minute = parts.minute;
+    const second = parts.second;
+    const easternAsUtc = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+    const offsetMinutes = Math.round((easternAsUtc - date.getTime()) / 60000);
+    const offsetSign = offsetMinutes >= 0 ? '+' : '-';
+    const absoluteOffset = Math.abs(offsetMinutes);
+    const offsetHour = String(Math.floor(absoluteOffset / 60)).padStart(2, '0');
+    const offsetMinute = String(absoluteOffset % 60).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}${offsetSign}${offsetHour}:${offsetMinute}`;
+}
+
 function sanitizeFilename(value) {
     return String(value || 'Recipe')
         .trim()
@@ -605,8 +746,10 @@ module.exports = {
     exportRecipeToMealPlanner,
     createMealPlannerRecord,
     createPageRecord,
+    getPageRecord,
     listCoachProfiles,
     listPageRecordCategories,
+    updatePageRecord,
     uploadPageRecordAttachments,
     uploadMealPlannerAttachments,
     buildAirtableFields,

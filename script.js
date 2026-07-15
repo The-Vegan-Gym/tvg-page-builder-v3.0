@@ -285,6 +285,10 @@ let activeEditorSectionKey = 'basicInformation';
 let masterPasteAiImages = [];
 let spellcheckCorrections = [];
 let activeAirtableExportMode = 'meal-planner';
+let appMode = 'create';
+let editingPageRecordId = '';
+let editingPageRecordFields = null;
+const AIRTABLE_EXPORT_CATEGORY = 'Client Recipes';
 const RECIPE_HISTORY_LIMIT = 80;
 let recipeHistory = [];
 let recipeHistoryIndex = -1;
@@ -629,6 +633,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadRecipeToForm(currentRecipe);
     renderRecipePage();
     resetRecipeHistory(currentRecipe);
+    await initializeEditModeFromUrl();
     setZoomToFit();
 });
 
@@ -879,6 +884,65 @@ function loadRecipeObject(recipe) {
     loadRecipeToForm(normalized);
     renderRecipePage();
     recordRecipeHistory(currentRecipe);
+}
+
+async function initializeEditModeFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const mode = String(params.get('mode') || '').trim().toLowerCase();
+    if (mode !== 'edit') return;
+
+    const pageRecordId = String(params.get('pageRecordId') || '').trim();
+    if (!pageRecordId) {
+        showEditModeLoadError(new Error('pageRecordId is missing from the edit URL.'));
+        return;
+    }
+
+    try {
+        const pageRecord = await postMealPlannerExport({
+            action: 'get-page-record',
+            pageRecordId
+        });
+        const attachmentUrl = pageRecord?.pageFileAttachment?.url;
+        if (!attachmentUrl) {
+            throw new Error('Page file is missing for this Pages record.');
+        }
+
+        const recipe = await downloadRecipeJsonAttachment(attachmentUrl);
+        appMode = 'edit';
+        editingPageRecordId = pageRecord.id || pageRecordId;
+        editingPageRecordFields = pageRecord.fields || {};
+        document.body.dataset.appMode = 'edit';
+        document.body.dataset.pageRecordId = editingPageRecordId;
+        loadRecipeObject(recipe);
+        resetRecipeHistory(currentRecipe);
+    } catch (error) {
+        showEditModeLoadError(error);
+    }
+}
+
+async function downloadRecipeJsonAttachment(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Unable to download Page file. HTTP ${response.status}`);
+    }
+
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch (error) {
+        throw new Error('Page file JSON cannot be parsed.');
+    }
+}
+
+function showEditModeLoadError(error) {
+    appMode = 'create';
+    editingPageRecordId = '';
+    editingPageRecordFields = null;
+    document.body.dataset.appMode = 'create';
+    delete document.body.dataset.pageRecordId;
+    const message = error?.message || 'Unable to load the Airtable Pages record.';
+    console.error('Edit-mode load error:', error);
+    alert(`Unable to load Airtable page for editing.\n\n${message}`);
 }
 
 function formatRecentRecipeDate(value) {
@@ -5789,6 +5853,10 @@ function setCategoryOptions(categories = [], placeholder = 'Select category') {
     });
 }
 
+function hasSelectOption(select, value) {
+    return Array.from(select?.options || []).some((option) => option.value === value);
+}
+
 async function loadPageRecordCategoriesForMyPages() {
     const select = elements.mealPlannerCategory();
     if (!select) return;
@@ -5799,6 +5867,10 @@ async function loadPageRecordCategoriesForMyPages() {
     try {
         const categories = await postMealPlannerExport({ action: 'list-page-record-categories' });
         setCategoryOptions(categories || [], 'Select category');
+        const currentCategory = String(editingPageRecordFields?.Category || '').trim();
+        if (appMode === 'edit' && currentCategory && hasSelectOption(select, currentCategory)) {
+            select.value = currentCategory;
+        }
     } catch (error) {
         console.error('Page Record category load error:', error);
         setCategoryOptions([], 'Unable to load categories');
@@ -5825,6 +5897,13 @@ async function loadCoachProfilesForMyPages() {
             option.textContent = coach.email ? `${coach.name} (${coach.email})` : coach.name;
             select.appendChild(option);
         });
+
+        const currentCoachId = Array.isArray(editingPageRecordFields?.['Coach Profiles'])
+            ? editingPageRecordFields['Coach Profiles'][0]
+            : '';
+        if (appMode === 'edit' && currentCoachId && hasSelectOption(select, currentCoachId)) {
+            select.value = currentCoachId;
+        }
 
         if (select.options.length === 1) {
             select.innerHTML = '<option value="">No coach profiles found</option>';
@@ -5919,16 +5998,11 @@ async function handleMealPlannerExportSubmit(event) {
     const submitButton = elements.btnSubmitMealPlannerExport();
     const originalText = submitButton?.textContent || 'Export';
     const metadata = {
-        category: elements.mealPlannerCategory()?.value || '',
+        category: AIRTABLE_EXPORT_CATEGORY,
         ingredients: elements.mealPlannerIngredients()?.value || '',
         cronometer: elements.mealPlannerCronometer()?.value || '',
         allergy: elements.mealPlannerAllergy()?.value || ''
     };
-
-    if (!metadata.category) {
-        updateMealPlannerExportStatus('Choose a category before exporting.', 'error');
-        return;
-    }
 
     try {
         if (submitButton) {
@@ -5993,7 +6067,7 @@ async function handleMyPagesExportSubmit() {
     const submitButton = elements.btnSubmitMealPlannerExport();
     const originalText = submitButton?.textContent || 'Export to My Pages';
     const coachProfileId = elements.myPagesCoachProfile()?.value || '';
-    const category = elements.mealPlannerCategory()?.value || '';
+    const category = AIRTABLE_EXPORT_CATEGORY;
     const ingredients = elements.mealPlannerIngredients()?.value || '';
     const allergy = elements.mealPlannerAllergy()?.value || '';
 
@@ -6001,11 +6075,6 @@ async function handleMyPagesExportSubmit() {
         updateMealPlannerExportStatus('Choose a coach profile before exporting.', 'error');
         return;
     }
-    if (!category) {
-        updateMealPlannerExportStatus('Choose a category before exporting.', 'error');
-        return;
-    }
-
     try {
         if (submitButton) {
             submitButton.disabled = true;
@@ -6013,10 +6082,12 @@ async function handleMyPagesExportSubmit() {
         }
         updateMealPlannerExportStatus('Preparing hero image...', '');
         const exportRecipe = await prepareRecipeForMealPlannerExport(currentRecipe);
-        updateMealPlannerExportStatus('Creating Page Record...', '');
+        const shouldUpdatePageRecord = appMode === 'edit' && Boolean(editingPageRecordId);
+        updateMealPlannerExportStatus(shouldUpdatePageRecord ? 'Updating Page Record...' : 'Creating Page Record...', '');
 
         const record = await postMealPlannerExport({
-            action: 'create-page-record',
+            action: shouldUpdatePageRecord ? 'update-page-record' : 'create-page-record',
+            recordId: shouldUpdatePageRecord ? editingPageRecordId : undefined,
             recipe: {
                 ...exportRecipe,
                 image: ''
@@ -6028,6 +6099,10 @@ async function handleMyPagesExportSubmit() {
                 allergy
             }
         });
+        if (shouldUpdatePageRecord) {
+            editingPageRecordId = record.id || editingPageRecordId;
+            document.body.dataset.pageRecordId = editingPageRecordId;
+        }
 
         const pageAttachments = await collectMyPagesJpgAttachments(exportRecipe, submitButton);
         if (!Array.isArray(pageAttachments) || pageAttachments.length === 0) {

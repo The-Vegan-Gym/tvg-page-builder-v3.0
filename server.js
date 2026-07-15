@@ -6,8 +6,10 @@ const {
     createPageRecord,
     createMealPlannerRecord,
     exportRecipeToMealPlanner,
+    getPageRecord,
     listCoachProfiles,
     listPageRecordCategories,
+    updatePageRecord,
     uploadPageRecordAttachments,
     uploadMealPlannerAttachments
 } = require('./meal-planner-export');
@@ -219,6 +221,10 @@ async function handleMealPlannerMetadataGeneration(req, res) {
 }
 
 function handleMealPlannerAction(payload = {}) {
+    if (payload.action === 'get-page-record') {
+        return getPageRecord(payload);
+    }
+
     if (payload.action === 'list-coach-profiles') {
         return listCoachProfiles();
     }
@@ -229,6 +235,10 @@ function handleMealPlannerAction(payload = {}) {
 
     if (payload.action === 'create-page-record') {
         return createPageRecord(payload);
+    }
+
+    if (payload.action === 'update-page-record') {
+        return updatePageRecord(payload);
     }
 
     if (payload.action === 'upload-page-record-attachments') {
