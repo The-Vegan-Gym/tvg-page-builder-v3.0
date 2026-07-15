@@ -5802,8 +5802,9 @@ function openAirtableExportOverlay(mode = 'meal-planner') {
     elements.mealPlannerCronometer()?.closest('.form-group')?.toggleAttribute('hidden', isMyPagesExport);
     elements.mealPlannerAllergy()?.closest('.form-group')?.removeAttribute('hidden');
     if (elements.mealPlannerCategory()) {
-        elements.mealPlannerCategory().required = true;
-        setCategoryOptions(MEAL_PLANNER_CATEGORY_OPTIONS);
+        elements.mealPlannerCategory().required = false;
+        elements.mealPlannerCategory().value = AIRTABLE_EXPORT_CATEGORY;
+        elements.mealPlannerCategory().closest('.form-group')?.setAttribute('hidden', '');
     }
 
     if (elements.mealPlannerIngredients()) {
@@ -5815,11 +5816,7 @@ function openAirtableExportOverlay(mode = 'meal-planner') {
     if (elements.mealPlannerCronometer()) {
         elements.mealPlannerCronometer().value = '';
     }
-    if (elements.mealPlannerCategory()) {
-        elements.mealPlannerCategory().value = '';
-    }
     if (isMyPagesExport) {
-        loadPageRecordCategoriesForMyPages();
         loadCoachProfilesForMyPages();
     }
 
