@@ -14,6 +14,7 @@ const {
     uploadMealPlannerAttachments
 } = require('./meal-planner-export');
 const { generateMealPlannerMetadata } = require('./meal-planner-metadata');
+const { generateMasterPaste, extractResponseText, cleanStructuredOutput } = require('./master-paste-ai');
 
 loadEnvFile();
 
@@ -275,69 +276,13 @@ async function createRecipePdfBuffer(recipe) {
 
 async function handleMasterPasteGeneration(req, res) {
     try {
-        loadEnvFile();
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey) {
-            throw new Error('OPENAI_API_KEY is missing. Add OPENAI_API_KEY=your_key to .env.');
-        }
-
         const payload = await readJsonBody(req);
-        const sourceText = String(payload.text || '').trim();
-        const images = Array.isArray(payload.images) ? payload.images.slice(0, 6) : [];
-
-        if (!sourceText && images.length === 0) {
-            throw new Error('Add recipe text, one or more images, or both before generating.');
-        }
-
-        const inputContent = [
-            {
-                type: 'input_text',
-                text: `${getMasterPasteAiPrompt()}\n\nSource text from user:\n${sourceText || '(none provided)'}`
-            },
-            ...images
-                .filter((image) => image?.dataUrl && /^data:image\/(?:png|jpe?g|webp);base64,/i.test(image.dataUrl))
-                .map((image) => ({
-                    type: 'input_image',
-                    image_url: image.dataUrl
-                }))
-        ];
-
-        const response = await fetch('https://api.openai.com/v1/responses', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: OPENAI_MODEL,
-                input: [
-                    {
-                        role: 'user',
-                        content: inputContent
-                    }
-                ],
-                temperature: 0.2
-            })
-        });
-
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-            const message = data?.error?.message || `OpenAI request failed with HTTP ${response.status}`;
-            throw new Error(message);
-        }
-
-        const structuredText = extractResponseText(data);
-        if (!structuredText) {
-            throw new Error('OpenAI returned an empty response.');
-        }
-
+        const result = await generateMasterPaste(payload);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ text: cleanStructuredOutput(structuredText) }));
+        res.end(JSON.stringify(result));
     } catch (error) {
-        console.error('Master paste AI generation error:', error);
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: error.message || 'Unable to generate structured recipe data' }));
+        res.writeHead(error.statusCode || 400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message || 'Unable to get an AI response.' }));
     }
 }
 
@@ -455,29 +400,6 @@ async function handleRecipeSpellcheck(req, res) {
     }
 }
 
-function extractResponseText(response) {
-    if (typeof response.output_text === 'string') {
-        return response.output_text;
-    }
-
-    const chunks = [];
-    (response.output || []).forEach((item) => {
-        (item.content || []).forEach((content) => {
-            if (typeof content.text === 'string') {
-                chunks.push(content.text);
-            }
-        });
-    });
-
-    return chunks.join('\n').trim();
-}
-
-function cleanStructuredOutput(text) {
-    const value = String(text || '').trim();
-    const codeBlockMatch = value.match(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/);
-    return (codeBlockMatch ? codeBlockMatch[1] : value).trim();
-}
-
 function parseJsonOutput(text) {
     const value = cleanStructuredOutput(text);
     try {
@@ -525,95 +447,6 @@ Rules:
 - Do not suggest equipment already listed in the currently selected equipment.`;
 }
 
-function getMasterPasteAiPrompt() {
-    return `You are helping format recipe data for a Recipe Page Generator app.
-
-Analyze the provided recipe text and images. Output ONLY structured plain text in this exact format. Do not include commentary.
-
-::META::
-Recipe Title;Meal Type;dietary flags;serves;prep time;cook time;calories;protein g;carbs g;fat g;equipment names;portion variation icon;show ingredients title yes/no;show instructions title yes/no
-
-::TEXT::
-Description or intro text
-
-::TEXT::
-Note:
-Optional note or tip text
-
-::INGREDIENTS Ingredients for 4 Servings::
-Ingredient;Amount
-Ingredient;Amount
-
-If there are multiple ingredient groups or recipe components, preserve them:
-
-::INGREDIENTS Ingredients for 4 Servings::
-::TABLE Group Name::
-Ingredient;Amount
-Ingredient;Amount
-::TABLE Another Group::
-Ingredient;Amount
-
-::DIRECTIONS::
-:HEADER: First part
-Step one text
-Step with checkbox items
-- [ ] Checkbox item one
-- [ ] Checkbox item two
-:HEADER: Second part
-Step two text
-
-Rules:
-- Return only the final structured recipe text. A fenced code block is acceptable, but no explanation outside it.
-- Use exact section headers: ::META::, ::TEXT::, ::INGREDIENTS::, ::TABLE Name::, ::DIRECTIONS::.
-- META must be semicolon-separated. Use 14 fields when possible:
-  1. Recipe title
-  2. Meal type
-  3. Dietary flags
-  4. Serves
-  5. Prep time
-  6. Cook time
-  7. Calories
-  8. Protein grams
-  9. Carb grams
-  10. Fat grams
-  11. Equipment/material names
-  12. Portion variation icon name (optional; leave blank for normal recipes)
-  13. Show ingredients title: yes or no
-  14. Show instructions title: yes or no
-- If using the older 11-field or 13-field META format, the app still accepts it and defaults missing title toggles to yes.
-- If macros are unknown, use 0 for calories, protein, carbs, and fat.
-- If a non-macro field is unknown, leave it blank but keep delimiters intact.
-- Match the original source language as closely as possible. Preserve the source's wording, tone, ingredient names, direction phrasing, headers, and subtitles unless a format cleanup is required.
-- Only improvise when the source does not include the needed information. Do not invent details, steps, section names, subtitles, ingredients, or notes when the source provides usable text.
-- Serves examples: "4 Servings", "2-3 Servings", "1 Serving".
-- Times should include units: "15 min", "1 hour", "30-45 min".
-- Equipment names should be comma-separated and use common tool names.
-- First ::TEXT:: block is the description. Additional ::TEXT:: blocks are note callouts.
-- For note callouts, put the note label on the first line, usually "Note:" or "Tip:".
-- Ingredient rows must be Name;Amount.
-- The black ingredients title is separate from ingredient set headers.
-- The black ingredients title text comes from the ::INGREDIENTS Header Text:: section line. Example: ::INGREDIENTS Ingredients for 4 Servings::.
-- Optional ingredient start mode format: ::INGREDIENTS Header Text;start mode:: or ::TABLE Group Name;start mode::. Start mode must be auto, force-right-column, or force-next-page. Use force-next-page when an ingredient set should begin at the top of the next page in the app/JPEG layout.
-- The black ingredients title can be hidden with META field 13 set to "no". Use "yes" by default for normal recipes.
-- If the black title is hidden, still include the ::INGREDIENTS:: block so ingredient rows can be parsed.
-- Use ::TABLE Group Name:: only for ingredient set headers such as Sauce, Dressing, Bowl, Filling, or Topping.
-- Do not repeat "Ingredients for X Servings" as a ::TABLE name unless the source truly has an ingredient group with that exact name.
-- If the source material includes ingredient subtitles or secondary labels, preserve them as ":SUBTITLE: Subtitle text" rows in the matching ingredient set.
-- Use lowercase "tsp" and "tbsp".
-- Use single-character fraction glyphs for common fractions: ½, ¼, ¾, ⅓, ⅔, ⅛, ⅜, ⅝, ⅞.
-- Write mixed amounts like "1½ tsp", not "1 1/2 tsp".
-- Directions are one step per line with no numbering.
-- The black instructions title is separate from instruction set labels. The black title defaults to "Instructions for X Servings" based on META serves. It can be hidden with META field 14 set to "no". Use "yes" by default for normal recipes.
-- A ::DIRECTIONS Label;step style;start mode:: label is an instruction set header. It renders like ingredient set headers, not like the black instructions title.
-- Use ::DIRECTIONS Label;numbered;auto:: when the source has major direction sections such as "Part 1: Prepare", "Part 2: Cook", "Sauce", "Assemble", or "Bake".
-- If the source instructions are broken into clearly separate sections, preserve those breaks as separate ::DIRECTIONS Label;numbered;auto:: blocks instead of flattening everything into one instruction set.
-- Do not repeat "Instructions for X Servings" as a ::DIRECTIONS label.
-- To add an unnumbered instruction header in the middle of directions, put it on its own line as ":HEADER: Header text". These headers should divide directions into parts, such as ":HEADER: Making the green goddess sauce".
-- To add an unnumbered instruction subtitle, put it on its own line as ":SUBTITLE: Subtitle text". Subtitles follow the same layout and number-reset rules as headers but render without bold styling. Subtitle capitalization can be controlled in the app.
-- If the source material includes subtitles inside directions, preserve them using ":SUBTITLE: Subtitle text" exactly where they appear.
-- Checkbox item lines must start exactly with "- [ ]" and directly follow the parent step.`;
-}
-
 function readJsonBody(req) {
     return new Promise((resolve, reject) => {
         let body = '';
@@ -653,7 +486,7 @@ function normalizeRecipe(recipe = {}) {
 }
 
 function normalizeIngredientAlignment(alignment) {
-    return alignment === 'right' ? 'right' : 'left';
+    return alignment === 'left' ? 'left' : 'right';
 }
 
 async function drawRecipePdf(doc, recipe) {

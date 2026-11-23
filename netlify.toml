@@ -12,6 +12,11 @@ to = "/.netlify/functions/spellcheck-recipe"
 status = 200
 
 [[redirects]]
+from = "/api/generate-master-paste"
+to = "/.netlify/functions/generate-master-paste"
+status = 200
+
+[[redirects]]
 from = "/api/export-meal-planner"
 to = "/.netlify/functions/export-meal-planner"
 status = 200

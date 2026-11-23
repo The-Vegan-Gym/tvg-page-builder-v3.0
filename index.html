@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recipe Page Generator - The Vegan Gym</title>
+    <link rel="icon" type="image/png" href="./favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -125,24 +126,36 @@
                     <div id="master-paste-info-panel" class="section-info-panel" hidden>
                         <button type="button" id="btn-close-master-paste-info" class="section-info-close" aria-label="Close Master Paste info">&times;</button>
                         <h3>Master Paste</h3>
+                        <p>Add documents, images, or recipe text. Enter a prompt to ask about your files or guide recipe generation.</p>
                         <p>Paste structured recipe text here to fill the main recipe fields at once, including title, image details, macros, ingredients, instructions, equipment, and notes.</p>
                         <p>Use Copy AI Instructions to get a format that can be filled by an AI assistant, then paste the result here and click Fill All.</p>
                     </div>
                     <div class="master-paste-panel-group master-paste-ai-panel">
                         <div class="master-paste-panel-header">
-                            <h3>Generate structured recipe data</h3>
+                            <h3>Work with AI</h3>
                         </div>
                         <div class="form-group">
-                            <label for="master-paste-ai-source">AI Source</label>
+                            <label for="master-paste-ai-source">Source Text and Files</label>
                             <div id="master-paste-ai-dropzone" class="master-paste-ai-dropzone">
-                                <textarea id="master-paste-ai-source" name="masterPasteAiSource" rows="5" placeholder="Drop recipe images here, or paste rough recipe text for AI to format..."></textarea>
-                                <input type="file" id="master-paste-ai-images" accept="image/*" multiple hidden>
+                                <textarea id="master-paste-ai-source" name="masterPasteAiSource" rows="3" placeholder="Drop files or paste source text here"></textarea>
+                                <input type="file" id="master-paste-ai-file-input" multiple hidden>
+                                <button type="button" id="btn-master-paste-ai-files" class="btn-secondary" aria-describedby="master-paste-ai-file-help">Add Files</button>
+                                <p id="master-paste-ai-file-help" class="master-paste-ai-file-help">PDF, Word, spreadsheets, slides, images, and text. Up to 6 files, 4 MB total.</p>
                                 <div id="master-paste-ai-files" class="master-paste-ai-files"></div>
                             </div>
                         </div>
+                        <div class="form-group">
+                            <label for="master-paste-ai-prompt">AI Prompt</label>
+                            <textarea id="master-paste-ai-prompt" rows="3" placeholder="What would you like AI to do?"></textarea>
+                        </div>
                         <div class="master-paste-actions">
-                            <button type="button" id="btn-master-paste-ai-images" class="btn-secondary">Add Images</button>
-                            <button type="button" id="btn-generate-master-paste-ai" class="btn-primary">Generate With AI</button>
+                            <button type="button" id="btn-send-master-paste-ai" class="btn-secondary">Send Prompt</button>
+                            <button type="button" id="btn-generate-master-paste-ai" class="btn-primary">Generate Recipe</button>
+                        </div>
+                        <div id="master-paste-ai-status" class="master-paste-status" role="status"></div>
+                        <div id="master-paste-ai-answer" class="form-group master-paste-ai-answer" hidden>
+                            <label for="master-paste-ai-reply">AI Reply</label>
+                            <textarea id="master-paste-ai-reply" rows="8" readonly></textarea>
                         </div>
                     </div>
                     <div class="master-paste-panel-group master-paste-structured-panel">
@@ -227,7 +240,7 @@
                             <button type="button" id="btn-reset-image-controls" class="btn-secondary image-reset-defaults" disabled>Reset to Defaults</button>
                         </div>
                         <label class="form-toggle image-corner-logo-toggle">
-                            <input type="checkbox" id="show-corner-logo" name="showCornerLogo" checked>
+                            <input type="checkbox" id="show-corner-logo" name="showCornerLogo">
                             <span>Show corner logo</span>
                         </label>
                     </div>

@@ -757,9 +757,18 @@ body {
     background: rgba(66, 213, 59, 0.08);
 }
 
+.master-paste-ai-panel textarea {
+    min-height: 0;
+}
+
 .master-paste-ai-dropzone textarea {
-    min-height: 140px;
     margin-bottom: var(--spacing-sm);
+}
+
+.master-paste-ai-file-help {
+    margin-top: var(--spacing-sm);
+    font-size: var(--editor-helper-size);
+    color: #b8c2cf;
 }
 
 .master-paste-ai-files {
@@ -767,6 +776,10 @@ body {
     flex-wrap: wrap;
     gap: var(--spacing-xs);
     margin-top: var(--spacing-sm);
+}
+
+.master-paste-ai-files:empty {
+    display: none;
 }
 
 .master-paste-ai-file {
@@ -779,6 +792,12 @@ body {
     color: #b8c2cf;
     font-size: var(--editor-helper-size);
     background: #1a2027;
+    max-width: 100%;
+}
+
+.master-paste-ai-file span {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .master-paste-ai-file button {
@@ -787,6 +806,10 @@ body {
     color: #edf2f7;
     cursor: pointer;
     font-weight: 700;
+}
+
+.master-paste-ai-answer {
+    margin-top: var(--spacing-md);
 }
 
 .master-paste-actions {

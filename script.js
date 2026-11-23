@@ -65,6 +65,8 @@ const TYPOGRAPHY_SIZE_CONTROLS = [
     { key: 'portionMacroUnit', id: 'portion-macro-unit-font-size', valueId: 'portion-macro-unit-font-size-value', defaultValue: 9, min: 6, max: 16 }
 ];
 
+const DEFAULT_INGREDIENT_ALIGNMENT = 'right';
+
 /**
  * Empty recipe template (starts blank)
  */
@@ -86,7 +88,7 @@ const EMPTY_RECIPE = {
         posX: 50,
         posY: 50
     },
-    showCornerLogo: true,
+    showCornerLogo: false,
     showMacroBar: true,
     macroBarPrefix: "",
     showDescription: true,
@@ -282,7 +284,11 @@ let bottomMarginGuideTimer = null;
 let previewAutoCenterFrame = null;
 let previewAutoCenterTimer = null;
 let activeEditorSectionKey = 'basicInformation';
-let masterPasteAiImages = [];
+const MASTER_PASTE_MAX_FILES = 6;
+const MASTER_PASTE_MAX_FILE_BYTES = 4 * 1024 * 1024;
+const MASTER_PASTE_MAX_BODY_BYTES = 5_750_000;
+let masterPasteAiFiles = [];
+let masterPasteAiRequest = null;
 let spellcheckCorrections = [];
 let activeAirtableExportMode = 'meal-planner';
 let appMode = 'create';
@@ -387,7 +393,7 @@ function normalizeRecipe(recipe = {}) {
         normalized.ingredientSections = [{
             label: '',
             startMode: 'auto',
-            alignment: 'left',
+            alignment: DEFAULT_INGREDIENT_ALIGNMENT,
             ingredients: normalized.ingredients
         }];
     }
@@ -481,10 +487,15 @@ const elements = {
     masterPasteStatus: () => document.getElementById('master-paste-status'),
     masterPasteAiSource: () => document.getElementById('master-paste-ai-source'),
     masterPasteAiDropzone: () => document.getElementById('master-paste-ai-dropzone'),
-    masterPasteAiImages: () => document.getElementById('master-paste-ai-images'),
+    masterPasteAiFileInput: () => document.getElementById('master-paste-ai-file-input'),
     masterPasteAiFiles: () => document.getElementById('master-paste-ai-files'),
-    btnMasterPasteAiImages: () => document.getElementById('btn-master-paste-ai-images'),
+    masterPasteAiPrompt: () => document.getElementById('master-paste-ai-prompt'),
+    masterPasteAiStatus: () => document.getElementById('master-paste-ai-status'),
+    masterPasteAiAnswer: () => document.getElementById('master-paste-ai-answer'),
+    masterPasteAiReply: () => document.getElementById('master-paste-ai-reply'),
+    btnMasterPasteAiFiles: () => document.getElementById('btn-master-paste-ai-files'),
     btnGenerateMasterPasteAi: () => document.getElementById('btn-generate-master-paste-ai'),
+    btnSendMasterPasteAi: () => document.getElementById('btn-send-master-paste-ai'),
     btnSpellcheckAi: () => document.getElementById('btn-spellcheck-ai'),
     btnApplySpellcheckAll: () => document.getElementById('btn-apply-spellcheck-all'),
     spellcheckStatus: () => document.getElementById('spellcheck-status'),
@@ -2237,7 +2248,8 @@ function initializeButtonListeners() {
     // Master Paste buttons
     initializeMasterPasteAiControls();
     elements.btnFillAll()?.addEventListener('click', handleFillAll);
-    elements.btnGenerateMasterPasteAi()?.addEventListener('click', handleGenerateMasterPasteAi);
+    elements.btnGenerateMasterPasteAi()?.addEventListener('click', () => handleGenerateMasterPasteAi('recipe'));
+    elements.btnSendMasterPasteAi()?.addEventListener('click', () => handleGenerateMasterPasteAi('reply'));
     elements.btnSpellcheckAi()?.addEventListener('click', handleSpellcheckAi);
     elements.btnApplySpellcheckAll()?.addEventListener('click', applyAllSpellcheckCorrections);
     elements.btnCopyAIInstructions()?.addEventListener('click', handleCopyAIInstructions);
@@ -2466,7 +2478,7 @@ function loadRecipeToForm(recipe) {
             section.ingredients,
             index === 0,
             section.startMode || 'auto',
-            section.alignment || 'left'
+            section.alignment
         );
     });
 
@@ -2909,7 +2921,7 @@ function getIngredientSectionsForForm(recipe) {
     return [{
         label: '',
         startMode: 'auto',
-        alignment: 'left',
+        alignment: DEFAULT_INGREDIENT_ALIGNMENT,
         ingredients: recipe.ingredients || []
     }];
 }
@@ -2946,7 +2958,7 @@ function getIngredientSectionsFromForm() {
         return [{
             label: '',
             startMode: 'auto',
-            alignment: 'left',
+            alignment: DEFAULT_INGREDIENT_ALIGNMENT,
             ingredients: []
         }];
     }
@@ -2960,10 +2972,8 @@ function normalizeIngredientStartMode(startMode, fallback = 'auto') {
         : fallback;
 }
 
-function normalizeIngredientAlignment(alignment, fallback = 'left') {
-    return ['left', 'right'].includes(alignment)
-        ? alignment
-        : fallback;
+function normalizeIngredientAlignment(alignment) {
+    return alignment === 'left' ? 'left' : DEFAULT_INGREDIENT_ALIGNMENT;
 }
 
 function getPortionVariationsFromForm() {
@@ -3316,7 +3326,7 @@ function animateSectionSwap(sections, beforePositions) {
 /**
  * Add a new ingredient row to the form
  */
-function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = false, startMode = 'auto', alignment = 'left') {
+function addIngredientSectionEditor(label = '', ingredients = [], isPrimary = false, startMode = 'auto', alignment) {
     const container = elements.ingredientsList();
     if (!container) return;
     const normalizedStartMode = normalizeIngredientStartMode(startMode);
@@ -4866,7 +4876,7 @@ function createDayTotalsMarkup(macros = {}) {
     `;
 }
 
-function createIngredientNode(ingredient, alignment = 'left') {
+function createIngredientNode(ingredient, alignment) {
     const normalizedAlignment = normalizeIngredientAlignment(alignment);
 
     if (ingredient.type === 'header' || ingredient.type === 'subtitle') {
@@ -6515,9 +6525,9 @@ async function handleExportAll() {
 
 function initializeMasterPasteAiControls() {
     const dropzone = elements.masterPasteAiDropzone();
-    const fileInput = elements.masterPasteAiImages();
+    const fileInput = elements.masterPasteAiFileInput();
 
-    elements.btnMasterPasteAiImages()?.addEventListener('click', () => {
+    elements.btnMasterPasteAiFiles()?.addEventListener('click', () => {
         fileInput?.click();
     });
 
@@ -6543,9 +6553,9 @@ function initializeMasterPasteAiControls() {
         event.preventDefault();
         dropzone.classList.remove('is-drag-over');
 
-        const imageFiles = getImageFilesFromTransfer(event.dataTransfer);
-        if (imageFiles.length) {
-            addMasterPasteAiFiles(imageFiles);
+        const files = getMasterPasteTransferFiles(event.dataTransfer);
+        if (files.length) {
+            addMasterPasteAiFiles(files);
             return;
         }
 
@@ -6556,15 +6566,15 @@ function initializeMasterPasteAiControls() {
     });
 
     dropzone.addEventListener('paste', (event) => {
-        const imageFiles = getImageFilesFromTransfer(event.clipboardData);
-        if (!imageFiles.length) return;
+        const files = getMasterPasteTransferFiles(event.clipboardData);
+        if (!files.length) return;
 
         event.preventDefault();
-        addMasterPasteAiFiles(imageFiles);
+        addMasterPasteAiFiles(files);
     });
 }
 
-function getImageFilesFromTransfer(transfer) {
+function getMasterPasteTransferFiles(transfer) {
     if (!transfer) return [];
 
     const itemFiles = Array.from(transfer.items || [])
@@ -6572,8 +6582,7 @@ function getImageFilesFromTransfer(transfer) {
         .map((item) => item.getAsFile())
         .filter(Boolean);
 
-    const files = itemFiles.length ? itemFiles : Array.from(transfer.files || []);
-    return files.filter((file) => file.type.startsWith('image/'));
+    return itemFiles.length ? itemFiles : Array.from(transfer.files || []);
 }
 
 function insertTextIntoMasterPasteAiSource(text) {
@@ -6592,9 +6601,33 @@ function insertTextIntoMasterPasteAiSource(text) {
     textarea.setSelectionRange(cursorPosition, cursorPosition);
 }
 
-function addMasterPasteAiFiles(files = []) {
-    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-    masterPasteAiImages = [...masterPasteAiImages, ...imageFiles].slice(0, 6);
+function setMasterPasteAiStatus(message = '', status = '') {
+    const statusEl = elements.masterPasteAiStatus();
+    statusEl.className = status ? `master-paste-status ${status}` : 'master-paste-status';
+    statusEl.textContent = message;
+}
+
+function addMasterPasteAiFiles(files) {
+    if (!files.length) return;
+
+    const emptyFile = files.find((file) => file.size === 0);
+    if (emptyFile) {
+        setMasterPasteAiStatus(`${emptyFile.name || 'This file'} is empty. Choose a file with content.`, 'error');
+        return;
+    }
+
+    const nextFiles = [...masterPasteAiFiles, ...files];
+    if (nextFiles.length > MASTER_PASTE_MAX_FILES) {
+        setMasterPasteAiStatus('Choose up to 6 files. Remove an attachment or select fewer files.', 'error');
+        return;
+    }
+    if (nextFiles.reduce((total, file) => total + file.size, 0) > MASTER_PASTE_MAX_FILE_BYTES) {
+        setMasterPasteAiStatus('Attachments must be 4 MB or less in total. Choose smaller files or split them across requests.', 'error');
+        return;
+    }
+
+    masterPasteAiFiles = nextFiles;
+    setMasterPasteAiStatus();
     renderMasterPasteAiFiles();
 }
 
@@ -6602,20 +6635,27 @@ function renderMasterPasteAiFiles() {
     const container = elements.masterPasteAiFiles();
     if (!container) return;
 
-    container.innerHTML = masterPasteAiImages.map((file, index) => `
-        <span class="master-paste-ai-file">
-            ${escapeHtml(file.name || `Image ${index + 1}`)}
-            <button type="button" data-remove-ai-image="${index}" aria-label="Remove ${escapeHtml(file.name || `Image ${index + 1}`)}">&times;</button>
-        </span>
-    `).join('');
-
-    container.querySelectorAll('[data-remove-ai-image]').forEach((button) => {
+    const chips = masterPasteAiFiles.map((file, index) => {
+        const name = file.name || `File ${index + 1}`;
+        const chip = document.createElement('span');
+        chip.className = 'master-paste-ai-file';
+        const label = document.createElement('span');
+        label.textContent = name;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = '×';
+        button.setAttribute('aria-label', `Remove ${name}`);
         button.addEventListener('click', () => {
-            const index = Number.parseInt(button.dataset.removeAiImage, 10);
-            masterPasteAiImages.splice(index, 1);
+            masterPasteAiFiles.splice(index, 1);
+            setMasterPasteAiStatus();
             renderMasterPasteAiFiles();
+            const nextButton = container.querySelectorAll('button')[index];
+            (nextButton || elements.btnMasterPasteAiFiles()).focus();
         });
+        chip.append(label, button);
+        return chip;
     });
+    container.replaceChildren(...chips);
 }
 
 function fileToDataUrl(file) {
@@ -6627,58 +6667,76 @@ function fileToDataUrl(file) {
     });
 }
 
-async function handleGenerateMasterPasteAi() {
-    const statusEl = elements.masterPasteStatus();
-    const button = elements.btnGenerateMasterPasteAi();
-    const sourceText = elements.masterPasteAiSource()?.value.trim() || '';
+async function handleGenerateMasterPasteAi(mode) {
+    if (masterPasteAiRequest) return;
 
-    if (!sourceText && masterPasteAiImages.length === 0) {
-        statusEl.className = 'master-paste-status error';
-        statusEl.textContent = 'Add recipe text, images, or both before generating.';
+    const generateButton = elements.btnGenerateMasterPasteAi();
+    const sendButton = elements.btnSendMasterPasteAi();
+    const isReply = mode === 'reply';
+    const button = isReply ? sendButton : generateButton;
+    const sourceFiles = masterPasteAiFiles.slice();
+    const sourceText = elements.masterPasteAiSource()?.value.trim() || '';
+    const prompt = elements.masterPasteAiPrompt()?.value.trim() || '';
+
+    if (isReply && !prompt) {
+        setMasterPasteAiStatus('Enter a prompt to send to AI.', 'error');
+        elements.masterPasteAiPrompt().focus();
+        return;
+    }
+    if (!sourceText && !prompt && !sourceFiles.length) {
+        setMasterPasteAiStatus('Add source text, attach a file, or enter a prompt to generate a recipe.', 'error');
         return;
     }
 
-    const originalText = button?.textContent || 'Generate With AI';
+    const originalText = button.textContent;
+    const request = new AbortController();
+    masterPasteAiRequest = request;
+    generateButton.disabled = true;
+    sendButton.disabled = true;
+    button.textContent = isReply ? 'Sending…' : 'Generating…';
+    setMasterPasteAiStatus();
 
     try {
-        if (button) {
-            button.disabled = true;
-            button.textContent = 'Generating...';
-        }
-
-        statusEl.className = 'master-paste-status';
-        statusEl.textContent = '';
-
-        const images = await Promise.all(masterPasteAiImages.map(async (file) => ({
+        const files = await Promise.all(sourceFiles.map(async (file) => ({
             name: file.name,
-            type: file.type,
             dataUrl: await fileToDataUrl(file)
         })));
+        const body = JSON.stringify({ text: sourceText, prompt, mode, files });
+        if (new Blob([body]).size > MASTER_PASTE_MAX_BODY_BYTES) {
+            throw new Error('This request is too large. Shorten the text or remove an attachment.');
+        }
 
         const response = await fetch('/api/generate-master-paste', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: sourceText, images })
+            body,
+            signal: request.signal
         });
 
         const data = await response.json().catch(() => ({}));
 
-        if (!response.ok) {
-            throw new Error(data.error || 'Unable to generate structured recipe data.');
+        if (!response.ok || !data.text?.trim()) {
+            throw new Error(data.error || 'Unable to get an AI response. Try again.');
         }
 
-        elements.masterPaste().value = data.text || '';
-        statusEl.className = 'master-paste-status success';
-        statusEl.textContent = 'AI structured data generated. Review it, then click Fill All.';
-    } catch (error) {
-        console.error('AI generation error:', error);
-        statusEl.className = 'master-paste-status error';
-        statusEl.textContent = error.message || 'Unable to generate structured recipe data.';
-    } finally {
-        if (button) {
-            button.disabled = false;
-            button.textContent = originalText;
+        if (request.signal.aborted) return;
+        if (isReply) {
+            elements.masterPasteAiReply().value = data.text;
+            elements.masterPasteAiAnswer().hidden = false;
+            setMasterPasteAiStatus('AI reply received.', 'success');
+        } else {
+            elements.masterPaste().value = data.text;
+            setMasterPasteAiStatus('Recipe generated. Review Structured Recipe Data, then click Fill All.', 'success');
         }
+    } catch (error) {
+        if (!request.signal.aborted) {
+            setMasterPasteAiStatus(error.message || 'Unable to get an AI response. Try again.', 'error');
+        }
+    } finally {
+        masterPasteAiRequest = null;
+        generateButton.disabled = false;
+        sendButton.disabled = false;
+        button.textContent = originalText;
     }
 }
 
@@ -7405,7 +7463,7 @@ function parseMasterPaste(text) {
         result.ingredientSections = [{
             label: '',
             startMode: 'auto',
-            alignment: 'left',
+            alignment: DEFAULT_INGREDIENT_ALIGNMENT,
             ingredients: result.ingredients
         }];
     }
@@ -8218,15 +8276,20 @@ function handleClear() {
 function clearMasterPasteFields() {
     const masterPaste = elements.masterPaste();
     const aiSource = elements.masterPasteAiSource();
-    const aiFileInput = elements.masterPasteAiImages();
+    const aiFileInput = elements.masterPasteAiFileInput();
     const statusEl = elements.masterPasteStatus();
 
     if (masterPaste) masterPaste.value = '';
     if (aiSource) aiSource.value = '';
     if (aiFileInput) aiFileInput.value = '';
 
-    masterPasteAiImages = [];
+    masterPasteAiRequest?.abort();
+    elements.masterPasteAiPrompt().value = '';
+    elements.masterPasteAiReply().value = '';
+    elements.masterPasteAiAnswer().hidden = true;
+    masterPasteAiFiles = [];
     renderMasterPasteAiFiles();
+    setMasterPasteAiStatus();
 
     if (statusEl) {
         statusEl.className = 'master-paste-status';
