@@ -635,6 +635,20 @@
                     <button type="button" id="btn-load-json-preview" class="btn-preview-secondary">Load</button>
                     <button type="button" id="btn-export-jpg-preview" class="btn-preview-export">Export JPG</button>
                 </div>
+                <div id="preview-review-notes" class="preview-review-notes" hidden>
+                    <button type="button" id="btn-preview-review-notes" class="preview-review-trigger" aria-label="Review notes available" aria-expanded="false" aria-controls="preview-review-panel" title="Review Notes">
+                        <span class="preview-review-notes-icon" aria-hidden="true"></span>
+                        <img src="Icons/Alert.svg" class="preview-review-alert preview-review-badge" alt="">
+                    </button>
+                    <section id="preview-review-panel" class="preview-review-panel" aria-labelledby="preview-review-title" hidden>
+                        <div class="preview-review-header">
+                            <img src="Icons/Alert.svg" class="preview-review-alert" alt="">
+                            <h2 id="preview-review-title">Review Notes</h2>
+                            <button type="button" id="btn-close-preview-review" class="btn-close-modal" aria-label="Close Review Notes">&times;</button>
+                        </div>
+                        <div id="preview-review-content" class="preview-review-content"></div>
+                    </section>
+                </div>
             </div>
             <div class="preview-container" id="preview-container">
                 <div class="recipe-page-wrapper">
@@ -761,6 +775,7 @@
                     <input type="search" id="load-airtable-recipe-search" placeholder="Search recipes…" autocomplete="off">
                 </div>
                 <div id="airtable-recipe-categories" class="recipe-browser-categories" role="group" aria-label="Recipe categories">
+                    <button type="button" data-recipe-category="needs-fixing" aria-pressed="false">Needs Fixing</button>
                     <button type="button" data-recipe-category="" aria-pressed="true">All Recipes</button>
                     <button type="button" data-recipe-category="Breakfast" aria-pressed="false">Breakfast</button>
                     <button type="button" data-recipe-category="Lunch / Dinner" aria-pressed="false">Lunch / Dinner</button>

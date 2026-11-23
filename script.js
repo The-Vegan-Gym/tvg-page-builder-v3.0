@@ -297,6 +297,7 @@ let mealPlannerRecipeOptions = null;
 let loadingMealPlannerRecipes = false;
 let updatingMealPlannerRecipe = false;
 let editingMealPlannerRecordId = '';
+const airtableReviewNotes = new Map();
 let airtableLoadOptions = [];
 let airtableLoadRequest = null;
 let airtableLoadSelectedId = '';
@@ -929,7 +930,7 @@ function applyRecipeHistoryAt(index) {
     isApplyingRecipeHistory = true;
     const entry = recipeHistory[recipeHistoryIndex];
     currentRecipe = cloneRecipeHistoryState(entry.state);
-    editingMealPlannerRecordId = entry.airtableRecordId;
+    setEditingMealPlannerRecord(entry.airtableRecordId);
     loadRecipeToForm(currentRecipe);
     renderRecipePage();
     isApplyingRecipeHistory = false;
@@ -949,10 +950,67 @@ function redoRecipeChange() {
 function loadRecipeObject(recipe, airtableRecordId = editingMealPlannerRecordId) {
     const normalized = normalizeRecipe(recipe);
     currentRecipe = normalized;
-    editingMealPlannerRecordId = airtableRecordId;
+    setEditingMealPlannerRecord(airtableRecordId);
     loadRecipeToForm(normalized);
     renderRecipePage();
     recordRecipeHistory(currentRecipe);
+}
+
+function setEditingMealPlannerRecord(recordId) {
+    if (editingMealPlannerRecordId === recordId) return;
+    editingMealPlannerRecordId = recordId;
+    renderPreviewReviewNotes();
+}
+
+function setPreviewReviewOpen(open) {
+    document.getElementById('preview-review-panel').hidden = !open;
+    document.getElementById('btn-preview-review-notes').setAttribute('aria-expanded', String(open));
+}
+
+function renderPreviewReviewNotes() {
+    const notes = airtableReviewNotes.get(editingMealPlannerRecordId) || [];
+    document.getElementById('preview-review-notes').hidden = notes.length === 0;
+    setPreviewReviewOpen(false);
+    const sections = notes.map(({ label, text }) => {
+        const section = document.createElement('div');
+        const title = document.createElement('h3');
+        const body = document.createElement('p');
+        title.textContent = label;
+        body.textContent = text;
+        section.append(title, body);
+        return section;
+    });
+    document.getElementById('preview-review-content').replaceChildren(...sections);
+}
+
+function cacheAirtableReviewNotes(recordId, reviewNotes) {
+    airtableReviewNotes.set(recordId, Array.isArray(reviewNotes) ? reviewNotes : []);
+    if (recordId === editingMealPlannerRecordId) renderPreviewReviewNotes();
+}
+
+function initializePreviewReviewNotes() {
+    const container = document.getElementById('preview-review-notes');
+    const trigger = document.getElementById('btn-preview-review-notes');
+    const panel = document.getElementById('preview-review-panel');
+    const close = document.getElementById('btn-close-preview-review');
+
+    trigger.addEventListener('click', () => {
+        setPreviewReviewOpen(panel.hidden);
+        if (!panel.hidden) close.focus();
+    });
+    close.addEventListener('click', () => {
+        setPreviewReviewOpen(false);
+        trigger.focus();
+    });
+    container.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !panel.hidden) {
+            event.preventDefault();
+            close.click();
+        }
+    });
+    document.addEventListener('click', (event) => {
+        if (!panel.hidden && !container.contains(event.target)) setPreviewReviewOpen(false);
+    });
 }
 
 async function initializeEditModeFromUrl() {
@@ -1130,8 +1188,9 @@ function renderAirtableLoadOptions() {
     const terms = normalizeAirtableSearch(elements.airtableLoadSearch().value).split(' ').filter(Boolean);
     const compareTitles = (a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
     const matches = airtableLoadOptions.filter((recipe) => {
-        const matchesCategory = !category || recipe.category === category
-            || (category === 'Smoothie' && /\bsmoothies?\b/i.test(recipe.title));
+        const matchesCategory = category === 'needs-fixing'
+            ? recipe.needsFixing === true
+            : !category || recipe.category === category || (category === 'Smoothie' && /\bsmoothies?\b/i.test(recipe.title));
         return matchesCategory && matchesAirtableRecipeSearch(recipe, terms);
     });
     matches.sort((a, b) => {
@@ -1249,6 +1308,7 @@ async function handleAirtableRecipeLoad(event) {
             if (currentRecipe !== previousRecipe) loadRecipeObject(previousRecipe, previousRecordId);
             throw new Error('The attachment could not be loaded as a recipe.');
         }
+        cacheAirtableReviewNotes(recordId, record.reviewNotes);
         saveRecentRecipe(currentRecipe);
         closeLoadRecipeOverlay();
     } catch (error) {
@@ -1271,8 +1331,21 @@ function handleRecentRecipeClick(event) {
     if (!recent?.recipe) return;
 
     loadRecipeObject(recent.recipe, recent.airtableRecordId || '');
+    if (recent.airtableRecordId) refreshAirtableReviewNotes(recent.airtableRecordId);
     saveRecentRecipe(recent.recipe);
     closeLoadRecipeOverlay();
+}
+
+async function refreshAirtableReviewNotes(recordId) {
+    const previous = airtableReviewNotes.get(recordId);
+    try {
+        const record = await postMealPlannerExport({ action: 'get-meal-planner-recipe-file', recordId });
+        if (record.id === recordId && airtableReviewNotes.get(recordId) === previous) {
+            cacheAirtableReviewNotes(recordId, record.reviewNotes);
+        }
+    } catch (error) {
+        console.warn('Unable to refresh Airtable review notes:', error.message);
+    }
 }
 
 function getSectionPageTypeAvailability(section, pageType = elements.pageType()?.value || 'recipe') {
@@ -2486,6 +2559,7 @@ function initializeButtonListeners() {
     // Master Paste buttons
     initializeMasterPasteAiControls();
     initializePreviewAiControls();
+    initializePreviewReviewNotes();
     elements.btnFillAll()?.addEventListener('click', handleFillAll);
     elements.btnApplyMasterPasteAi()?.addEventListener('click', () => handleGenerateMasterPasteAi('apply'));
     elements.btnGenerateMasterPasteAi()?.addEventListener('click', () => handleGenerateMasterPasteAi('recipe'));
@@ -8921,7 +8995,7 @@ function handleLoadJson(event) {
  */
 function handleClear() {
     if (confirm('Are you sure you want to clear all recipe data?')) {
-        editingMealPlannerRecordId = '';
+        setEditingMealPlannerRecord('');
         currentRecipe = normalizeRecipe({});
         clearMasterPasteFields();
         loadRecipeToForm(currentRecipe);

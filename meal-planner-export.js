@@ -48,7 +48,7 @@ const NUTRITION_FIELDS = { Calories: 'calories', Protein: 'protein', Carbs: 'car
 async function listMealPlannerRecipes({ withRecipeFile = false, gallery = false } = {}) {
     const environment = getAirtableEnvironment();
     const fields = ['Title', ...Object.keys(NUTRITION_FIELDS), 'Meal Series', 'date'];
-    if (gallery === true) fields.push('Category', 'Exclude', 'Photo', ATTACHMENT_FIELDS.photo, ATTACHMENT_FIELDS.recipeFile);
+    if (gallery === true) fields.push('Category', 'Exclude', 'Needs fixing', 'Photo', ATTACHMENT_FIELDS.photo, ATTACHMENT_FIELDS.recipeFile);
     const records = await listAirtableRecords({
         ...environment, fields, sortField: 'Title',
         lookup: 'Airtable recipe lookup',
@@ -66,6 +66,7 @@ async function listMealPlannerRecipes({ withRecipeFile = false, gallery = false 
             ...summary,
             category: typeof fields.Category === 'string' ? fields.Category : '',
             excluded: fields.Exclude === true,
+            needsFixing: fields['Needs fixing'] === true,
             hasRecipeFile: Boolean(findRecipeFile(fields[ATTACHMENT_FIELDS.recipeFile])),
             thumbnailUrl
         };
@@ -85,9 +86,16 @@ async function getMealPlannerRecipeFile(payload) {
     const attachment = findRecipeFile(files);
     if (!attachment) throw new Error('The Recipe File column has no .recipe or .json attachment.');
 
+    const reviewNotes = Object.entries({
+        'Andrew Notes': record.fields['Andrew Notes'],
+        Feedback: record.fields.feedback ?? record.fields.Feedback
+    })
+        .map(([label, value]) => ({ label, text: typeof value === 'string' ? value.trim() : '' }))
+        .filter(({ text }) => text);
     return {
         ...mealPlannerRecordLink(environment, record.id),
-        attachmentUrl: attachment.url
+        attachmentUrl: attachment.url,
+        reviewNotes
     };
 }
 

@@ -3402,6 +3402,127 @@ body {
     gap: var(--spacing-sm);
 }
 
+.preview-review-notes {
+    position: absolute;
+    top: calc(100% + 12px);
+    right: var(--spacing-lg);
+}
+
+.preview-review-trigger {
+    position: relative;
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    padding: 0;
+    border: 1px solid #47515c;
+    border-radius: 9px;
+    background: #252c34;
+    color: #edf2f7;
+    box-shadow: 0 5px 14px #0005;
+    cursor: pointer;
+}
+
+.preview-review-trigger:hover,
+.preview-review-trigger[aria-expanded="true"] {
+    border-color: #d4a949;
+    background: #303842;
+}
+
+.preview-review-notes-icon {
+    width: 20px;
+    height: 20px;
+    background: currentColor;
+    mask: url('Icons/notes-icon.svg') center / contain no-repeat;
+}
+
+.preview-review-alert {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    filter: sepia(1) saturate(16) hue-rotate(350deg);
+}
+
+.preview-review-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+}
+
+.preview-review-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    display: flex;
+    width: min(330px, calc(100vw - 48px));
+    max-height: min(340px, calc(100dvh - 150px));
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #47515c;
+    border-radius: 10px;
+    background: #151b22;
+    color: #edf2f7;
+    box-shadow: 0 10px 26px #0008;
+}
+
+.preview-review-panel[hidden] {
+    display: none;
+}
+
+.preview-review-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-bottom: 1px solid #303943;
+    background: #20272f;
+}
+
+.preview-review-header h2 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.preview-review-header .btn-close-modal {
+    width: 26px;
+    height: 26px;
+    margin-left: auto;
+    background: transparent;
+}
+
+.preview-review-content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px 12px 12px;
+    font-size: var(--editor-body-size);
+}
+
+.preview-review-content > div + div {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #303943;
+}
+
+.preview-review-content h3 {
+    margin: 0 0 4px;
+    color: #e8b752;
+    font-size: var(--editor-label-size);
+}
+
+.preview-review-content p {
+    margin: 0;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 1000px) {
+    .preview-review-panel {
+        max-height: max(96px, calc(50dvh - 138px));
+    }
+}
+
 .preview-zoom-controls {
     position: absolute;
     right: 14px;
