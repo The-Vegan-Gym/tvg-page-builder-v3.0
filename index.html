@@ -754,14 +754,35 @@
                     <button type="button" id="btn-load-from-airtable" class="btn-primary">Load from Airtable</button>
                 </div>
             </div>
-            <form class="load-recipe-body" id="load-airtable-recipe-form" hidden>
-                <div class="form-group">
-                    <label for="load-airtable-recipe-search">Search Airtable Recipes</label>
-                    <input type="search" id="load-airtable-recipe-search" placeholder="Search by title or meal series" autocomplete="off">
+            <form class="load-recipe-body airtable-recipe-browser" id="load-airtable-recipe-form" hidden>
+                <div class="recipe-browser-search">
+                    <label class="visually-hidden" for="load-airtable-recipe-search">Search recipes</label>
+                    <span class="recipe-browser-search-icon" aria-hidden="true"></span>
+                    <input type="search" id="load-airtable-recipe-search" placeholder="Search recipes…" autocomplete="off">
                 </div>
-                <div class="form-group">
-                    <label for="load-airtable-recipe-record">Recipe to Load</label>
-                    <select id="load-airtable-recipe-record" required></select>
+                <div id="airtable-recipe-categories" class="recipe-browser-categories" role="group" aria-label="Recipe categories">
+                    <button type="button" data-recipe-category="" aria-pressed="true">All Recipes</button>
+                    <button type="button" data-recipe-category="Breakfast" aria-pressed="false">Breakfast</button>
+                    <button type="button" data-recipe-category="Lunch / Dinner" aria-pressed="false">Lunch / Dinner</button>
+                    <button type="button" data-recipe-category="Sides" aria-pressed="false">Sides</button>
+                    <button type="button" data-recipe-category="Dessert" aria-pressed="false">Dessert</button>
+                    <button type="button" data-recipe-category="Smoothie" aria-pressed="false">Smoothie</button>
+                    <button type="button" data-recipe-category="Snack" aria-pressed="false">Snack</button>
+                    <button type="button" data-recipe-category="Sauce" aria-pressed="false">Sauce</button>
+                    <button type="button" data-recipe-category="Client Recipes" aria-pressed="false">Client Recipes</button>
+                </div>
+                <div class="recipe-browser-toolbar">
+                    <span id="airtable-recipe-count" role="status"></span>
+                    <label class="visually-hidden" for="airtable-recipe-sort">Sort recipes</label>
+                    <select id="airtable-recipe-sort">
+                        <option value="az">Name (A–Z)</option>
+                        <option value="za">Name (Z–A)</option>
+                        <option value="newest">Newest first</option>
+                    </select>
+                </div>
+                <div id="airtable-recipe-results" class="recipe-browser-results">
+                    <div id="airtable-recipe-grid" class="recipe-browser-grid" role="group" aria-label="Choose a recipe"></div>
+                    <p id="airtable-recipe-empty" class="recent-recipes-empty" hidden></p>
                 </div>
                 <div id="load-airtable-recipe-status" class="master-paste-status" role="status"></div>
                 <div class="load-recipe-actions">

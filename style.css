@@ -1629,18 +1629,317 @@ body {
 
 #load-airtable-recipe-search {
     width: 100%;
-    padding: var(--spacing-sm) var(--spacing-md);
-    border: 1px solid #303943;
-    border-radius: var(--radius-md);
-    background: #0f1318;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 0;
+    background: transparent;
     color: #edf2f7;
     font: inherit;
     font-size: var(--editor-body-size);
 }
 
 #load-airtable-recipe-search:focus {
-    border-color: var(--color-primary);
     outline: none;
+}
+
+.load-recipe-modal.is-browsing-airtable {
+    max-width: 860px;
+    height: min(760px, calc(100dvh - 40px));
+    max-height: none;
+    border-radius: 14px;
+}
+
+.is-browsing-airtable .equipment-modal-header {
+    padding: 16px 24px 12px;
+    border-bottom: 0;
+}
+
+.is-browsing-airtable .equipment-modal-header h3 {
+    font-size: 20px;
+}
+
+.airtable-recipe-browser {
+    flex: 1;
+    min-height: 0;
+    gap: 8px;
+    padding: 0 24px 20px;
+    overflow: hidden;
+}
+
+.recipe-browser-search {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    border: 1px solid #43515a;
+    border-radius: 6px;
+    background: #11171d;
+}
+
+.recipe-browser-search:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px #42d53b20;
+}
+
+.recipe-browser-search-icon {
+    position: relative;
+    display: block;
+    width: 13px;
+    height: 13px;
+    flex: 0 0 13px;
+    margin-left: 12px;
+    border: 1.5px solid #d2dae2;
+    border-radius: 50%;
+}
+
+.recipe-browser-search-icon::after {
+    position: absolute;
+    right: -4px;
+    bottom: -2px;
+    width: 6px;
+    height: 1.5px;
+    border-radius: 1px;
+    background: #d2dae2;
+    transform: rotate(45deg);
+    content: '';
+}
+
+.recipe-browser-categories {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: stretch;
+    overflow-x: auto;
+    border-bottom: 1px solid #303943;
+    scrollbar-width: thin;
+}
+
+.recipe-browser-categories button {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: #aab7c2;
+    font: 650 12px var(--font-primary);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.recipe-browser-categories button:hover,
+.recipe-browser-categories button[aria-pressed="true"] {
+    color: #f5f7fa;
+}
+
+.recipe-browser-categories button[aria-pressed="true"] {
+    border-bottom-color: var(--color-primary);
+}
+
+.recipe-browser-toolbar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    color: #9fadb9;
+    font-size: 11px;
+}
+
+.recipe-browser-toolbar select {
+    margin-left: auto;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 4px;
+    background: #171c22;
+    color: #cbd6e0;
+    font: 650 12px var(--font-primary);
+    cursor: pointer;
+}
+
+.recipe-browser-results {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: #4d5a65 #242d36;
+}
+
+.recipe-browser-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 11px;
+    padding: 1px 4px 3px 1px;
+}
+
+.recipe-browser-card {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+    border: 1px solid #34404a;
+    border-radius: 9px;
+    background: #222a32;
+    color: #f2f6f8;
+    font-family: var(--font-primary);
+    text-align: left;
+    cursor: pointer;
+}
+
+.recipe-browser-card.is-excluded {
+    border-color: #cc786e;
+}
+
+.recipe-browser-card:hover,
+.recipe-browser-card[aria-pressed="true"] {
+    border-color: var(--color-primary);
+    background: #27362e;
+}
+
+.recipe-browser-card[aria-pressed="true"] {
+    box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.recipe-browser-card:focus-visible {
+    outline: 2px solid #81eb76;
+    outline-offset: -3px;
+}
+
+.recipe-browser-card-photo {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1.85;
+    background: linear-gradient(145deg, #313b45, #1e262e);
+}
+
+.recipe-browser-card-photo::before {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 28px;
+    height: 28px;
+    background: #7e8b97;
+    mask: url('Icons/image.svg') center / contain no-repeat;
+    transform: translate(-50%, -50%);
+    content: '';
+}
+
+.recipe-browser-card-photo img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.recipe-browser-badge,
+.recipe-browser-file-missing {
+    position: absolute;
+    display: block;
+    border-radius: 999px;
+    padding: 3px 7px;
+    line-height: 1.3;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.recipe-browser-badge {
+    top: 6px;
+    left: 6px;
+    background: #a1ed83;
+    color: #142510;
+}
+
+.is-excluded .recipe-browser-badge {
+    background: #ff9488;
+    color: #2d1513;
+}
+
+.recipe-browser-file-missing {
+    right: 5px;
+    bottom: 5px;
+    background: #131b22e8;
+    color: #e4eaf0;
+}
+
+.recipe-browser-card-title {
+    width: 100%;
+    display: -webkit-box;
+    overflow: hidden;
+    margin: 6px 0 auto;
+    padding: 0 8px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 12px;
+    line-height: 1.2;
+    font-weight: 750;
+}
+
+.recipe-browser-card-detail {
+    overflow: hidden;
+    padding: 2px 8px 0;
+    color: #aab7c2;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recipe-browser-macros {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+    width: 100%;
+    padding: 5px 6px 6px;
+    text-align: center;
+}
+
+.recipe-browser-macros > span {
+    display: block;
+    min-width: 0;
+    padding: 4px 1px;
+    border-radius: 4px;
+    background: #303941;
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+.recipe-browser-macros strong {
+    display: block;
+    color: #9bdf8a;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.airtable-recipe-browser .load-recipe-actions {
+    flex: 0 0 auto;
+    width: min(100%, 520px);
+    margin: 3px auto 0;
+}
+
+.airtable-recipe-browser .btn-primary:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 730px) {
+    .recipe-browser-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 550px) {
+    .is-browsing-airtable .equipment-modal-header,
+    .airtable-recipe-browser {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .recipe-browser-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
 }
 
 .meal-planner-export-body {

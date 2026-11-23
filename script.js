@@ -299,6 +299,7 @@ let updatingMealPlannerRecipe = false;
 let editingMealPlannerRecordId = '';
 let airtableLoadOptions = [];
 let airtableLoadRequest = null;
+let airtableLoadSelectedId = '';
 let appMode = 'create';
 let editingPageRecordId = '';
 let editingPageRecordFields = null;
@@ -636,7 +637,9 @@ const elements = {
     btnLoadFromAirtable: () => document.getElementById('btn-load-from-airtable'),
     airtableLoadForm: () => document.getElementById('load-airtable-recipe-form'),
     airtableLoadSearch: () => document.getElementById('load-airtable-recipe-search'),
-    airtableLoadRecord: () => document.getElementById('load-airtable-recipe-record'),
+    airtableLoadCategories: () => document.getElementById('airtable-recipe-categories'),
+    airtableLoadSort: () => document.getElementById('airtable-recipe-sort'),
+    airtableLoadGrid: () => document.getElementById('airtable-recipe-grid'),
     airtableLoadSubmit: () => document.getElementById('btn-load-airtable-recipe'),
     mealPlannerExportTitle: () => document.getElementById('meal-planner-export-title'),
     mealPlannerExportOverlay: () => document.getElementById('meal-planner-export-overlay'),
@@ -1064,6 +1067,8 @@ function showRecentRecipePicker() {
     airtableLoadRequest?.abort();
     elements.airtableLoadForm().hidden = true;
     document.getElementById('load-recipe-recent').hidden = false;
+    elements.loadRecipeOverlay().querySelector('.load-recipe-modal').classList.remove('is-browsing-airtable');
+    document.getElementById('load-recipe-heading').textContent = 'Load Recipe';
     renderRecentRecipes();
     elements.btnLoadFromAirtable().focus();
 }
@@ -1079,31 +1084,40 @@ async function openAirtableRecipePicker() {
     const request = new AbortController();
     airtableLoadRequest = request;
     airtableLoadOptions = [];
+    airtableLoadSelectedId = '';
     elements.airtableLoadForm().hidden = false;
     document.getElementById('load-recipe-recent').hidden = true;
+    elements.loadRecipeOverlay().querySelector('.load-recipe-modal').classList.add('is-browsing-airtable');
+    document.getElementById('load-recipe-heading').textContent = 'Browse Recipes';
     const search = elements.airtableLoadSearch();
-    const picker = elements.airtableLoadRecord();
     const submit = elements.airtableLoadSubmit();
+    const categories = elements.airtableLoadCategories();
+    const sort = elements.airtableLoadSort();
     search.value = '';
     search.disabled = false;
-    picker.replaceChildren(new Option('Loading Airtable recipes…', ''));
-    picker.disabled = true;
+    sort.value = 'az';
+    sort.disabled = false;
+    categories.inert = false;
+    categories.querySelectorAll('[data-recipe-category]').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.recipeCategory === ''));
+    });
+    elements.airtableLoadGrid().replaceChildren();
+    elements.airtableLoadGrid().inert = false;
+    document.getElementById('airtable-recipe-count').textContent = '';
+    document.getElementById('airtable-recipe-empty').hidden = true;
     submit.disabled = true;
     submit.textContent = 'Load Recipe';
-    updateAirtableLoadStatus();
+    updateAirtableLoadStatus('Loading Airtable recipes…', 'working');
     search.focus();
 
     try {
-        const recipes = await postMealPlannerExport({ action: 'list-meal-planner-recipes', withRecipeFile: true }, { signal: request.signal });
+        const recipes = await postMealPlannerExport({ action: 'list-meal-planner-recipes', gallery: true }, { signal: request.signal });
         if (request.signal.aborted) return;
         if (!Array.isArray(recipes)) throw new Error('Airtable did not return the recipe list.');
         airtableLoadOptions = recipes;
-        picker.disabled = false;
-        if (recipes.length) renderAirtableLoadOptions();
-        else picker.replaceChildren(new Option('No recipes with a Recipe File', ''));
+        renderAirtableLoadOptions();
     } catch (error) {
         if (request.signal.aborted) return;
-        picker.replaceChildren(new Option('Unable to load recipes', ''));
         updateAirtableLoadStatus(error.message, 'error');
     } finally {
         if (airtableLoadRequest === request) airtableLoadRequest = null;
@@ -1111,23 +1125,109 @@ async function openAirtableRecipePicker() {
 }
 
 function renderAirtableLoadOptions() {
-    if (!airtableLoadOptions.length) return;
-    const picker = elements.airtableLoadRecord();
-    populateAirtableRecipeOptions(picker, elements.airtableLoadSearch(), airtableLoadOptions);
-    elements.airtableLoadSubmit().disabled = !picker.value;
+    const category = elements.airtableLoadCategories().querySelector('[aria-pressed="true"]').dataset.recipeCategory;
+    const sort = elements.airtableLoadSort().value;
+    const terms = normalizeAirtableSearch(elements.airtableLoadSearch().value).split(' ').filter(Boolean);
+    const compareTitles = (a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+    const matches = airtableLoadOptions.filter((recipe) => {
+        const matchesCategory = !category || recipe.category === category
+            || (category === 'Smoothie' && /\bsmoothies?\b/i.test(recipe.title));
+        return matchesCategory && matchesAirtableRecipeSearch(recipe, terms);
+    });
+    matches.sort((a, b) => {
+        if (sort === 'newest') return (b.date || '').localeCompare(a.date || '') || compareTitles(a, b);
+        return sort === 'za' ? compareTitles(b, a) : compareTitles(a, b);
+    });
+
+    const titleCounts = new Map();
+    matches.forEach(({ title }) => titleCounts.set(title, (titleCounts.get(title) || 0) + 1));
+    elements.airtableLoadGrid().replaceChildren(...matches.map((recipe, index) =>
+        createAirtableRecipeCard(recipe, titleCounts.get(recipe.title) > 1, index < 12)
+    ));
+    document.getElementById('airtable-recipe-results').scrollTop = 0;
+    document.getElementById('airtable-recipe-count').textContent = `${matches.length} ${matches.length === 1 ? 'recipe' : 'recipes'}`;
+    const empty = document.getElementById('airtable-recipe-empty');
+    empty.hidden = matches.length > 0;
+    empty.textContent = airtableLoadOptions.length ? 'No recipes match your search and category.' : 'No recipes found in Airtable.';
+    selectAirtableLoadRecipe(matches.find(({ id }) => id === airtableLoadSelectedId));
+}
+
+function createAirtableRecipeCard(recipe, showDetail, eagerImage) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'recipe-browser-card';
+    card.classList.toggle('is-excluded', recipe.excluded);
+    card.dataset.recipeId = recipe.id;
+    const detail = [recipe.series, recipe.date?.slice(0, 10), recipe.id.slice(-6)].filter(Boolean).join(' · ');
+    card.title = [recipe.title, detail].join(' · ');
+    const photo = document.createElement('span');
+    photo.className = 'recipe-browser-card-photo';
+    if (recipe.thumbnailUrl) {
+        const img = document.createElement('img');
+        img.alt = '';
+        img.loading = eagerImage ? 'eager' : 'lazy';
+        img.decoding = 'async';
+        img.referrerPolicy = 'no-referrer';
+        img.addEventListener('error', () => img.remove(), { once: true });
+        img.src = recipe.thumbnailUrl;
+        photo.append(img);
+    }
+    const badge = document.createElement('span');
+    badge.className = 'recipe-browser-badge';
+    badge.innerHTML = recipe.excluded ? '<span aria-hidden="true">⊘</span> Excluded' : '<span aria-hidden="true">✓</span> Included';
+    photo.append(badge);
+    if (!recipe.hasRecipeFile) {
+        const missing = document.createElement('span');
+        missing.className = 'recipe-browser-file-missing';
+        missing.textContent = 'No recipe file';
+        photo.append(missing);
+    }
+
+    const title = document.createElement('span');
+    title.className = 'recipe-browser-card-title';
+    title.textContent = recipe.title;
+    card.append(photo, title);
+    if (showDetail) {
+        const subtitle = document.createElement('span');
+        subtitle.className = 'recipe-browser-card-detail';
+        subtitle.textContent = detail;
+        card.append(subtitle);
+    }
+    const macros = document.createElement('span');
+    macros.className = 'recipe-browser-macros';
+    macros.innerHTML = [
+        [recipe.calories, 'cal'], [recipe.protein, 'pro'], [recipe.fat, 'fat'], [recipe.carbs, 'carb']
+    ].map(([value, label]) => `<span><strong>${escapeHtml(String(value ?? '—'))}</strong>${label}</span>`).join('');
+    card.append(macros);
+    return card;
+}
+
+function selectAirtableLoadRecipe(recipe) {
+    airtableLoadSelectedId = recipe?.id || '';
+    elements.airtableLoadGrid().querySelectorAll('[data-recipe-id]').forEach((card) => {
+        card.setAttribute('aria-pressed', String(card.dataset.recipeId === airtableLoadSelectedId));
+    });
+    elements.airtableLoadSubmit().disabled = !recipe?.hasRecipeFile;
+    if (recipe && !recipe.hasRecipeFile) {
+        updateAirtableLoadStatus('This Airtable record has no .recipe or .json attachment to load.', 'error');
+    } else {
+        updateAirtableLoadStatus();
+    }
 }
 
 async function handleAirtableRecipeLoad(event) {
     event.preventDefault();
-    const picker = elements.airtableLoadRecord();
-    const recordId = picker.value;
-    if (airtableLoadRequest || !airtableLoadOptions.some(({ id }) => id === recordId)) return;
+    const recordId = airtableLoadSelectedId;
+    if (airtableLoadRequest || !airtableLoadOptions.some(({ id, hasRecipeFile }) => id === recordId && hasRecipeFile)) return;
 
     const request = new AbortController();
     airtableLoadRequest = request;
     const search = elements.airtableLoadSearch();
     const submit = elements.airtableLoadSubmit();
-    picker.disabled = search.disabled = submit.disabled = true;
+    const sort = elements.airtableLoadSort();
+    const grid = elements.airtableLoadGrid();
+    const categories = elements.airtableLoadCategories();
+    categories.inert = grid.inert = search.disabled = sort.disabled = submit.disabled = true;
     submit.textContent = 'Loading…';
     updateAirtableLoadStatus('Downloading the recipe file…', 'working');
     try {
@@ -1156,7 +1256,7 @@ async function handleAirtableRecipeLoad(event) {
     } finally {
         if (airtableLoadRequest === request) {
             airtableLoadRequest = null;
-            picker.disabled = search.disabled = submit.disabled = false;
+            categories.inert = grid.inert = search.disabled = sort.disabled = submit.disabled = false;
             submit.textContent = 'Load Recipe';
         }
     }
@@ -2438,10 +2538,24 @@ function initializeButtonListeners() {
     elements.btnCloseLoadRecipe()?.addEventListener('click', closeLoadRecipeOverlay);
     elements.btnLoadFromAirtable()?.addEventListener('click', openAirtableRecipePicker);
     document.getElementById('btn-back-load-recipe')?.addEventListener('click', showRecentRecipePicker);
-    elements.airtableLoadSearch()?.addEventListener('input', renderAirtableLoadOptions);
-    elements.airtableLoadRecord()?.addEventListener('change', () => {
-        elements.airtableLoadSubmit().disabled = !elements.airtableLoadRecord().value;
-        updateAirtableLoadStatus();
+    elements.airtableLoadSearch()?.addEventListener('input', () => {
+        if (!airtableLoadRequest) renderAirtableLoadOptions();
+    });
+    elements.airtableLoadSort()?.addEventListener('change', () => {
+        if (!airtableLoadRequest) renderAirtableLoadOptions();
+    });
+    elements.airtableLoadCategories()?.addEventListener('click', (event) => {
+        const selected = event.target.closest('[data-recipe-category]');
+        if (!selected) return;
+        elements.airtableLoadCategories().querySelectorAll('[data-recipe-category]').forEach((button) => {
+            button.setAttribute('aria-pressed', String(button === selected));
+        });
+        if (!airtableLoadRequest) renderAirtableLoadOptions();
+    });
+    elements.airtableLoadGrid()?.addEventListener('click', (event) => {
+        const card = event.target.closest('[data-recipe-id]');
+        if (!card) return;
+        selectAirtableLoadRecipe(airtableLoadOptions.find(({ id }) => id === card.dataset.recipeId));
     });
     elements.airtableLoadForm()?.addEventListener('submit', handleAirtableRecipeLoad);
     elements.btnLoadFromComputer()?.addEventListener('click', () => {
@@ -6199,11 +6313,8 @@ function renderMealPlannerRecipeOptions(preferredId) {
 }
 
 function populateAirtableRecipeOptions(recordPicker, searchInput, recipes, preferredId = recordPicker.value) {
-    const terms = searchInput.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const matches = recipes.filter(({ title, series }) => {
-        const searchable = `${title} ${series || ''}`.toLowerCase();
-        return terms.every((term) => searchable.includes(term));
-    });
+    const terms = normalizeAirtableSearch(searchInput.value).split(' ').filter(Boolean);
+    const matches = recipes.filter((recipe) => matchesAirtableRecipeSearch(recipe, terms));
     const options = matches.map(({ id, title, calories, protein, carbs, fat, date, series }) => {
         const macros = [calories == null ? '' : `${calories} cal`, ...[
             [protein, 'P'], [carbs, 'C'], [fat, 'F']
@@ -6213,6 +6324,15 @@ function populateAirtableRecipeOptions(recordPicker, searchInput, recipes, prefe
     });
     recordPicker.replaceChildren(new Option(matches.length ? 'Choose a recipe' : 'No matching recipes', ''), ...options);
     if (matches.some(({ id }) => id === preferredId)) recordPicker.value = preferredId;
+}
+
+function normalizeAirtableSearch(value) {
+    return value.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+function matchesAirtableRecipeSearch({ title, series, category }, terms) {
+    const searchable = normalizeAirtableSearch([title, series, category].filter(Boolean).join(' '));
+    return terms.every((term) => searchable.includes(term));
 }
 
 function showSelectedMealPlannerRecipe() {

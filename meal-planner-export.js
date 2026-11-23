@@ -45,14 +45,31 @@ const EASTERN_TIME_ZONE = 'America/New_York';
 const AIRTABLE_EXPORT_CATEGORY = 'Client Recipes';
 const NUTRITION_FIELDS = { Calories: 'calories', Protein: 'protein', Carbs: 'carbs', Fat: 'fat' };
 
-async function listMealPlannerRecipes({ withRecipeFile = false } = {}) {
+async function listMealPlannerRecipes({ withRecipeFile = false, gallery = false } = {}) {
     const environment = getAirtableEnvironment();
+    const fields = ['Title', ...Object.keys(NUTRITION_FIELDS), 'Meal Series', 'date'];
+    if (gallery === true) fields.push('Category', 'Exclude', 'Photo', ATTACHMENT_FIELDS.photo, ATTACHMENT_FIELDS.recipeFile);
     const records = await listAirtableRecords({
-        ...environment, fields: ['Title', ...Object.keys(NUTRITION_FIELDS), 'Meal Series', 'date'], sortField: 'Title',
+        ...environment, fields, sortField: 'Title',
         lookup: 'Airtable recipe lookup',
         filterByFormula: withRecipeFile === true ? `NOT({${ATTACHMENT_FIELDS.recipeFile}} = BLANK())` : ''
     });
-    return records.map((record) => describeMealPlannerRecipe(environment, record));
+    return records.map((record) => {
+        const summary = describeMealPlannerRecipe(environment, record);
+        if (gallery !== true) return summary;
+
+        const fields = record.fields || {};
+        const photo = Array.isArray(fields[ATTACHMENT_FIELDS.photo]) ? fields[ATTACHMENT_FIELDS.photo][0] : null;
+        const thumbnailUrl = [photo?.thumbnails?.large?.url, photo?.thumbnails?.small?.url, photo?.url, fields.Photo]
+            .find((value) => typeof value === 'string' && /^https:\/\//i.test(value)) || '';
+        return {
+            ...summary,
+            category: typeof fields.Category === 'string' ? fields.Category : '',
+            excluded: fields.Exclude === true,
+            hasRecipeFile: Boolean(findRecipeFile(fields[ATTACHMENT_FIELDS.recipeFile])),
+            thumbnailUrl
+        };
+    });
 }
 
 async function getMealPlannerRecipeFile(payload) {
@@ -65,15 +82,19 @@ async function getMealPlannerRecipeFile(payload) {
     if (!Array.isArray(files) || files.length === 0) {
         throw new Error('This record has no attachment in its Recipe File column.');
     }
-    const attachment = files.find((file) => /^https:\/\//i.test(file?.url || '') && (
-        /\.(json|recipe)$/i.test(file.filename || '') || file.type === 'application/json'
-    ));
+    const attachment = findRecipeFile(files);
     if (!attachment) throw new Error('The Recipe File column has no .recipe or .json attachment.');
 
     return {
         ...mealPlannerRecordLink(environment, record.id),
         attachmentUrl: attachment.url
     };
+}
+
+function findRecipeFile(files) {
+    return Array.isArray(files) ? files.find((file) => /^https:\/\//i.test(file?.url || '') && (
+        /\.(json|recipe)$/i.test(file.filename || '') || file.type === 'application/json'
+    )) : undefined;
 }
 
 function describeMealPlannerRecipe(environment, { id, createdTime, fields }) {
