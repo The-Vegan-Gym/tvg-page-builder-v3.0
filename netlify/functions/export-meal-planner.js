@@ -1,15 +1,5 @@
-const {
-    createPageRecord,
-    createMealPlannerRecord,
-    exportRecipeToMealPlanner,
-    getPageRecord,
-    listCoachProfiles,
-    listPageRecordCategories,
-    updatePageRecord,
-    uploadPageRecordAttachments,
-    uploadMealPlannerAttachments
-} = require('../../meal-planner-export');
-const { createRecipePdfBuffer, loadEnvFile } = require('../../server');
+const { handleMealPlannerAction } = require('../../meal-planner-export');
+const { loadEnvFile } = require('../../server');
 
 exports.handler = async (event) => {
     if (event.httpMethod === 'OPTIONS') {
@@ -31,44 +21,6 @@ exports.handler = async (event) => {
         return jsonResponse(400, { error: error.message || 'Unable to export to Meal Planner' });
     }
 };
-
-function handleMealPlannerAction(payload = {}) {
-    if (payload.action === 'get-page-record') {
-        return getPageRecord(payload);
-    }
-
-    if (payload.action === 'list-coach-profiles') {
-        return listCoachProfiles();
-    }
-
-    if (payload.action === 'list-page-record-categories') {
-        return listPageRecordCategories();
-    }
-
-    if (payload.action === 'create-page-record') {
-        return createPageRecord(payload);
-    }
-
-    if (payload.action === 'update-page-record') {
-        return updatePageRecord(payload);
-    }
-
-    if (payload.action === 'upload-page-record-attachments') {
-        return uploadPageRecordAttachments(payload);
-    }
-
-    if (payload.action === 'create-record') {
-        return createMealPlannerRecord(payload);
-    }
-
-    if (payload.action === 'upload-attachments') {
-        return uploadMealPlannerAttachments(payload);
-    }
-
-    return exportRecipeToMealPlanner(payload, {
-        createPdfBuffer: createRecipePdfBuffer
-    });
-}
 
 function parseBody(event) {
     const body = event.isBase64Encoded

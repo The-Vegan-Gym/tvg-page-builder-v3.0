@@ -126,7 +126,7 @@
                     <div id="master-paste-info-panel" class="section-info-panel" hidden>
                         <button type="button" id="btn-close-master-paste-info" class="section-info-close" aria-label="Close Master Paste info">&times;</button>
                         <h3>Master Paste</h3>
-                        <p>Add documents, images, or recipe text. Enter a prompt to ask about your files or guide recipe generation.</p>
+                        <p>Describe what you want to create or change, then choose Apply to Page. You can attach source files and undo the edit from the preview toolbar.</p>
                         <p>Paste structured recipe text here to fill the main recipe fields at once, including title, image details, macros, ingredients, instructions, equipment, and notes.</p>
                         <p>Use Copy AI Instructions to get a format that can be filled by an AI assistant, then paste the result here and click Fill All.</p>
                     </div>
@@ -146,11 +146,12 @@
                         </div>
                         <div class="form-group">
                             <label for="master-paste-ai-prompt">AI Prompt</label>
-                            <textarea id="master-paste-ai-prompt" rows="3" placeholder="What would you like AI to do?"></textarea>
+                            <textarea id="master-paste-ai-prompt" rows="3" placeholder="e.g. Turn this attachment into a recipe page, or shorten the current directions."></textarea>
                         </div>
                         <div class="master-paste-actions">
-                            <button type="button" id="btn-send-master-paste-ai" class="btn-secondary">Send Prompt</button>
-                            <button type="button" id="btn-generate-master-paste-ai" class="btn-primary">Generate Recipe</button>
+                            <button type="button" id="btn-apply-master-paste-ai" class="btn-primary">Apply to Page</button>
+                            <button type="button" id="btn-send-master-paste-ai" class="btn-secondary">Ask AI</button>
+                            <button type="button" id="btn-generate-master-paste-ai" class="btn-secondary">Generate Draft</button>
                         </div>
                         <div id="master-paste-ai-status" class="master-paste-status" role="status"></div>
                         <div id="master-paste-ai-answer" class="form-group master-paste-ai-answer" hidden>
@@ -609,7 +610,7 @@
 
                 <!-- Action Buttons -->
                 <div class="form-actions">
-                    <input type="file" id="json-file-input" accept=".json" hidden>
+                    <input type="file" id="json-file-input" accept=".json,.recipe" hidden>
                     <button type="button" id="btn-clear" class="btn-danger">Clear All</button>
                 </div>
                 </form>
@@ -641,12 +642,48 @@
                         <!-- Recipe page content rendered by JS -->
                     </div>
                 </div>
+                <div class="preview-ai-tools" id="preview-ai-tools">
+                    <button type="button" id="btn-preview-ai-open" class="preview-ai-launch" aria-label="Edit with AI" aria-expanded="false" aria-controls="preview-ai-panel">
+                        <span class="preview-ai-badge" aria-hidden="true"></span>
+                        <span>Edit with AI</span>
+                    </button>
+                    <section id="preview-ai-panel" class="preview-ai-panel" role="dialog" aria-labelledby="preview-ai-title" inert>
+                        <div class="preview-ai-header">
+                            <span class="preview-ai-badge" aria-hidden="true"></span>
+                            <h2 id="preview-ai-title">Edit with AI</h2>
+                            <button type="button" id="btn-preview-ai-close" class="preview-ai-close" aria-label="Close AI editor">&times;</button>
+                        </div>
+                        <form id="preview-ai-form">
+                            <div class="preview-ai-composer">
+                                <textarea id="preview-ai-prompt" rows="2" aria-label="Describe your recipe page edits" placeholder="Make the title smaller, change the header color, or simplify the ingredients."></textarea>
+                                <button type="submit" id="btn-preview-ai-send" class="preview-ai-send" aria-label="Apply AI edits" title="Apply AI Edits">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21.6 2.4a1 1 0 0 0-1-.2l-18 7a1 1 0 0 0 0 1.9l7.1 2.5 2.5 7.1a1 1 0 0 0 1.9 0l7.7-17.3a1 1 0 0 0-.2-1ZM11 13l5.8-5.8-4.3 7.7-.8-2.2-.7.3Z"/></svg>
+                                </button>
+                            </div>
+                            <div class="preview-ai-suggestions" aria-label="Suggested edits">
+                                <button type="button" data-ai-suggestion="Change the header color to ">Change Colors</button>
+                                <button type="button" data-ai-suggestion="Make the recipe title smaller.">Adjust Text</button>
+                                <button type="button" data-ai-suggestion="Move the instructions to the next page.">Update Layout</button>
+                                <button type="button" id="btn-preview-ai-image">Add / Replace Image</button>
+                                <button type="button" data-ai-suggestion="Simplify the ingredient wording and keep all measurements.">Simplify Ingredients</button>
+                                <button type="button" data-ai-suggestion="Update the nutrition to ">Update Nutrition</button>
+                            </div>
+                            <input type="file" id="preview-ai-image" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                            <div id="preview-ai-attachment" class="master-paste-ai-file preview-ai-attachment" hidden>
+                                <span id="preview-ai-filename"></span>
+                                <button type="button" id="btn-preview-ai-remove-image" aria-label="Remove attached photo">&times;</button>
+                            </div>
+                            <p id="preview-ai-status" class="preview-ai-status" role="status"></p>
+                        </form>
+                    </section>
+                </div>
                 <div class="preview-zoom-controls" aria-label="Preview zoom controls">
                     <button type="button" id="btn-zoom-out" class="btn-zoom" aria-label="Zoom out">−</button>
                     <input type="range" id="zoom-slider" class="zoom-slider" min="50" max="150" step="1" value="100" aria-label="Zoom level">
                     <span id="zoom-level">100%</span>
                     <button type="button" id="btn-zoom-in" class="btn-zoom" aria-label="Zoom in">+</button>
                     <button type="button" id="btn-center-preview" class="btn-zoom btn-center-preview" title="Center Preview">Center</button>
+                    <button type="button" id="btn-focus-preview" class="btn-zoom btn-focus-preview" title="Focus Page 1" aria-label="Focus page 1"></button>
                 </div>
             </div>
         </main>
@@ -724,6 +761,27 @@
                 <button type="button" class="btn-close-modal" id="btn-close-meal-planner-export">&times;</button>
             </div>
             <form id="meal-planner-export-form" class="meal-planner-export-body">
+                <div class="form-group" id="meal-planner-export-destination-group">
+                    <label for="meal-planner-export-destination">Export Mode</label>
+                    <select id="meal-planner-export-destination">
+                        <option value="create">Create New Recipe</option>
+                        <option value="update">Update Existing Recipe</option>
+                    </select>
+                </div>
+                <div id="meal-planner-existing-recipe" hidden>
+                    <div class="form-group">
+                        <label for="meal-planner-recipe-search">Search Airtable Recipes</label>
+                        <input type="search" id="meal-planner-recipe-search" placeholder="Search by title or meal series" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="meal-planner-recipe-record">Recipe to Update</label>
+                        <select id="meal-planner-recipe-record" aria-describedby="meal-planner-update-help">
+                            <option value="">Choose a recipe</option>
+                        </select>
+                        <a id="meal-planner-open-recipe" class="meal-planner-record-link" target="_blank" rel="noopener noreferrer" hidden>Open record in Airtable</a>
+                    </div>
+                    <p id="meal-planner-update-help" class="form-hint">Replaces the four page variants and recipe file. Updates filled nutrition fields and the recipe image when supplied.</p>
+                </div>
                 <div class="meal-planner-export-actions">
                     <button type="button" id="btn-generate-meal-planner-metadata" class="btn-secondary">Generate</button>
                 </div>
@@ -757,7 +815,7 @@
                     <label for="meal-planner-allergy">Allergy</label>
                     <textarea id="meal-planner-allergy" name="allergy" rows="3" placeholder="One allergy tag per line"></textarea>
                 </div>
-                <div id="meal-planner-export-status" class="master-paste-status"></div>
+                <div id="meal-planner-export-status" class="master-paste-status" role="status"></div>
                 <div class="equipment-modal-footer">
                     <button type="button" id="btn-cancel-meal-planner-export" class="btn-secondary">Cancel</button>
                     <button type="submit" id="btn-submit-meal-planner-export" class="btn-primary">Export</button>

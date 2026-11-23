@@ -76,6 +76,7 @@ const EMPTY_RECIPE = {
     title: "",
     titleFontSize: 40,
     typographySizes: { ...DEFAULT_TYPOGRAPHY_SIZES },
+    colors: {},
     sectionLabelSpacing: 4,
     stepToHeaderSpacing: 32,
     subtitleToStepSpacing: 12,
@@ -289,8 +290,12 @@ const MASTER_PASTE_MAX_FILE_BYTES = 4 * 1024 * 1024;
 const MASTER_PASTE_MAX_BODY_BYTES = 5_750_000;
 let masterPasteAiFiles = [];
 let masterPasteAiRequest = null;
+let previewAiImage = null;
 let spellcheckCorrections = [];
 let activeAirtableExportMode = 'meal-planner';
+let mealPlannerRecipeOptions = null;
+let loadingMealPlannerRecipes = false;
+let updatingMealPlannerRecipe = false;
 let appMode = 'create';
 let editingPageRecordId = '';
 let editingPageRecordFields = null;
@@ -494,6 +499,7 @@ const elements = {
     masterPasteAiAnswer: () => document.getElementById('master-paste-ai-answer'),
     masterPasteAiReply: () => document.getElementById('master-paste-ai-reply'),
     btnMasterPasteAiFiles: () => document.getElementById('btn-master-paste-ai-files'),
+    btnApplyMasterPasteAi: () => document.getElementById('btn-apply-master-paste-ai'),
     btnGenerateMasterPasteAi: () => document.getElementById('btn-generate-master-paste-ai'),
     btnSendMasterPasteAi: () => document.getElementById('btn-send-master-paste-ai'),
     btnSpellcheckAi: () => document.getElementById('btn-spellcheck-ai'),
@@ -627,6 +633,9 @@ const elements = {
     mealPlannerExportTitle: () => document.getElementById('meal-planner-export-title'),
     mealPlannerExportOverlay: () => document.getElementById('meal-planner-export-overlay'),
     mealPlannerExportForm: () => document.getElementById('meal-planner-export-form'),
+    mealPlannerExportDestination: () => document.getElementById('meal-planner-export-destination'),
+    mealPlannerRecipeSearch: () => document.getElementById('meal-planner-recipe-search'),
+    mealPlannerRecipeRecord: () => document.getElementById('meal-planner-recipe-record'),
     myPagesCoachProfileGroup: () => document.getElementById('my-pages-coach-profile-group'),
     myPagesCoachProfile: () => document.getElementById('my-pages-coach-profile'),
     mealPlannerCategory: () => document.getElementById('meal-planner-category'),
@@ -642,6 +651,12 @@ const elements = {
     btnZoomIn: () => document.getElementById('btn-zoom-in'),
     btnZoomOut: () => document.getElementById('btn-zoom-out'),
     btnCenterPreview: () => document.getElementById('btn-center-preview'),
+    btnFocusPreview: () => document.getElementById('btn-focus-preview'),
+    previewAiTools: () => document.getElementById('preview-ai-tools'),
+    previewAiPanel: () => document.getElementById('preview-ai-panel'),
+    previewAiPrompt: () => document.getElementById('preview-ai-prompt'),
+    btnPreviewAiOpen: () => document.getElementById('btn-preview-ai-open'),
+    btnPreviewAiSend: () => document.getElementById('btn-preview-ai-send'),
     zoomSlider: () => document.getElementById('zoom-slider'),
     zoomLevelDisplay: () => document.getElementById('zoom-level'),
 
@@ -1169,7 +1184,10 @@ function initializePreviewPanning() {
     container.tabIndex = 0;
     container.setAttribute('aria-label', 'Recipe preview. Hold Space and drag to pan.');
 
-    const canUseSpacePan = () => document.activeElement === container || container.contains(document.activeElement);
+    const canUseSpacePan = () => {
+        const focused = document.activeElement;
+        return container.contains(focused) && !focused.closest('.preview-zoom-controls, .preview-ai-tools');
+    };
 
     const setSpacePanEnabled = (enabled) => {
         isSpacePanEnabled = enabled;
@@ -1192,6 +1210,7 @@ function initializePreviewPanning() {
     };
 
     container.addEventListener('mousedown', (event) => {
+        if (event.target.closest('.preview-zoom-controls, .preview-ai-tools')) return;
         container.focus({ preventScroll: true });
 
         if (event.button === 1) {
@@ -1229,7 +1248,7 @@ function initializePreviewPanning() {
     });
 
     container.addEventListener('wheel', (event) => {
-        if (event.ctrlKey || event.metaKey) {
+        if (event.ctrlKey || event.metaKey || event.target.closest('.preview-ai-panel')) {
             return;
         }
 
@@ -1259,7 +1278,7 @@ function initializePreviewPanning() {
     });
 
     window.addEventListener('keyup', (event) => {
-        if (event.code !== 'Space') return;
+        if (event.code !== 'Space' || !isSpacePanEnabled) return;
 
         event.preventDefault();
         setSpacePanEnabled(false);
@@ -2247,7 +2266,9 @@ function initializeFormListeners() {
 function initializeButtonListeners() {
     // Master Paste buttons
     initializeMasterPasteAiControls();
+    initializePreviewAiControls();
     elements.btnFillAll()?.addEventListener('click', handleFillAll);
+    elements.btnApplyMasterPasteAi()?.addEventListener('click', () => handleGenerateMasterPasteAi('apply'));
     elements.btnGenerateMasterPasteAi()?.addEventListener('click', () => handleGenerateMasterPasteAi('recipe'));
     elements.btnSendMasterPasteAi()?.addEventListener('click', () => handleGenerateMasterPasteAi('reply'));
     elements.btnSpellcheckAi()?.addEventListener('click', handleSpellcheckAi);
@@ -2264,6 +2285,9 @@ function initializeButtonListeners() {
     elements.btnExportMealPlanner()?.addEventListener('click', () => openAirtableExportOverlay('meal-planner'));
     elements.btnExportMyPages()?.addEventListener('click', () => openAirtableExportOverlay('my-pages'));
     elements.mealPlannerExportForm()?.addEventListener('submit', handleMealPlannerExportSubmit);
+    elements.mealPlannerExportDestination()?.addEventListener('change', updateMealPlannerExportMode);
+    elements.mealPlannerRecipeSearch()?.addEventListener('input', renderMealPlannerRecipeOptions);
+    elements.mealPlannerRecipeRecord()?.addEventListener('change', showSelectedMealPlannerRecipe);
     elements.btnGenerateMealPlannerMetadata()?.addEventListener('click', handleGenerateMealPlannerMetadata);
     elements.btnCloseMealPlannerExport()?.addEventListener('click', closeMealPlannerExportOverlay);
     elements.btnCancelMealPlannerExport()?.addEventListener('click', closeMealPlannerExportOverlay);
@@ -2313,12 +2337,12 @@ function initializeButtonListeners() {
 
     // Zoom controls
     elements.btnZoomIn()?.addEventListener('click', () => {
-        zoomLevel = Math.min(150, zoomLevel + 10);
+        zoomLevel = Math.min(Number(elements.zoomSlider().max), zoomLevel + 10);
         updateZoom();
     });
 
     elements.btnZoomOut()?.addEventListener('click', () => {
-        zoomLevel = Math.max(50, zoomLevel - 10);
+        zoomLevel = Math.max(Number(elements.zoomSlider().min), zoomLevel - 10);
         updateZoom();
     });
 
@@ -2328,6 +2352,7 @@ function initializeButtonListeners() {
     });
 
     elements.btnCenterPreview()?.addEventListener('click', centerPreview);
+    elements.btnFocusPreview()?.addEventListener('click', focusFirstPreviewPage);
 }
 
 // ================================================
@@ -2339,7 +2364,7 @@ function initializeButtonListeners() {
  */
 function loadRecipeToForm(recipe) {
     recipe = normalizeRecipe(recipe);
-    elements.pageType().value = 'recipe';
+    elements.pageType().value = recipe.pageType === 'day-of-eating' ? 'day-of-eating' : 'recipe';
     if (elements.pageStyle()) {
         elements.pageStyle().value = recipe.pageStyle || 'standard';
     }
@@ -2426,21 +2451,21 @@ function loadRecipeToForm(recipe) {
     const heroHeightValue = isPrinterFriendly(recipe) ? getPrinterFriendlyHeroHeight(recipe) : (recipe.heroHeight || 309);
     elements.heroHeight().value = heroHeightValue;
     elements.heroHeightValue().value = heroHeightValue;
-    updatePageTypeVisibility('recipe');
+    updatePageTypeVisibility(elements.pageType().value);
+
+    const imgSettings = recipe.imageSettings;
+    elements.imageScale().value = imgSettings.scale;
+    elements.imageScaleValue().value = imgSettings.scale;
+    elements.imagePosX().value = imgSettings.posX;
+    elements.imagePosXValue().value = imgSettings.posX;
+    elements.imagePosY().value = imgSettings.posY;
+    elements.imagePosYValue().value = imgSettings.posY;
 
     // Load image if present
     if (recipe.image) {
         elements.imagePreviewThumb().src = recipe.image;
         elements.imageUploadArea().classList.add('has-image');
         setImageControlsDisabled(false);
-        // Load image settings
-        const imgSettings = recipe.imageSettings || { scale: 100, posX: 50, posY: 50 };
-        elements.imageScale().value = imgSettings.scale;
-        elements.imageScaleValue().value = imgSettings.scale;
-        elements.imagePosX().value = imgSettings.posX;
-        elements.imagePosXValue().value = imgSettings.posX;
-        elements.imagePosY().value = imgSettings.posY;
-        elements.imagePosYValue().value = imgSettings.posY;
     } else {
         elements.imagePreviewThumb()?.removeAttribute('src');
         elements.heroImage().value = '';
@@ -2522,7 +2547,8 @@ function updateRecipeFromForm() {
     const primaryIngredientSection = ingredientSections[0] || { label: '', ingredients: [] };
 
     currentRecipe = {
-        pageType: 'recipe',
+        ...currentRecipe,
+        pageType: elements.pageType()?.value || 'recipe',
         pageStyle: elements.pageStyle()?.value || 'standard',
         title: elements.title()?.value || '',
         titleFontSize: parseInt(elements.titleFontSize()?.value, 10) || 40,
@@ -2773,8 +2799,21 @@ function createTypographyStyle(recipe = currentRecipe) {
         `--page-number-font-size: ${sizes.pageNumber}px`,
         `--portion-label-font-size: ${sizes.portionLabel}px`,
         `--portion-macro-value-font-size: ${sizes.portionMacroValue}px`,
-        `--portion-macro-unit-font-size: ${sizes.portionMacroUnit}px`
-    ].join('; ');
+        `--portion-macro-unit-font-size: ${sizes.portionMacroUnit}px`,
+        ...Object.entries({
+            hero: 'hero-color', title: 'title-color', macroBar: 'macro-color',
+            macroText: 'macro-text', sectionHeader: 'heading-color', sectionHeaderText: 'heading-text',
+            page: 'page-color', body: 'body-color'
+        }).map(([key, name]) => {
+            const color = getRecipeColor(recipe, key);
+            return color ? `--recipe-${name}: ${color}` : '';
+        })
+    ].filter(Boolean).join('; ');
+}
+
+function getRecipeColor(recipe, key, fallback = '') {
+    const value = recipe.colors?.[key];
+    return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
 }
 
 function getPrinterFriendlyHeroHeight(recipe = currentRecipe) {
@@ -3895,7 +3934,7 @@ function addInstructionSectionEditor(label = '', steps = [], isPrimary = false, 
                     <button type="button" class="segmented-control-button ${normalizedStartMode === 'force-next-page' ? 'is-active' : ''}" data-instruction-start-mode="force-next-page" aria-pressed="${normalizedStartMode === 'force-next-page'}">Next Page</button>
                 </div>
             </div>
-            <input type="hidden" class="instruction-section-step-style" value="numbered">
+            <input type="hidden" class="instruction-section-step-style" value="${stepStyle === 'bulleted' ? 'bulleted' : 'numbered'}">
         </div>
         <div class="instruction-section-steps"></div>
         <div class="instruction-section-actions">
@@ -5619,8 +5658,9 @@ async function handleExportJpg(options = {}) {
             .getPropertyValue('--color-primary')
             .trim() || '#42d53b';
         const printerFriendly = isPrinterFriendly(currentRecipe);
-        const macroBarColor = printerFriendly ? '#d9d9d9' : brandPrimary;
-        const recipeTitleColor = printerFriendly ? '#222222' : '#ffffff';
+        const macroBarColor = getRecipeColor(currentRecipe, 'macroBar', printerFriendly ? '#d9d9d9' : brandPrimary);
+        const recipeTitleColor = getRecipeColor(currentRecipe, 'title', printerFriendly ? '#222222' : '#ffffff');
+        const pageColor = getRecipeColor(currentRecipe, 'page', '#ffffff');
 
         const baseFilename = options?.filenameBase || getExportTitle();
         const exportedFiles = [];
@@ -5703,23 +5743,23 @@ async function handleExportJpg(options = {}) {
                     font-style: normal !important;
                 }
                 /* Force light mode colors for export */
-                .recipe-page { background: #ffffff !important; }
+                .recipe-page { background: ${pageColor} !important; }
                 .recipe-title { color: ${recipeTitleColor} !important; }
-                .hero-print-background { background: #ffffff !important; }
-                .macro-bar-content { background: ${macroBarColor} !important; color: #000000 !important; position: relative !important; }
-                .macro-bar-content span { color: #000000 !important; position: relative !important; z-index: 1 !important; }
-                .macro-bar-content .macro-divider { color: #000000 !important; }
-                .description-text { color: #424242 !important; }
-                .section-title { color: #000000 !important; }
-                .ingredient-name-cell, .ingredient-amount-cell { color: #000000 !important; }
+                .hero-print-background { background: var(--recipe-hero-color, #ffffff) !important; }
+                .macro-bar-content { background: ${macroBarColor} !important; color: var(--recipe-macro-text, #000000) !important; position: relative !important; }
+                .macro-bar-content span { color: var(--recipe-macro-text, #000000) !important; position: relative !important; z-index: 1 !important; }
+                .macro-bar-content .macro-divider { color: var(--recipe-macro-text, #000000) !important; }
+                .description-text { color: var(--recipe-body-color, #424242) !important; }
+                .section-title { color: var(--recipe-body-color, #000000) !important; }
+                .ingredient-name-cell, .ingredient-amount-cell { color: var(--recipe-body-color, #000000) !important; }
                 .ingredient-item { border-bottom-color: #E0E0E0 !important; }
                 .instruction-number { background: #b2b2b2 !important; color: #000000 !important; }
-                .instructions-header { background: #000000 !important; color: #ffffff !important; }
-                .instruction-text, .checkbox-text, .checkbox-box { color: #000000 !important; }
+                .instructions-header { background: var(--recipe-heading-color, #000000) !important; color: var(--recipe-heading-text, #ffffff) !important; }
+                .instruction-text, .checkbox-text, .checkbox-box { color: var(--recipe-body-color, #000000) !important; }
                 .checkbox-box { border-color: #c0c0c0 !important; color: #c0c0c0 !important; }
                 .note-callout { background: #dbdbdb !important; }
-                .note-text { color: #000000 !important; font-weight: 500 !important; }
-                .page-number { color: #424242 !important; }
+                .note-text { color: var(--recipe-body-color, #000000) !important; font-weight: 500 !important; }
+                .page-number { color: var(--recipe-body-color, #424242) !important; }
                 .description-section { border-bottom-color: #E0E0E0 !important; }
             `;
             clone.appendChild(styleTag);
@@ -5806,7 +5846,7 @@ async function handleExportJpg(options = {}) {
             const canvas = await html2canvas(clone, {
                 scale: scaleRatio,
                 useCORS: true,
-                backgroundColor: '#ffffff',
+                backgroundColor: pageColor,
                 width: cssPageWidth,
                 height: cssPageHeight,
                 windowWidth: cssPageWidth,
@@ -5931,6 +5971,7 @@ function waitForPreviewRender() {
 }
 
 function openAirtableExportOverlay(mode = 'meal-planner') {
+    if (updatingMealPlannerRecipe) return;
     updateRecipeFromForm();
     activeAirtableExportMode = mode;
     const overlay = elements.mealPlannerExportOverlay();
@@ -5940,14 +5981,12 @@ function openAirtableExportOverlay(mode = 'meal-planner') {
     if (elements.mealPlannerExportTitle()) {
         elements.mealPlannerExportTitle().textContent = isMyPagesExport ? 'Export to My Pages' : 'Export to Meal Planner';
     }
-    if (elements.btnSubmitMealPlannerExport()) {
-        elements.btnSubmitMealPlannerExport().textContent = isMyPagesExport ? 'Export to My Pages' : 'Export';
-    }
-    elements.btnGenerateMealPlannerMetadata()?.removeAttribute('hidden');
+    elements.mealPlannerExportDestination().value = 'create';
+    elements.mealPlannerRecipeSearch().value = '';
+    elements.mealPlannerRecipeRecord().value = '';
+    mealPlannerRecipeOptions = null;
+    document.getElementById('meal-planner-export-destination-group').hidden = isMyPagesExport;
     elements.myPagesCoachProfileGroup()?.toggleAttribute('hidden', !isMyPagesExport);
-    elements.mealPlannerIngredients()?.closest('.form-group')?.removeAttribute('hidden');
-    elements.mealPlannerCronometer()?.closest('.form-group')?.toggleAttribute('hidden', isMyPagesExport);
-    elements.mealPlannerAllergy()?.closest('.form-group')?.removeAttribute('hidden');
     if (elements.mealPlannerCategory()) {
         elements.mealPlannerCategory().required = false;
         elements.mealPlannerCategory().value = AIRTABLE_EXPORT_CATEGORY;
@@ -5967,8 +6006,8 @@ function openAirtableExportOverlay(mode = 'meal-planner') {
         loadCoachProfilesForMyPages();
     }
 
-    updateMealPlannerExportStatus('', '');
     overlay.classList.add('active');
+    updateMealPlannerExportMode();
 }
 
 function openMealPlannerExportOverlay() {
@@ -5976,7 +6015,83 @@ function openMealPlannerExportOverlay() {
 }
 
 function closeMealPlannerExportOverlay() {
+    if (updatingMealPlannerRecipe) return;
     elements.mealPlannerExportOverlay()?.classList.remove('active');
+}
+
+function isUpdatingMealPlannerRecipe() {
+    return activeAirtableExportMode === 'meal-planner' && elements.mealPlannerExportDestination().value === 'update';
+}
+
+function updateMealPlannerExportMode() {
+    const isUpdate = isUpdatingMealPlannerRecipe();
+    const isMyPages = activeAirtableExportMode === 'my-pages';
+    document.getElementById('meal-planner-existing-recipe').hidden = !isUpdate;
+    elements.mealPlannerRecipeRecord().required = isUpdate;
+    elements.btnGenerateMealPlannerMetadata()?.closest('.meal-planner-export-actions')?.toggleAttribute('hidden', isUpdate);
+    elements.mealPlannerIngredients()?.closest('.form-group')?.toggleAttribute('hidden', isUpdate);
+    elements.mealPlannerAllergy()?.closest('.form-group')?.toggleAttribute('hidden', isUpdate);
+    elements.mealPlannerCronometer()?.closest('.form-group')?.toggleAttribute('hidden', isUpdate || isMyPages);
+
+    const submit = elements.btnSubmitMealPlannerExport();
+    submit.textContent = isUpdate ? 'Update Recipe' : (isMyPages ? 'Export to My Pages' : 'Export');
+    submit.disabled = isUpdate;
+    updateMealPlannerExportStatus('');
+    if (isUpdate) {
+        if (mealPlannerRecipeOptions) renderMealPlannerRecipeOptions();
+        else loadMealPlannerRecipeOptions();
+    }
+}
+
+async function loadMealPlannerRecipeOptions() {
+    if (loadingMealPlannerRecipes) return;
+    loadingMealPlannerRecipes = true;
+    elements.mealPlannerRecipeRecord().replaceChildren(new Option('Loading Airtable recipes…', ''));
+    try {
+        const recipes = await postMealPlannerExport({ action: 'list-meal-planner-recipes' });
+        if (!Array.isArray(recipes)) throw new Error('Airtable did not return the recipe list.');
+        mealPlannerRecipeOptions = recipes;
+        if (isUpdatingMealPlannerRecipe()) renderMealPlannerRecipeOptions();
+    } catch (error) {
+        if (isUpdatingMealPlannerRecipe()) {
+            elements.mealPlannerRecipeRecord().replaceChildren(new Option('Unable to load recipes', ''));
+            updateMealPlannerExportStatus(error.message || 'Unable to load Airtable recipes.', 'error');
+        }
+    } finally {
+        loadingMealPlannerRecipes = false;
+    }
+}
+
+function renderMealPlannerRecipeOptions() {
+    if (!isUpdatingMealPlannerRecipe() || !mealPlannerRecipeOptions) return;
+
+    const recordPicker = elements.mealPlannerRecipeRecord();
+    const previous = recordPicker.value;
+    const terms = elements.mealPlannerRecipeSearch().value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = mealPlannerRecipeOptions.filter(({ title, series }) => {
+        const searchable = `${title} ${series || ''}`.toLowerCase();
+        return terms.every((term) => searchable.includes(term));
+    });
+    const options = matches.map(({ id, title, calories, protein, carbs, fat, date, series }) => {
+        const macros = [calories == null ? '' : `${calories} cal`, ...[
+            [protein, 'P'], [carbs, 'C'], [fat, 'F']
+        ].filter(([grams]) => grams != null).map(([grams, label]) => `${grams}g ${label}`)].filter(Boolean).join(' · ');
+        const detail = [series, macros, date?.slice(0, 10), id.slice(-6)].filter(Boolean).join(' | ');
+        return new Option(`${title} (${detail})`, id);
+    });
+    recordPicker.replaceChildren(new Option(matches.length ? 'Choose a recipe' : 'No matching recipes', ''), ...options);
+    if (matches.some(({ id }) => id === previous)) recordPicker.value = previous;
+    showSelectedMealPlannerRecipe();
+}
+
+function showSelectedMealPlannerRecipe() {
+    const selectedId = elements.mealPlannerRecipeRecord().value;
+    const record = mealPlannerRecipeOptions?.find(({ id }) => id === selectedId);
+    const link = document.getElementById('meal-planner-open-recipe');
+    link.hidden = !record;
+    if (record) link.href = record.url;
+    else link.removeAttribute('href');
+    elements.btnSubmitMealPlannerExport().disabled = !record || updatingMealPlannerRecipe;
 }
 
 function setCategoryOptions(categories = [], placeholder = 'Select category') {
@@ -6132,10 +6247,16 @@ async function postMealPlannerMetadata(payload) {
 
 async function handleMealPlannerExportSubmit(event) {
     event.preventDefault();
+    if (updatingMealPlannerRecipe) return;
     updateRecipeFromForm();
 
     if (activeAirtableExportMode === 'my-pages') {
         await handleMyPagesExportSubmit();
+        return;
+    }
+
+    if (isUpdatingMealPlannerRecipe()) {
+        await handleMealPlannerRecipeUpdate();
         return;
     }
 
@@ -6204,6 +6325,81 @@ async function handleMealPlannerExportSubmit(event) {
             submitButton.disabled = false;
             submitButton.textContent = originalText;
         }
+    }
+}
+
+async function handleMealPlannerRecipeUpdate() {
+    const recordId = elements.mealPlannerRecipeRecord().value;
+    if (!mealPlannerRecipeOptions?.some(({ id }) => id === recordId)) {
+        updateMealPlannerExportStatus('Choose the Airtable recipe you want to update.', 'error');
+        return;
+    }
+
+    const submit = elements.btnSubmitMealPlannerExport();
+    const controls = [
+        submit, elements.mealPlannerExportDestination(), elements.mealPlannerRecipeSearch(),
+        elements.mealPlannerRecipeRecord(), elements.btnCancelMealPlannerExport(), elements.btnCloseMealPlannerExport()
+    ];
+    updatingMealPlannerRecipe = true;
+    controls.forEach((control) => { control.disabled = true; });
+    submit.textContent = 'Updating…';
+    let updateToken;
+    let finalizing = false;
+    try {
+        updateMealPlannerExportStatus('Preparing replacement files…', 'working');
+        const recipe = await prepareRecipeForMealPlannerExport(currentRecipe);
+        const replacePhoto = Boolean(recipe.image);
+        const pages = await collectMealPlannerJpgAttachments(recipe, submit, 'working');
+        const counts = {};
+        const stagedPages = pages.map((pageAttachment) => {
+            const pageIndex = counts[pageAttachment.fieldName] || 0;
+            counts[pageAttachment.fieldName] = pageIndex + 1;
+            return { pageAttachment, pageIndex };
+        });
+        const session = await postMealPlannerExport({
+            action: 'begin-meal-planner-recipe-update', recordId, pageCounts: counts,
+            macros: recipe.macros, replacePhoto
+        });
+        updateToken = session.updateToken;
+        const stage = { action: 'stage-meal-planner-recipe-update', updateToken };
+        for (const [index, page] of stagedPages.entries()) {
+            updateMealPlannerExportStatus(`Uploading replacement page ${index + 1}/${stagedPages.length}…`, 'working');
+            await postMealPlannerExport({ ...stage, ...page });
+        }
+        updateMealPlannerExportStatus(replacePhoto ? 'Uploading recipe file and image…' : 'Uploading recipe file…', 'working');
+        await postMealPlannerExport({ ...stage, recipe });
+        updateMealPlannerExportStatus('Updating Airtable nutrition and files…', 'working');
+        finalizing = true;
+        const finish = { action: 'finish-meal-planner-recipe-update', updateToken };
+        let updated;
+        try {
+            updated = await postMealPlannerExport(finish);
+        } catch (error) {
+            if (!(error instanceof TypeError)) throw error;
+            updated = await postMealPlannerExport(finish);
+        }
+        if (updated.id !== recordId) throw new Error('Airtable did not confirm the selected recipe update.');
+        mealPlannerRecipeOptions = mealPlannerRecipeOptions.map((record) => record.id === recordId ? updated : record);
+        renderMealPlannerRecipeOptions();
+        updateMealPlannerExportStatus('Updated the selected Airtable recipe.', 'success');
+    } catch (error) {
+        let message = error.message || 'Unable to update the Airtable recipe.';
+        if (updateToken && !finalizing) {
+            try {
+                const result = await postMealPlannerExport({ action: 'cancel-meal-planner-recipe-update', updateToken });
+                if (!result.canceled) message += ' Check the selected Airtable record before retrying.';
+            } catch {
+                message += ' Check the Airtable record for any files uploaded before the failure.';
+            }
+        } else if (finalizing) {
+            message += ' Check the selected Airtable record before retrying.';
+        }
+        updateMealPlannerExportStatus(message, 'error');
+    } finally {
+        updatingMealPlannerRecipe = false;
+        controls.forEach((control) => { control.disabled = false; });
+        submit.textContent = 'Update Recipe';
+        showSelectedMealPlannerRecipe();
     }
 }
 
@@ -6334,7 +6530,7 @@ function getMealPlannerIngredientNames(recipe = currentRecipe) {
     return names;
 }
 
-async function collectMealPlannerJpgAttachments(exportRecipe, submitButton) {
+async function collectMealPlannerJpgAttachments(exportRecipe, submitButton, status = '') {
     const originalRecipe = JSON.parse(JSON.stringify(currentRecipe));
     const variants = [
         { label: 'Standard', pageStyle: 'standard', showMacroBar: true, clearHeroImage: false, fieldName: 'Recipe PDF' },
@@ -6347,7 +6543,7 @@ async function collectMealPlannerJpgAttachments(exportRecipe, submitButton) {
     try {
         for (let index = 0; index < variants.length; index += 1) {
             const variant = variants[index];
-            updateMealPlannerExportStatus(`Rendering JPG pages ${index + 1}/4...`, '');
+            updateMealPlannerExportStatus(`Rendering JPG pages ${index + 1}/4...`, status);
 
             currentRecipe = normalizeRecipe({
                 ...exportRecipe,
@@ -6667,60 +6863,177 @@ function fileToDataUrl(file) {
     });
 }
 
-async function handleGenerateMasterPasteAi(mode) {
-    if (masterPasteAiRequest) return;
+function setPreviewAiOpen(open) {
+    const tools = elements.previewAiTools();
+    const launcher = elements.btnPreviewAiOpen();
+    tools.classList.toggle('is-open', open);
+    elements.previewAiPanel().inert = !open;
+    launcher.inert = open;
+    launcher.setAttribute('aria-expanded', String(open));
+    if (open) elements.previewAiPrompt().focus({ preventScroll: true });
+    else launcher.focus({ preventScroll: true });
+}
 
-    const generateButton = elements.btnGenerateMasterPasteAi();
-    const sendButton = elements.btnSendMasterPasteAi();
+function setPreviewAiStatus(message = '', status = '') {
+    const element = document.getElementById('preview-ai-status');
+    element.className = ['preview-ai-status', status].filter(Boolean).join(' ');
+    element.textContent = message;
+}
+
+function setPreviewAiPhoto(file = null) {
+    previewAiImage = file;
+    document.getElementById('preview-ai-attachment').hidden = !file;
+    document.getElementById('preview-ai-filename').textContent = file?.name || '';
+}
+
+function initializePreviewAiControls() {
+    const form = document.getElementById('preview-ai-form');
+    const prompt = elements.previewAiPrompt();
+    const fileInput = document.getElementById('preview-ai-image');
+
+    elements.btnPreviewAiOpen().addEventListener('click', () => setPreviewAiOpen(true));
+    document.getElementById('btn-preview-ai-close').addEventListener('click', () => setPreviewAiOpen(false));
+    elements.previewAiPanel().addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            setPreviewAiOpen(false);
+        }
+    });
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        handleGenerateMasterPasteAi('apply', true);
+    });
+    prompt.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+            event.preventDefault();
+            form.requestSubmit();
+        }
+    });
+    form.querySelectorAll('[data-ai-suggestion]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const suggestion = button.dataset.aiSuggestion;
+            prompt.value = [prompt.value.trim(), suggestion].filter(Boolean).join('\n');
+            prompt.focus();
+            prompt.setSelectionRange(prompt.value.length, prompt.value.length);
+        });
+    });
+    document.getElementById('btn-preview-ai-image').addEventListener('click', () => fileInput.click());
+    document.getElementById('btn-preview-ai-remove-image').addEventListener('click', () => setPreviewAiPhoto());
+    fileInput.addEventListener('change', () => {
+        const [file] = fileInput.files;
+        fileInput.value = '';
+        if (!file) return;
+        if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type) || file.size > MASTER_PASTE_MAX_FILE_BYTES || !file.size) {
+            setPreviewAiStatus('Choose a PNG, JPEG, WebP, or GIF photo up to 4 MB.', 'error');
+            return;
+        }
+        setPreviewAiPhoto(file);
+        if (!prompt.value.trim()) prompt.value = 'Use the attached image as the hero photo.';
+        setPreviewAiStatus();
+        prompt.focus();
+    });
+}
+
+async function requestRecipeAi(payload, signal) {
+    const body = JSON.stringify(payload);
+    if (new Blob([body]).size > MASTER_PASTE_MAX_BODY_BYTES) {
+        throw new Error('This request is too large. Shorten the text or remove an attachment.');
+    }
+    const response = await fetch('/api/generate-master-paste', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Unable to get an AI response. Try again.');
+    return data;
+}
+
+async function handleGenerateMasterPasteAi(mode, fromPreview = false) {
+    const setStatus = fromPreview ? setPreviewAiStatus : setMasterPasteAiStatus;
+    if (masterPasteAiRequest) {
+        setStatus('An AI edit is already in progress.', 'error');
+        return;
+    }
+
+    const buttons = {
+        apply: elements.btnApplyMasterPasteAi(),
+        reply: elements.btnSendMasterPasteAi(),
+        recipe: elements.btnGenerateMasterPasteAi()
+    };
     const isReply = mode === 'reply';
-    const button = isReply ? sendButton : generateButton;
-    const sourceFiles = masterPasteAiFiles.slice();
-    const sourceText = elements.masterPasteAiSource()?.value.trim() || '';
-    const prompt = elements.masterPasteAiPrompt()?.value.trim() || '';
+    const isApply = mode === 'apply';
+    const previewButton = elements.btnPreviewAiSend();
+    const editedButton = fromPreview ? previewButton : buttons[mode];
+    const actions = [...Object.values(buttons), previewButton];
+    const promptInput = fromPreview ? elements.previewAiPrompt() : elements.masterPasteAiPrompt();
+    const selectedPhoto = previewAiImage;
+    const sourceFiles = fromPreview ? (selectedPhoto ? [selectedPhoto] : []) : masterPasteAiFiles.slice();
+    const sourceText = fromPreview ? '' : elements.masterPasteAiSource().value.trim();
+    const prompt = promptInput.value.trim();
 
-    if (isReply && !prompt) {
-        setMasterPasteAiStatus('Enter a prompt to send to AI.', 'error');
-        elements.masterPasteAiPrompt().focus();
+    if ((isReply || isApply) && !prompt) {
+        setStatus(isApply ? 'Describe the changes you want to apply.' : 'Enter a prompt to send to AI.', 'error');
+        promptInput.focus();
         return;
     }
     if (!sourceText && !prompt && !sourceFiles.length) {
-        setMasterPasteAiStatus('Add source text, attach a file, or enter a prompt to generate a recipe.', 'error');
+        setStatus('Add source text, attach a file, or enter a prompt to generate a recipe.', 'error');
         return;
     }
 
-    const originalText = button.textContent;
+    const recipeState = isApply ? serializeRecipeHistoryState(currentRecipe) : null;
+    let editorChanged = false;
+    const trackEditorInput = (event) => {
+        const section = event.target.closest?.('[data-section-key]');
+        if (section && section.dataset.sectionKey !== 'masterPaste') editorChanged = true;
+    };
+    if (isApply) document.addEventListener('input', trackEditorInput);
+
+    const originalText = editedButton.textContent;
     const request = new AbortController();
     masterPasteAiRequest = request;
-    generateButton.disabled = true;
-    sendButton.disabled = true;
-    button.textContent = isReply ? 'Sending…' : 'Generating…';
-    setMasterPasteAiStatus();
+    actions.forEach((action) => { action.disabled = true; });
+    if (!fromPreview) editedButton.textContent = { apply: 'Editing Page…', reply: 'Sending…', recipe: 'Generating…' }[mode];
+    setStatus(fromPreview ? 'Editing the recipe page…' : '');
 
     try {
         const files = await Promise.all(sourceFiles.map(async (file) => ({
             name: file.name,
             dataUrl: await fileToDataUrl(file)
         })));
-        const body = JSON.stringify({ text: sourceText, prompt, mode, files });
-        if (new Blob([body]).size > MASTER_PASTE_MAX_BODY_BYTES) {
-            throw new Error('This request is too large. Shorten the text or remove an attachment.');
+        const payload = { text: sourceText, prompt, mode, files };
+        const recipe = isApply ? JSON.parse(recipeState) : null;
+        if (recipe) {
+            const { image, dayMeals, ingredients, instructions, ...page } = recipe;
+            payload.recipe = {
+                ...page,
+                hasHeroImage: Boolean(image),
+                dayMeals: dayMeals.map(({ image: photo, ...meal }, sourceIndex) => ({ ...meal, sourceIndex, hasImage: Boolean(photo) })),
+                instructionSections: getInstructionSectionsForForm(recipe)
+            };
+            payload.availableMaterials = AVAILABLE_MATERIALS.map(({ id, name }) => ({ id, name }));
+            payload.portionIcons = AVAILABLE_PORTION_VARIATION_ICONS.map(({ id, name }) => ({ id, name }));
         }
-
-        const response = await fetch('/api/generate-master-paste', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body,
-            signal: request.signal
-        });
-
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok || !data.text?.trim()) {
-            throw new Error(data.error || 'Unable to get an AI response. Try again.');
-        }
+        const data = await requestRecipeAi(payload, request.signal);
 
         if (request.signal.aborted) return;
-        if (isReply) {
+        if (isApply) {
+            const nextRecipe = await prepareMasterPasteAiEdits(recipe, data, files, request.signal, setStatus);
+            if (request.signal.aborted) return;
+            if (editorChanged || serializeRecipeHistoryState(currentRecipe) !== recipeState) {
+                throw new Error('The recipe changed while AI was working. Send the prompt again to edit the latest version.');
+            }
+            if (!fromPreview) elements.masterPasteAiAnswer().hidden = true;
+            const changed = applyMasterPasteAiEdits(nextRecipe, data.message, recipeState, setStatus);
+            if (changed && fromPreview) {
+                if (promptInput.value.trim() === prompt) promptInput.value = '';
+                if (previewAiImage === selectedPhoto) setPreviewAiPhoto();
+            }
+        } else if (typeof data.text !== 'string' || !data.text.trim()) {
+            throw new Error('Unable to get an AI response. Try again.');
+        } else if (isReply) {
             elements.masterPasteAiReply().value = data.text;
             elements.masterPasteAiAnswer().hidden = false;
             setMasterPasteAiStatus('AI reply received.', 'success');
@@ -6730,14 +7043,109 @@ async function handleGenerateMasterPasteAi(mode) {
         }
     } catch (error) {
         if (!request.signal.aborted) {
-            setMasterPasteAiStatus(error.message || 'Unable to get an AI response. Try again.', 'error');
+            setStatus(error.message || 'Unable to get an AI response. Try again.', 'error');
+            request.abort();
         }
     } finally {
         masterPasteAiRequest = null;
-        generateButton.disabled = false;
-        sendButton.disabled = false;
-        button.textContent = originalText;
+        if (isApply) document.removeEventListener('input', trackEditorInput);
+        actions.forEach((action) => { action.disabled = false; });
+        if (!fromPreview) editedButton.textContent = originalText;
     }
+}
+
+async function prepareMasterPasteAiEdits(recipe, { changes, imageEdits = [] }, files, signal, setStatus) {
+    if (!changes || typeof changes !== 'object' || Array.isArray(changes)) {
+        throw new Error('AI returned edits the app could not apply. Please try again.');
+    }
+
+    const nextRecipe = { ...recipe, ...changes };
+    for (const key of ['macros', 'typographySizes', 'imageSettings', 'colors']) {
+        if (changes[key]) nextRecipe[key] = { ...recipe[key], ...changes[key] };
+    }
+    if (changes.materialCounts) {
+        const counts = new Map(Object.entries(recipe.materialCounts));
+        changes.materialCounts.forEach(({ id, count }) => {
+            if (count > 1) counts.set(id, count);
+            else counts.delete(id);
+        });
+        nextRecipe.materialCounts = Object.fromEntries(counts);
+    }
+    if (changes.portionVariationSections) {
+        const firstSection = changes.portionVariationSections[0];
+        nextRecipe.portionVariations = firstSection?.variations || [];
+        nextRecipe.portionVariationIcon = firstSection?.icon || '';
+        nextRecipe.portionVariationsLabel = firstSection?.label || '';
+    }
+    if (changes.dayMeals) {
+        nextRecipe.dayMeals = changes.dayMeals.map(({ sourceIndex, ...meal }) => ({
+            ...recipe.dayMeals[sourceIndex], ...meal, image: recipe.dayMeals[sourceIndex]?.image || ''
+        }));
+    }
+    if (changes.ingredientSections) nextRecipe.ingredients = changes.ingredientSections[0]?.ingredients || [];
+    if (changes.instructionSections) {
+        const firstSection = changes.instructionSections[0];
+        nextRecipe.instructions = firstSection?.steps || [];
+        nextRecipe.instructionsStartMode = firstSection?.startMode || recipe.instructionsStartMode;
+    }
+
+    if (imageEdits.some(({ action }) => action === 'generate' || action === 'edit')) setStatus('Preparing the requested photos…');
+    await Promise.all(imageEdits.map(async (edit) => {
+        const target = edit.target === 'hero' ? nextRecipe : nextRecipe.dayMeals[edit.mealIndex];
+        const attached = files[edit.attachmentIndex]?.dataUrl;
+        if (edit.action === 'remove') {
+            target.image = '';
+        } else if (edit.action === 'attachment') {
+            const image = await readRecipeAiPhoto(attached);
+            target.image = /^data:image\/(png|jpeg);/i.test(attached) ? attached : encodeRecipeAiPhoto(image);
+        } else {
+            let sourceImage;
+            if (edit.action === 'edit') {
+                const source = attached || target.image;
+                if (!source) throw new Error('Attach the photo you want AI to edit.');
+                sourceImage = encodeRecipeAiPhoto(await readRecipeAiPhoto(source));
+            }
+            const result = await requestRecipeAi({ mode: 'photo', target: edit.target, prompt: edit.prompt, sourceImage }, signal);
+            await readRecipeAiPhoto(result.image);
+            target.image = result.image;
+        }
+    }));
+    return nextRecipe;
+}
+
+async function readRecipeAiPhoto(src) {
+    if (typeof src !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(src)) {
+        throw new Error('AI could not load that photo. Attach it again and retry.');
+    }
+    try {
+        return await loadImageElement(src);
+    } catch {
+        throw new Error('AI could not load that photo. Attach it again and retry.');
+    }
+}
+
+function encodeRecipeAiPhoto(image) {
+    const scale = Math.min(1, 1536 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.88);
+}
+
+function applyMasterPasteAiEdits(nextRecipe, message, recipeState, setStatus) {
+    if (serializeRecipeHistoryState(nextRecipe) === recipeState) {
+        setStatus(message ? `No page changes. ${message}` : 'No page changes were needed.', 'success');
+        return false;
+    }
+
+    recordRecipeHistory(currentRecipe);
+    loadRecipeObject(nextRecipe);
+    setStatus(message ? `Page updated. ${message} Use Undo to revert.` : 'Page updated. Use Undo to revert.', 'success');
+    return true;
 }
 
 function addSpellcheckItem(items, label, path, text) {
@@ -8284,6 +8692,9 @@ function clearMasterPasteFields() {
     if (aiFileInput) aiFileInput.value = '';
 
     masterPasteAiRequest?.abort();
+    elements.previewAiPrompt().value = '';
+    setPreviewAiPhoto();
+    setPreviewAiStatus();
     elements.masterPasteAiPrompt().value = '';
     elements.masterPasteAiReply().value = '';
     elements.masterPasteAiAnswer().hidden = true;
@@ -8332,7 +8743,7 @@ function layoutHeroImageLayers(root = document) {
 /**
  * Update zoom level display and transform
  */
-function updateZoom() {
+function updateZoom(focusBounds) {
     const scale = zoomLevel / 100;
     const page = elements.recipePage();
     if (!page) return;
@@ -8341,6 +8752,10 @@ function updateZoom() {
     const { width: pageWidth, height: pageHeight } = getRecipePageDimensions();
     const container = elements.previewContainer();
 
+    const slider = elements.zoomSlider();
+    slider.min = Math.min(Number(slider.min), zoomLevel);
+    slider.max = Math.max(Number(slider.max), zoomLevel);
+    slider.value = zoomLevel;
     elements.zoomLevelDisplay().textContent = `${zoomLevel}%`;
     page.style.transform = `scale(${scale})`;
 
@@ -8352,14 +8767,41 @@ function updateZoom() {
     }
 
     if (container && wrapper) {
-        previewPanX = (container.clientWidth - wrapper.offsetWidth) / 2;
-        previewPanY = (container.clientHeight - wrapper.offsetHeight) / 2;
+        const { width, height, top, bottom } = focusBounds || {
+            width: pageWidth,
+            height: pageHeight,
+            top: 0,
+            bottom: container.clientHeight
+        };
+        previewPanX = (container.clientWidth - width * scale) / 2;
+        previewPanY = (top + bottom - height * scale) / 2;
         applyPreviewPan();
     }
 }
 
 function centerPreview() {
     centerPreviewWithBehavior('smooth');
+}
+
+function focusFirstPreviewPage() {
+    const container = elements.previewContainer();
+    const firstPage = elements.recipePage()?.querySelector('.page-primary');
+    if (!container || !firstPage) return;
+
+    const header = container.closest('.preview-panel')?.querySelector('.preview-header');
+    const controls = container.querySelector('.preview-zoom-controls');
+    const top = header?.offsetHeight || 0;
+    const bottom = controls?.offsetTop ?? container.clientHeight;
+    const width = firstPage.offsetWidth;
+    const height = firstPage.offsetHeight;
+    const gutter = 12;
+    const availableWidth = container.clientWidth - gutter * 2;
+    const availableHeight = bottom - top - gutter * 2;
+    if (availableWidth <= 0 || availableHeight <= 0 || !width || !height) return;
+
+    const scale = Math.min(availableWidth / width, availableHeight / height);
+    zoomLevel = Math.max(1, Math.floor(scale * 100));
+    updateZoom({ width, height, top, bottom });
 }
 
 function centerPreviewWithBehavior(behavior = 'auto') {
@@ -8511,7 +8953,7 @@ function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
-    return div.innerHTML;
+    return div.innerHTML.replaceAll('"', '&quot;');
 }
 
 function normalizeExternalUrl(url) {
@@ -8559,6 +9001,11 @@ async function createHeroOverlayCanvas(heroSection, scaleRatio) {
     overlayClone.style.top = '0';
     overlayClone.style.margin = '0';
     overlayClone.style.background = 'transparent';
+    const pageStyles = heroSection.closest('.recipe-page')?.style;
+    for (const property of ['--recipe-hero-color', '--recipe-title-color']) {
+        const value = pageStyles?.getPropertyValue(property);
+        if (value) overlayClone.style.setProperty(property, value);
+    }
 
     document.body.appendChild(overlayClone);
 

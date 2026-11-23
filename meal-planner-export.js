@@ -1,4 +1,5 @@
 const AIRTABLE_CONFIG = require('./airtable.config');
+const { createHmac, randomBytes, timingSafeEqual } = require('node:crypto');
 
 const AIRTABLE_API_BASE = 'https://api.airtable.com/v0';
 const AIRTABLE_CONTENT_BASE = 'https://content.airtable.com/v0';
@@ -42,6 +43,215 @@ const PAGE_RECORD_PAGE_ATTACHMENT_FIELDS = new Set([
 ]);
 const EASTERN_TIME_ZONE = 'America/New_York';
 const AIRTABLE_EXPORT_CATEGORY = 'Client Recipes';
+const NUTRITION_FIELDS = { Calories: 'calories', Protein: 'protein', Carbs: 'carbs', Fat: 'fat' };
+
+async function listMealPlannerRecipes() {
+    const environment = getAirtableEnvironment();
+    const records = await listAirtableRecords({
+        ...environment, fields: ['Title', ...Object.keys(NUTRITION_FIELDS), 'Meal Series', 'date'], sortField: 'Title',
+        lookup: 'Airtable recipe lookup'
+    });
+    return records.map((record) => describeMealPlannerRecipe(environment, record));
+}
+
+function describeMealPlannerRecipe(environment, { id, createdTime, fields }) {
+    return {
+        ...mealPlannerRecordLink(environment, id),
+        title: String(fields?.Title || '').trim() || 'Untitled recipe',
+        calories: fields?.Calories ?? null,
+        protein: fields?.Protein ?? null,
+        carbs: fields?.Carbs ?? null,
+        fat: fields?.Fat ?? null,
+        series: typeof fields?.['Meal Series'] === 'string' ? fields['Meal Series'] : '',
+        date: typeof fields?.date === 'string' ? fields.date : createdTime
+    };
+}
+
+async function beginMealPlannerRecipeUpdate(payload) {
+    const environment = getAirtableEnvironment();
+    const recordId = String(payload.recordId || '').trim();
+    if (!/^rec[a-zA-Z0-9]{14}$/.test(recordId)) throw new Error('Choose an Airtable recipe to update.');
+
+    const counts = payload.pageCounts || {};
+    const pageCounts = Object.fromEntries([...PAGE_ATTACHMENT_FIELDS].map((field) => [field, counts[field]]));
+    if (Object.values(pageCounts).some((count) => !Number.isSafeInteger(count) || count < 1)) {
+        throw new Error('Generate all four sets of recipe pages before updating Airtable.');
+    }
+    const expected = { ...pageCounts, [ATTACHMENT_FIELDS.recipeFile]: 1 };
+    if (payload.replacePhoto === true) expected[ATTACHMENT_FIELDS.photo] = 1;
+
+    const nutrition = {};
+    for (const [field, key] of Object.entries(NUTRITION_FIELDS)) {
+        const value = String(payload.macros?.[key] ?? '').trim().replaceAll(',', '');
+        if (!value) continue;
+        const number = Number(value);
+        if (!Number.isFinite(number) || number < 0) throw new Error(`Enter a valid value for ${field} before updating.`);
+        nutrition[field] = number;
+    }
+    const record = await getAirtableRecord({ ...environment, recordId, resource: 'Recipe' });
+    const fields = record.fields || {};
+    const plan = {
+        recordId,
+        tag: randomBytes(6).toString('hex'),
+        expires: Date.now() + 60 * 60 * 1000,
+        expected,
+        nutrition,
+        previousNutrition: Object.fromEntries(Object.keys(nutrition).map((field) => [field, fields[field] ?? null])),
+        previousFiles: Object.fromEntries(Object.keys(expected).map((field) => [field, fileIds(fields[field])]))
+    };
+    const encoded = Buffer.from(JSON.stringify(plan)).toString('base64url');
+    const signature = signRecipeUpdate(encoded, environment).toString('base64url');
+    return { ...mealPlannerRecordLink(environment, recordId), updateToken: `${encoded}.${signature}` };
+}
+
+async function stageMealPlannerRecipeUpdate(payload) {
+    const environment = getAirtableEnvironment();
+    const plan = readRecipeUpdate(payload.updateToken, environment);
+    const page = payload.pageAttachment;
+    let attachments;
+    if (page) {
+        if (!PAGE_ATTACHMENT_FIELDS.has(page.fieldName)) throw new Error('A recipe page export field was invalid.');
+        attachments = normalizePageAttachments([page], 'Recipe');
+    } else {
+        if (Object.hasOwn(plan.expected, ATTACHMENT_FIELDS.photo) && !/^data:image\/(jpeg|png|webp|gif);base64,/.test(payload.recipe?.image || '')) {
+            throw new Error('The replacement recipe image could not be read.');
+        }
+        attachments = await buildRecipeAttachments(payload.recipe || {}, [], {
+            includePageAttachments: false,
+            includePhoto: Object.hasOwn(plan.expected, ATTACHMENT_FIELDS.photo)
+        });
+        const saveFile = attachments.find((item) => item.fieldName === ATTACHMENT_FIELDS.recipeFile);
+        saveFile.filename = saveFile.filename.replace(/\.json$/i, '.recipe');
+    }
+
+    const index = page ? payload.pageIndex : 0;
+    if (!Number.isInteger(index) || index < 0 || attachments.some(({ fieldName, buffer }) =>
+        !Object.hasOwn(plan.expected, fieldName) || index >= plan.expected[fieldName] || !buffer.length || buffer.length > 5_000_000
+    ) || (!page && attachments.length !== Object.keys(plan.expected).length - PAGE_ATTACHMENT_FIELDS.size)) {
+        throw new Error('A replacement file is missing or exceeds Airtable’s 5 MB upload limit.');
+    }
+
+    const record = await getAirtableRecord({ ...environment, recordId: plan.recordId, resource: 'Recipe' });
+    for (const { filename, fieldName, contentType, buffer } of attachments) {
+        const suffix = recipeUpdateFileSuffix(plan, index);
+        if (stagedRecipeFiles(record.fields?.[fieldName], plan, index).length) continue;
+        const dot = filename.lastIndexOf('.');
+        await uploadAirtableAttachment({
+            ...environment, recordId: plan.recordId, fieldName,
+            filename: `${filename.slice(0, dot)}${suffix}${filename.slice(dot)}`, contentType, buffer
+        });
+    }
+    return { staged: true };
+}
+
+async function finishMealPlannerRecipeUpdate(payload) {
+    const environment = getAirtableEnvironment();
+    const plan = readRecipeUpdate(payload.updateToken, environment);
+    const record = await getAirtableRecord({ ...environment, recordId: plan.recordId, resource: 'Recipe' });
+    const fields = record.fields || {};
+    const replacements = {};
+    const currentOriginals = {};
+    for (const [field, count] of Object.entries(plan.expected)) {
+        if (fileIds(fields[field]).length < count) {
+            throw new Error('Some replacement files are missing. The update could not be completed.');
+        }
+        const staged = Array.from({ length: count }, (_, index) => stagedRecipeFiles(fields[field], plan, index));
+        if (staged.some((files) => files.length !== 1)) {
+            throw new Error('Some replacement files are missing. The update could not be completed.');
+        }
+        replacements[field] = staged.flat().map(({ id }) => ({ id }));
+        const stagedIds = new Set(fileIds(replacements[field]));
+        currentOriginals[field] = fileIds(fields[field]).filter((id) => !stagedIds.has(id));
+    }
+    const nutritionMatches = (values) => Object.entries(values).every(([field, value]) => (fields[field] ?? null) === value);
+    if (Object.values(currentOriginals).every((ids) => ids.length === 0) && nutritionMatches(plan.nutrition)) {
+        return describeMealPlannerRecipe(environment, record);
+    }
+
+    const fileConflict = Object.entries(plan.previousFiles).some(([field, ids]) =>
+        JSON.stringify(ids) !== JSON.stringify(currentOriginals[field])
+    );
+    if (fileConflict || !nutritionMatches(plan.previousNutrition)) {
+        await removeStagedRecipeFiles(environment, plan, fields);
+        throw new Error('This Airtable recipe changed during export. Review the record before trying the update again.');
+    }
+
+    const updated = await updateAirtableRecord({
+        ...environment, recordId: plan.recordId, resource: 'Recipe',
+        fields: { ...plan.nutrition, ...replacements }
+    });
+    if (Object.entries(replacements).some(([field, files]) =>
+        JSON.stringify(fileIds(updated.fields?.[field])) !== JSON.stringify(fileIds(files))
+    )) {
+        throw new Error('Airtable did not confirm every replacement file.');
+    }
+    return describeMealPlannerRecipe(environment, updated);
+}
+
+async function cancelMealPlannerRecipeUpdate(payload) {
+    const environment = getAirtableEnvironment();
+    const plan = readRecipeUpdate(payload.updateToken, environment);
+    const record = await getAirtableRecord({ ...environment, recordId: plan.recordId, resource: 'Recipe' });
+    const fields = record.fields || {};
+    // A late cancel must never remove files after the original set was replaced.
+    const priorFilesRemain = Object.entries(plan.previousFiles).every(([field, ids]) => {
+        const actual = new Set(fileIds(fields[field]));
+        return ids.every((id) => actual.has(id));
+    });
+    const allFilesStaged = Object.entries(plan.expected).every(([field, count]) =>
+        stagedRecipeFiles(fields[field], plan).length === count
+    );
+    if (!priorFilesRemain || allFilesStaged) return { canceled: false };
+    await removeStagedRecipeFiles(environment, plan, fields);
+    return { canceled: true };
+}
+
+async function removeStagedRecipeFiles(environment, plan, fields) {
+    const patch = {};
+    for (const field of Object.keys(plan.expected)) {
+        const staged = new Set(fileIds(stagedRecipeFiles(fields[field], plan)));
+        if (staged.size) patch[field] = fileIds(fields[field]).filter((id) => !staged.has(id)).map((id) => ({ id }));
+    }
+    if (Object.keys(patch).length) {
+        await updateAirtableRecord({ ...environment, recordId: plan.recordId, resource: 'Recipe', fields: patch });
+    }
+}
+
+function mealPlannerRecordLink({ baseId, tableId }, id) {
+    return { id, url: `https://airtable.com/${baseId}/${tableId}/${id}` };
+}
+
+function fileIds(files) {
+    return Array.isArray(files) ? files.map(({ id }) => id) : [];
+}
+
+function recipeUpdateFileSuffix(plan, index) {
+    return ` - ${plan.tag}-${index + 1}`;
+}
+
+function stagedRecipeFiles(files, plan, index) {
+    const suffix = index === undefined ? new RegExp(` - ${plan.tag}-[0-9]+\\.[^.]+$`) : null;
+    return (Array.isArray(files) ? files : []).filter(({ id, filename }) => {
+        if (!id || typeof filename !== 'string') return false;
+        return suffix ? suffix.test(filename) : filename.slice(0, filename.lastIndexOf('.')).endsWith(recipeUpdateFileSuffix(plan, index));
+    });
+}
+
+function signRecipeUpdate(encoded, { token, baseId, tableId }) {
+    return createHmac('sha256', token).update(`recipe-update:${baseId}:${tableId}:${encoded}`).digest();
+}
+
+function readRecipeUpdate(updateToken, environment) {
+    const [encoded, signature] = String(updateToken || '').split('.');
+    const supplied = Buffer.from(signature || '', 'base64url');
+    const expected = signRecipeUpdate(encoded, environment);
+    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+        throw new Error('Start the Airtable update again.');
+    }
+    const plan = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+    if (plan.expires < Date.now()) throw new Error('The Airtable update expired. Start it again.');
+    return plan;
+}
 
 async function exportRecipeToMealPlanner(payload = {}, options = {}) {
     const { token, baseId, tableId } = getAirtableEnvironment();
@@ -213,8 +423,8 @@ async function getPageRecord(payload = {}) {
     };
 }
 
-async function getAirtableRecord({ token, baseId, tableId, recordId }) {
-    const response = await fetch(`${AIRTABLE_API_BASE}/${baseId}/${tableId}/${recordId}`, {
+async function getAirtableRecord({ token, baseId, tableId, recordId, resource = 'Page Record' }) {
+    const response = await fetchAirtable(`${AIRTABLE_API_BASE}/${baseId}/${tableId}/${recordId}`, {
         headers: {
             Authorization: `Bearer ${token}`
         }
@@ -223,25 +433,25 @@ async function getAirtableRecord({ token, baseId, tableId, recordId }) {
 
     if (!response.ok) {
         if (response.status === 404) {
-            throw new Error(`Pages record was not found: ${recordId}.`);
+            throw new Error(`${resource} was not found: ${recordId}.`);
         }
         throw new Error(formatAirtableError(
-            'Airtable Page Record lookup failed',
+            `Airtable ${resource} lookup failed`,
             response.status,
             data,
-            'Check that PAGE_RECORDS_TABLE_ID is correct and AIRTABLE_TOKEN includes data.records:read.'
+            'Check the Airtable table configuration and data.records:read permission.'
         ));
     }
 
     if (!data?.id) {
-        throw new Error(`Pages record was not found: ${recordId}.`);
+        throw new Error(`${resource} was not found: ${recordId}.`);
     }
 
     return data;
 }
 
-async function updateAirtableRecord({ token, baseId, tableId, recordId, fields }) {
-    const response = await fetch(`${AIRTABLE_API_BASE}/${baseId}/${tableId}/${recordId}`, {
+async function updateAirtableRecord({ token, baseId, tableId, recordId, fields, resource = 'Page Record' }) {
+    const response = await fetchAirtable(`${AIRTABLE_API_BASE}/${baseId}/${tableId}/${recordId}`, {
         method: 'PATCH',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -256,18 +466,18 @@ async function updateAirtableRecord({ token, baseId, tableId, recordId, fields }
 
     if (!response.ok) {
         if (response.status === 404) {
-            throw new Error(`Pages record was not found: ${recordId}.`);
+            throw new Error(`${resource} was not found: ${recordId}.`);
         }
         throw new Error(formatAirtableError(
-            'Airtable Page Record update failed',
+            `Airtable ${resource} update failed`,
             response.status,
             data,
-            'Check that PAGE_RECORDS_TABLE_ID is correct and AIRTABLE_TOKEN includes data.records:write.'
+            'Check the Airtable table configuration and data.records:write permission.'
         ));
     }
 
     if (!data?.id) {
-        throw new Error('Airtable did not return an updated Page Record id.');
+        throw new Error(`Airtable did not return an updated ${resource} ID.`);
     }
 
     return data;
@@ -530,7 +740,7 @@ async function createAirtableRecord({ token, baseId, tableId, fields }) {
     return record;
 }
 
-async function listAirtableRecords({ token, baseId, tableId, fields = [], sortField = '' }) {
+async function listAirtableRecords({ token, baseId, tableId, fields = [], sortField = '', lookup = 'Airtable coach profile lookup' }) {
     const params = new URLSearchParams({ pageSize: '100' });
     fields.forEach((field) => params.append('fields[]', field));
     if (sortField) {
@@ -548,7 +758,7 @@ async function listAirtableRecords({ token, baseId, tableId, fields = [], sortFi
             params.delete('offset');
         }
 
-        const response = await fetch(`${AIRTABLE_API_BASE}/${baseId}/${tableId}?${params.toString()}`, {
+        const response = await fetchAirtable(`${AIRTABLE_API_BASE}/${baseId}/${tableId}?${params.toString()}`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }
@@ -557,10 +767,10 @@ async function listAirtableRecords({ token, baseId, tableId, fields = [], sortFi
 
         if (!response.ok) {
             throw new Error(formatAirtableError(
-                'Airtable coach profile lookup failed',
+                `${lookup} failed`,
                 response.status,
                 data,
-                'Check that COACH_PROFILES_TABLE_ID is correct and AIRTABLE_TOKEN includes data.records:read.'
+                'Check the Airtable table configuration and data.records:read permission.'
             ));
         }
 
@@ -603,7 +813,7 @@ async function listSingleSelectOptions({ token, baseId, tableId, fieldName }) {
 }
 
 async function uploadAirtableAttachment({ token, baseId, recordId, fieldName, filename, contentType, buffer }) {
-    const response = await fetch(`${AIRTABLE_CONTENT_BASE}/${baseId}/${recordId}/${encodeURIComponent(fieldName)}/uploadAttachment`, {
+    const response = await fetchAirtable(`${AIRTABLE_CONTENT_BASE}/${baseId}/${recordId}/${encodeURIComponent(fieldName)}/uploadAttachment`, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -627,6 +837,16 @@ async function uploadAirtableAttachment({ token, baseId, recordId, fieldName, fi
     }
 
     return data;
+}
+
+async function fetchAirtable(url, options) {
+    const response = await fetch(url, options);
+    if (response.status !== 429 || options.method === 'PATCH') return response;
+
+    const seconds = Number(response.headers.get('Retry-After'));
+    await response.body?.cancel();
+    await new Promise((resolve) => setTimeout(resolve, Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 30) * 1000 : 30000));
+    return fetch(url, options);
 }
 
 async function imageSourceToAttachment(source, baseFilename) {
@@ -742,7 +962,69 @@ function extensionFromContentType(contentType) {
     return 'jpg';
 }
 
+function handleMealPlannerAction(payload = {}) {
+    if (payload.action === 'get-page-record') {
+        return getPageRecord(payload);
+    }
+
+    if (payload.action === 'list-coach-profiles') {
+        return listCoachProfiles();
+    }
+
+    if (payload.action === 'list-page-record-categories') {
+        return listPageRecordCategories();
+    }
+
+    if (payload.action === 'create-page-record') {
+        return createPageRecord(payload);
+    }
+
+    if (payload.action === 'update-page-record') {
+        return updatePageRecord(payload);
+    }
+
+    if (payload.action === 'upload-page-record-attachments') {
+        return uploadPageRecordAttachments(payload);
+    }
+
+    if (payload.action === 'create-record') {
+        return createMealPlannerRecord(payload);
+    }
+
+    if (payload.action === 'upload-attachments') {
+        return uploadMealPlannerAttachments(payload);
+    }
+
+    if (payload.action === 'list-meal-planner-recipes') {
+        return listMealPlannerRecipes();
+    }
+
+    if (payload.action === 'begin-meal-planner-recipe-update') {
+        return beginMealPlannerRecipeUpdate(payload);
+    }
+
+    if (payload.action === 'stage-meal-planner-recipe-update') {
+        return stageMealPlannerRecipeUpdate(payload);
+    }
+
+    if (payload.action === 'finish-meal-planner-recipe-update') {
+        return finishMealPlannerRecipeUpdate(payload);
+    }
+
+    if (payload.action === 'cancel-meal-planner-recipe-update') {
+        return cancelMealPlannerRecipeUpdate(payload);
+    }
+
+    return exportRecipeToMealPlanner(payload);
+}
+
 module.exports = {
+    handleMealPlannerAction,
+    listMealPlannerRecipes,
+    beginMealPlannerRecipeUpdate,
+    stageMealPlannerRecipeUpdate,
+    finishMealPlannerRecipeUpdate,
+    cancelMealPlannerRecipeUpdate,
     exportRecipeToMealPlanner,
     createMealPlannerRecord,
     createPageRecord,

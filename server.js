@@ -2,17 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
-const {
-    createPageRecord,
-    createMealPlannerRecord,
-    exportRecipeToMealPlanner,
-    getPageRecord,
-    listCoachProfiles,
-    listPageRecordCategories,
-    updatePageRecord,
-    uploadPageRecordAttachments,
-    uploadMealPlannerAttachments
-} = require('./meal-planner-export');
+const { handleMealPlannerAction } = require('./meal-planner-export');
 const { generateMealPlannerMetadata } = require('./meal-planner-metadata');
 const { generateMasterPaste, extractResponseText, cleanStructuredOutput } = require('./master-paste-ai');
 
@@ -219,44 +209,6 @@ async function handleMealPlannerMetadataGeneration(req, res) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: error.message || 'Unable to generate Meal Planner metadata' }));
     }
-}
-
-function handleMealPlannerAction(payload = {}) {
-    if (payload.action === 'get-page-record') {
-        return getPageRecord(payload);
-    }
-
-    if (payload.action === 'list-coach-profiles') {
-        return listCoachProfiles();
-    }
-
-    if (payload.action === 'list-page-record-categories') {
-        return listPageRecordCategories();
-    }
-
-    if (payload.action === 'create-page-record') {
-        return createPageRecord(payload);
-    }
-
-    if (payload.action === 'update-page-record') {
-        return updatePageRecord(payload);
-    }
-
-    if (payload.action === 'upload-page-record-attachments') {
-        return uploadPageRecordAttachments(payload);
-    }
-
-    if (payload.action === 'create-record') {
-        return createMealPlannerRecord(payload);
-    }
-
-    if (payload.action === 'upload-attachments') {
-        return uploadMealPlannerAttachments(payload);
-    }
-
-    return exportRecipeToMealPlanner(payload, {
-        createPdfBuffer: createRecipePdfBuffer
-    });
 }
 
 async function createRecipePdfBuffer(recipe) {
