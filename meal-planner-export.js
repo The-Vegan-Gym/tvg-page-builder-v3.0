@@ -45,13 +45,35 @@ const EASTERN_TIME_ZONE = 'America/New_York';
 const AIRTABLE_EXPORT_CATEGORY = 'Client Recipes';
 const NUTRITION_FIELDS = { Calories: 'calories', Protein: 'protein', Carbs: 'carbs', Fat: 'fat' };
 
-async function listMealPlannerRecipes() {
+async function listMealPlannerRecipes({ withRecipeFile = false } = {}) {
     const environment = getAirtableEnvironment();
     const records = await listAirtableRecords({
         ...environment, fields: ['Title', ...Object.keys(NUTRITION_FIELDS), 'Meal Series', 'date'], sortField: 'Title',
-        lookup: 'Airtable recipe lookup'
+        lookup: 'Airtable recipe lookup',
+        filterByFormula: withRecipeFile === true ? `NOT({${ATTACHMENT_FIELDS.recipeFile}} = BLANK())` : ''
     });
     return records.map((record) => describeMealPlannerRecipe(environment, record));
+}
+
+async function getMealPlannerRecipeFile(payload) {
+    const recordId = String(payload.recordId || '').trim();
+    if (!/^rec[a-zA-Z0-9]{14}$/.test(recordId)) throw new Error('Choose an Airtable recipe to load.');
+
+    const environment = getAirtableEnvironment();
+    const record = await getAirtableRecord({ ...environment, recordId, resource: 'Recipe' });
+    const files = record.fields?.[ATTACHMENT_FIELDS.recipeFile];
+    if (!Array.isArray(files) || files.length === 0) {
+        throw new Error('This record has no attachment in its Recipe File column.');
+    }
+    const attachment = files.find((file) => /^https:\/\//i.test(file?.url || '') && (
+        /\.(json|recipe)$/i.test(file.filename || '') || file.type === 'application/json'
+    ));
+    if (!attachment) throw new Error('The Recipe File column has no .recipe or .json attachment.');
+
+    return {
+        ...mealPlannerRecordLink(environment, record.id),
+        attachmentUrl: attachment.url
+    };
 }
 
 function describeMealPlannerRecipe(environment, { id, createdTime, fields }) {
@@ -740,9 +762,10 @@ async function createAirtableRecord({ token, baseId, tableId, fields }) {
     return record;
 }
 
-async function listAirtableRecords({ token, baseId, tableId, fields = [], sortField = '', lookup = 'Airtable coach profile lookup' }) {
+async function listAirtableRecords({ token, baseId, tableId, fields = [], sortField = '', lookup = 'Airtable coach profile lookup', filterByFormula = '' }) {
     const params = new URLSearchParams({ pageSize: '100' });
     fields.forEach((field) => params.append('fields[]', field));
+    if (filterByFormula) params.set('filterByFormula', filterByFormula);
     if (sortField) {
         params.append('sort[0][field]', sortField);
         params.append('sort[0][direction]', 'asc');
@@ -996,7 +1019,11 @@ function handleMealPlannerAction(payload = {}) {
     }
 
     if (payload.action === 'list-meal-planner-recipes') {
-        return listMealPlannerRecipes();
+        return listMealPlannerRecipes(payload);
+    }
+
+    if (payload.action === 'get-meal-planner-recipe-file') {
+        return getMealPlannerRecipeFile(payload);
     }
 
     if (payload.action === 'begin-meal-planner-recipe-update') {

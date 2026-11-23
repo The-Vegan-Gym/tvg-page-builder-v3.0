@@ -296,6 +296,9 @@ let activeAirtableExportMode = 'meal-planner';
 let mealPlannerRecipeOptions = null;
 let loadingMealPlannerRecipes = false;
 let updatingMealPlannerRecipe = false;
+let editingMealPlannerRecordId = '';
+let airtableLoadOptions = [];
+let airtableLoadRequest = null;
 let appMode = 'create';
 let editingPageRecordId = '';
 let editingPageRecordFields = null;
@@ -630,6 +633,11 @@ const elements = {
     recentRecipesList: () => document.getElementById('recent-recipes-list'),
     btnCloseLoadRecipe: () => document.getElementById('btn-close-load-recipe'),
     btnLoadFromComputer: () => document.getElementById('btn-load-from-computer'),
+    btnLoadFromAirtable: () => document.getElementById('btn-load-from-airtable'),
+    airtableLoadForm: () => document.getElementById('load-airtable-recipe-form'),
+    airtableLoadSearch: () => document.getElementById('load-airtable-recipe-search'),
+    airtableLoadRecord: () => document.getElementById('load-airtable-recipe-record'),
+    airtableLoadSubmit: () => document.getElementById('btn-load-airtable-recipe'),
     mealPlannerExportTitle: () => document.getElementById('meal-planner-export-title'),
     mealPlannerExportOverlay: () => document.getElementById('meal-planner-export-overlay'),
     mealPlannerExportForm: () => document.getElementById('meal-planner-export-form'),
@@ -841,10 +849,13 @@ function saveRecentRecipe(recipe) {
     const savedAt = new Date().toISOString();
     const id = `${slugify(title || 'recipe')}-${Date.now()}`;
     const existing = getRecentRecipes().filter((item) => {
+        if (editingMealPlannerRecordId || item.airtableRecordId) {
+            return item.airtableRecordId !== editingMealPlannerRecordId;
+        }
         const itemTitle = (item.recipe?.title || item.title || '').trim();
         return itemTitle.toLowerCase() !== title.toLowerCase();
     });
-    const nextRecents = [{ id, title, savedAt, recipe: normalizedRecipe }, ...existing].slice(0, 5);
+    const nextRecents = [{ id, title, savedAt, recipe: normalizedRecipe, airtableRecordId: editingMealPlannerRecordId }, ...existing].slice(0, 5);
 
     try {
         localStorage.setItem(RECENT_RECIPES_STORAGE_KEY, JSON.stringify(nextRecents));
@@ -875,7 +886,7 @@ function updateRecipeHistoryButtons() {
 }
 
 function resetRecipeHistory(recipe = currentRecipe) {
-    recipeHistory = [serializeRecipeHistoryState(recipe)];
+    recipeHistory = [{ state: serializeRecipeHistoryState(recipe), airtableRecordId: editingMealPlannerRecordId }];
     recipeHistoryIndex = 0;
     updateRecipeHistoryButtons();
 }
@@ -884,7 +895,8 @@ function recordRecipeHistory(recipe = currentRecipe) {
     if (isApplyingRecipeHistory) return;
 
     const serializedRecipe = serializeRecipeHistoryState(recipe);
-    if (recipeHistory[recipeHistoryIndex] === serializedRecipe) {
+    const previous = recipeHistory[recipeHistoryIndex];
+    if (previous?.state === serializedRecipe && previous.airtableRecordId === editingMealPlannerRecordId) {
         updateRecipeHistoryButtons();
         return;
     }
@@ -893,7 +905,7 @@ function recordRecipeHistory(recipe = currentRecipe) {
         recipeHistory = recipeHistory.slice(0, recipeHistoryIndex + 1);
     }
 
-    recipeHistory.push(serializedRecipe);
+    recipeHistory.push({ state: serializedRecipe, airtableRecordId: editingMealPlannerRecordId });
     if (recipeHistory.length > RECIPE_HISTORY_LIMIT) {
         recipeHistory.shift();
     } else {
@@ -912,7 +924,9 @@ function applyRecipeHistoryAt(index) {
 
     recipeHistoryIndex = index;
     isApplyingRecipeHistory = true;
-    currentRecipe = cloneRecipeHistoryState(recipeHistory[recipeHistoryIndex]);
+    const entry = recipeHistory[recipeHistoryIndex];
+    currentRecipe = cloneRecipeHistoryState(entry.state);
+    editingMealPlannerRecordId = entry.airtableRecordId;
     loadRecipeToForm(currentRecipe);
     renderRecipePage();
     isApplyingRecipeHistory = false;
@@ -929,9 +943,10 @@ function redoRecipeChange() {
     applyRecipeHistoryAt(recipeHistoryIndex + 1);
 }
 
-function loadRecipeObject(recipe) {
+function loadRecipeObject(recipe, airtableRecordId = editingMealPlannerRecordId) {
     const normalized = normalizeRecipe(recipe);
     currentRecipe = normalized;
+    editingMealPlannerRecordId = airtableRecordId;
     loadRecipeToForm(normalized);
     renderRecipePage();
     recordRecipeHistory(currentRecipe);
@@ -964,24 +979,24 @@ async function initializeEditModeFromUrl() {
         editingPageRecordFields = pageRecord.fields || {};
         document.body.dataset.appMode = 'edit';
         document.body.dataset.pageRecordId = editingPageRecordId;
-        loadRecipeObject(recipe);
+        loadRecipeObject(recipe, '');
         resetRecipeHistory(currentRecipe);
     } catch (error) {
         showEditModeLoadError(error);
     }
 }
 
-async function downloadRecipeJsonAttachment(url) {
-    const response = await fetch(url);
+async function downloadRecipeJsonAttachment(url, { signal, label = 'Page file' } = {}) {
+    const response = await fetch(url, { signal });
     if (!response.ok) {
-        throw new Error(`Unable to download Page file. HTTP ${response.status}`);
+        throw new Error(`Unable to download ${label}. HTTP ${response.status}`);
     }
 
     const text = await response.text();
     try {
-        return JSON.parse(text);
+        return JSON.parse(text.replace(/^\uFEFF/, ''));
     } catch (error) {
-        throw new Error('Page file JSON cannot be parsed.');
+        throw new Error(`${label} JSON cannot be parsed.`);
     }
 }
 
@@ -1023,7 +1038,8 @@ function renderRecentRecipes() {
 
     list.innerHTML = recents.map((item, index) => {
         const title = item.title || item.recipe?.title || 'Untitled Recipe';
-        const savedAt = formatRecentRecipeDate(item.savedAt);
+        const date = formatRecentRecipeDate(item.savedAt);
+        const savedAt = item.airtableRecordId ? `Airtable · ${date}` : date;
 
         return `
             <button type="button" class="recent-recipe-item" data-recent-recipe-index="${index}">
@@ -1035,12 +1051,115 @@ function renderRecentRecipes() {
 }
 
 function openLoadRecipeOverlay() {
-    renderRecentRecipes();
     elements.loadRecipeOverlay()?.classList.add('active');
+    showRecentRecipePicker();
 }
 
 function closeLoadRecipeOverlay() {
+    airtableLoadRequest?.abort();
     elements.loadRecipeOverlay()?.classList.remove('active');
+}
+
+function showRecentRecipePicker() {
+    airtableLoadRequest?.abort();
+    elements.airtableLoadForm().hidden = true;
+    document.getElementById('load-recipe-recent').hidden = false;
+    renderRecentRecipes();
+    elements.btnLoadFromAirtable().focus();
+}
+
+function updateAirtableLoadStatus(message = '', status = '') {
+    const element = document.getElementById('load-airtable-recipe-status');
+    element.className = ['master-paste-status', status].filter(Boolean).join(' ');
+    element.textContent = message;
+}
+
+async function openAirtableRecipePicker() {
+    airtableLoadRequest?.abort();
+    const request = new AbortController();
+    airtableLoadRequest = request;
+    airtableLoadOptions = [];
+    elements.airtableLoadForm().hidden = false;
+    document.getElementById('load-recipe-recent').hidden = true;
+    const search = elements.airtableLoadSearch();
+    const picker = elements.airtableLoadRecord();
+    const submit = elements.airtableLoadSubmit();
+    search.value = '';
+    search.disabled = false;
+    picker.replaceChildren(new Option('Loading Airtable recipes…', ''));
+    picker.disabled = true;
+    submit.disabled = true;
+    submit.textContent = 'Load Recipe';
+    updateAirtableLoadStatus();
+    search.focus();
+
+    try {
+        const recipes = await postMealPlannerExport({ action: 'list-meal-planner-recipes', withRecipeFile: true }, { signal: request.signal });
+        if (request.signal.aborted) return;
+        if (!Array.isArray(recipes)) throw new Error('Airtable did not return the recipe list.');
+        airtableLoadOptions = recipes;
+        picker.disabled = false;
+        if (recipes.length) renderAirtableLoadOptions();
+        else picker.replaceChildren(new Option('No recipes with a Recipe File', ''));
+    } catch (error) {
+        if (request.signal.aborted) return;
+        picker.replaceChildren(new Option('Unable to load recipes', ''));
+        updateAirtableLoadStatus(error.message, 'error');
+    } finally {
+        if (airtableLoadRequest === request) airtableLoadRequest = null;
+    }
+}
+
+function renderAirtableLoadOptions() {
+    if (!airtableLoadOptions.length) return;
+    const picker = elements.airtableLoadRecord();
+    populateAirtableRecipeOptions(picker, elements.airtableLoadSearch(), airtableLoadOptions);
+    elements.airtableLoadSubmit().disabled = !picker.value;
+}
+
+async function handleAirtableRecipeLoad(event) {
+    event.preventDefault();
+    const picker = elements.airtableLoadRecord();
+    const recordId = picker.value;
+    if (airtableLoadRequest || !airtableLoadOptions.some(({ id }) => id === recordId)) return;
+
+    const request = new AbortController();
+    airtableLoadRequest = request;
+    const search = elements.airtableLoadSearch();
+    const submit = elements.airtableLoadSubmit();
+    picker.disabled = search.disabled = submit.disabled = true;
+    submit.textContent = 'Loading…';
+    updateAirtableLoadStatus('Downloading the recipe file…', 'working');
+    try {
+        const options = { signal: request.signal };
+        const record = await postMealPlannerExport({ action: 'get-meal-planner-recipe-file', recordId }, options);
+        if (record.id !== recordId || !record.attachmentUrl) throw new Error('Airtable did not return the selected recipe file.');
+        const recipe = await downloadRecipeJsonAttachment(record.attachmentUrl, { ...options, label: 'Recipe File' });
+        if (request.signal.aborted) return;
+        if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)
+            || (recipe.title != null && typeof recipe.title !== 'string')
+            || !Object.keys(recipe).some((key) => Object.hasOwn(EMPTY_RECIPE, key))) {
+            throw new Error('The attachment is not a recipe save file.');
+        }
+        const previousRecipe = currentRecipe;
+        const previousRecordId = editingMealPlannerRecordId;
+        try {
+            loadRecipeObject(recipe, recordId);
+        } catch {
+            if (currentRecipe !== previousRecipe) loadRecipeObject(previousRecipe, previousRecordId);
+            throw new Error('The attachment could not be loaded as a recipe.');
+        }
+        saveRecentRecipe(currentRecipe);
+        closeLoadRecipeOverlay();
+    } catch (error) {
+        if (!request.signal.aborted) updateAirtableLoadStatus(error.message || 'Unable to load the Airtable recipe.', 'error');
+    } finally {
+        if (airtableLoadRequest === request) {
+            airtableLoadRequest = null;
+            picker.disabled = search.disabled = submit.disabled = false;
+            submit.textContent = 'Load Recipe';
+        }
+    }
 }
 
 function handleRecentRecipeClick(event) {
@@ -1051,7 +1170,7 @@ function handleRecentRecipeClick(event) {
     const recent = getRecentRecipes()[index];
     if (!recent?.recipe) return;
 
-    loadRecipeObject(recent.recipe);
+    loadRecipeObject(recent.recipe, recent.airtableRecordId || '');
     saveRecentRecipe(recent.recipe);
     closeLoadRecipeOverlay();
 }
@@ -2286,7 +2405,7 @@ function initializeButtonListeners() {
     elements.btnExportMyPages()?.addEventListener('click', () => openAirtableExportOverlay('my-pages'));
     elements.mealPlannerExportForm()?.addEventListener('submit', handleMealPlannerExportSubmit);
     elements.mealPlannerExportDestination()?.addEventListener('change', updateMealPlannerExportMode);
-    elements.mealPlannerRecipeSearch()?.addEventListener('input', renderMealPlannerRecipeOptions);
+    elements.mealPlannerRecipeSearch()?.addEventListener('input', () => renderMealPlannerRecipeOptions());
     elements.mealPlannerRecipeRecord()?.addEventListener('change', showSelectedMealPlannerRecipe);
     elements.btnGenerateMealPlannerMetadata()?.addEventListener('click', handleGenerateMealPlannerMetadata);
     elements.btnCloseMealPlannerExport()?.addEventListener('click', closeMealPlannerExportOverlay);
@@ -2317,6 +2436,14 @@ function initializeButtonListeners() {
 
     elements.jsonFileInput()?.addEventListener('change', handleLoadJson);
     elements.btnCloseLoadRecipe()?.addEventListener('click', closeLoadRecipeOverlay);
+    elements.btnLoadFromAirtable()?.addEventListener('click', openAirtableRecipePicker);
+    document.getElementById('btn-back-load-recipe')?.addEventListener('click', showRecentRecipePicker);
+    elements.airtableLoadSearch()?.addEventListener('input', renderAirtableLoadOptions);
+    elements.airtableLoadRecord()?.addEventListener('change', () => {
+        elements.airtableLoadSubmit().disabled = !elements.airtableLoadRecord().value;
+        updateAirtableLoadStatus();
+    });
+    elements.airtableLoadForm()?.addEventListener('submit', handleAirtableRecipeLoad);
     elements.btnLoadFromComputer()?.addEventListener('click', () => {
         closeLoadRecipeOverlay();
         elements.jsonFileInput()?.click();
@@ -2326,6 +2453,9 @@ function initializeButtonListeners() {
         if (event.target === elements.loadRecipeOverlay()) {
             closeLoadRecipeOverlay();
         }
+    });
+    elements.loadRecipeOverlay()?.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeLoadRecipeOverlay();
     });
 
     // Clear button
@@ -5981,7 +6111,7 @@ function openAirtableExportOverlay(mode = 'meal-planner') {
     if (elements.mealPlannerExportTitle()) {
         elements.mealPlannerExportTitle().textContent = isMyPagesExport ? 'Export to My Pages' : 'Export to Meal Planner';
     }
-    elements.mealPlannerExportDestination().value = 'create';
+    elements.mealPlannerExportDestination().value = !isMyPagesExport && editingMealPlannerRecordId ? 'update' : 'create';
     elements.mealPlannerRecipeSearch().value = '';
     elements.mealPlannerRecipeRecord().value = '';
     mealPlannerRecipeOptions = null;
@@ -6038,7 +6168,7 @@ function updateMealPlannerExportMode() {
     submit.disabled = isUpdate;
     updateMealPlannerExportStatus('');
     if (isUpdate) {
-        if (mealPlannerRecipeOptions) renderMealPlannerRecipeOptions();
+        if (mealPlannerRecipeOptions) renderMealPlannerRecipeOptions(elements.mealPlannerRecipeRecord().value || editingMealPlannerRecordId);
         else loadMealPlannerRecipeOptions();
     }
 }
@@ -6051,7 +6181,7 @@ async function loadMealPlannerRecipeOptions() {
         const recipes = await postMealPlannerExport({ action: 'list-meal-planner-recipes' });
         if (!Array.isArray(recipes)) throw new Error('Airtable did not return the recipe list.');
         mealPlannerRecipeOptions = recipes;
-        if (isUpdatingMealPlannerRecipe()) renderMealPlannerRecipeOptions();
+        if (isUpdatingMealPlannerRecipe()) renderMealPlannerRecipeOptions(editingMealPlannerRecordId);
     } catch (error) {
         if (isUpdatingMealPlannerRecipe()) {
             elements.mealPlannerRecipeRecord().replaceChildren(new Option('Unable to load recipes', ''));
@@ -6062,13 +6192,15 @@ async function loadMealPlannerRecipeOptions() {
     }
 }
 
-function renderMealPlannerRecipeOptions() {
+function renderMealPlannerRecipeOptions(preferredId) {
     if (!isUpdatingMealPlannerRecipe() || !mealPlannerRecipeOptions) return;
+    populateAirtableRecipeOptions(elements.mealPlannerRecipeRecord(), elements.mealPlannerRecipeSearch(), mealPlannerRecipeOptions, preferredId);
+    showSelectedMealPlannerRecipe();
+}
 
-    const recordPicker = elements.mealPlannerRecipeRecord();
-    const previous = recordPicker.value;
-    const terms = elements.mealPlannerRecipeSearch().value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const matches = mealPlannerRecipeOptions.filter(({ title, series }) => {
+function populateAirtableRecipeOptions(recordPicker, searchInput, recipes, preferredId = recordPicker.value) {
+    const terms = searchInput.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = recipes.filter(({ title, series }) => {
         const searchable = `${title} ${series || ''}`.toLowerCase();
         return terms.every((term) => searchable.includes(term));
     });
@@ -6080,8 +6212,7 @@ function renderMealPlannerRecipeOptions() {
         return new Option(`${title} (${detail})`, id);
     });
     recordPicker.replaceChildren(new Option(matches.length ? 'Choose a recipe' : 'No matching recipes', ''), ...options);
-    if (matches.some(({ id }) => id === previous)) recordPicker.value = previous;
-    showSelectedMealPlannerRecipe();
+    if (matches.some(({ id }) => id === preferredId)) recordPicker.value = preferredId;
 }
 
 function showSelectedMealPlannerRecipe() {
@@ -6422,7 +6553,7 @@ async function handleMyPagesExportSubmit() {
         }
         updateMealPlannerExportStatus('Preparing hero image...', '');
         const exportRecipe = await prepareRecipeForMealPlannerExport(currentRecipe);
-        const shouldUpdatePageRecord = appMode === 'edit' && Boolean(editingPageRecordId);
+        const shouldUpdatePageRecord = appMode === 'edit' && Boolean(editingPageRecordId) && !editingMealPlannerRecordId;
         updateMealPlannerExportStatus(shouldUpdatePageRecord ? 'Updating Page Record...' : 'Creating Page Record...', '');
 
         const record = await postMealPlannerExport({
@@ -6486,11 +6617,12 @@ async function handleMyPagesExportSubmit() {
     }
 }
 
-async function postMealPlannerExport(payload) {
+async function postMealPlannerExport(payload, { signal } = {}) {
     const response = await fetch('/api/export-meal-planner', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal
     });
     const data = await response.json().catch(() => ({}));
 
@@ -8651,12 +8783,8 @@ function handleLoadJson(event) {
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
-            const recipe = normalizeRecipe(JSON.parse(e.target.result));
-            currentRecipe = recipe;
-            loadRecipeToForm(recipe);
-            renderRecipePage();
-            recordRecipeHistory(currentRecipe);
-            saveRecentRecipe(recipe);
+            loadRecipeObject(JSON.parse(e.target.result), '');
+            saveRecentRecipe(currentRecipe);
         } catch (error) {
             alert('Error loading JSON file. Please ensure it is a valid recipe file.');
             console.error('JSON parse error:', error);
@@ -8673,6 +8801,7 @@ function handleLoadJson(event) {
  */
 function handleClear() {
     if (confirm('Are you sure you want to clear all recipe data?')) {
+        editingMealPlannerRecordId = '';
         currentRecipe = normalizeRecipe({});
         clearMasterPasteFields();
         loadRecipeToForm(currentRecipe);

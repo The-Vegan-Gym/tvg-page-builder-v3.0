@@ -1602,6 +1602,47 @@ body {
     overflow-y: auto;
 }
 
+.load-recipe-body[hidden] {
+    display: none;
+}
+
+.load-recipe-body .form-group,
+.load-recipe-body .master-paste-status {
+    margin: 0;
+}
+
+.load-recipe-body .master-paste-status.working {
+    display: block;
+    color: #cbd6e1;
+    background: #202a34;
+}
+
+.load-recipe-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.load-recipe-actions > button {
+    flex: 1 1 auto;
+}
+
+#load-airtable-recipe-search {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid #303943;
+    border-radius: var(--radius-md);
+    background: #0f1318;
+    color: #edf2f7;
+    font: inherit;
+    font-size: var(--editor-body-size);
+}
+
+#load-airtable-recipe-search:focus {
+    border-color: var(--color-primary);
+    outline: none;
+}
+
 .meal-planner-export-body {
     display: flex;
     flex-direction: column;
