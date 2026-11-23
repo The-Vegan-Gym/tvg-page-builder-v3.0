@@ -1736,10 +1736,46 @@ body {
 .recipe-browser-toolbar {
     display: flex;
     flex: 0 0 auto;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
+    gap: 4px 10px;
     color: #9fadb9;
     font-size: 11px;
+}
+
+.recipe-browser-excluded-toggle {
+    width: auto;
+    min-height: 26px;
+    margin: 0;
+    padding: 4px 39px 4px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.recipe-browser-excluded-toggle::before {
+    right: 7px;
+    width: 26px;
+    height: 16px;
+}
+
+.recipe-browser-excluded-toggle::after {
+    right: 19px;
+    width: 12px;
+    height: 12px;
+}
+
+.recipe-browser-excluded-toggle:has(input:checked)::after {
+    right: 9px;
+}
+
+.recipe-browser-excluded-toggle:has(input:focus-visible) {
+    outline: 2px solid #8ff087;
+    outline-offset: 2px;
+}
+
+.recipe-browser-excluded-toggle:has(input:disabled) {
+    cursor: wait;
+    opacity: .6;
 }
 
 .recipe-browser-toolbar select {

@@ -640,6 +640,7 @@ const elements = {
     airtableLoadSearch: () => document.getElementById('load-airtable-recipe-search'),
     airtableLoadCategories: () => document.getElementById('airtable-recipe-categories'),
     airtableLoadSort: () => document.getElementById('airtable-recipe-sort'),
+    airtableLoadShowExcluded: () => document.getElementById('airtable-recipe-show-excluded'),
     airtableLoadGrid: () => document.getElementById('airtable-recipe-grid'),
     airtableLoadSubmit: () => document.getElementById('btn-load-airtable-recipe'),
     mealPlannerExportTitle: () => document.getElementById('meal-planner-export-title'),
@@ -1155,6 +1156,7 @@ async function openAirtableRecipePicker() {
     search.disabled = false;
     sort.value = 'az';
     sort.disabled = false;
+    elements.airtableLoadShowExcluded().disabled = false;
     categories.inert = false;
     categories.querySelectorAll('[data-recipe-category]').forEach((button) => {
         button.setAttribute('aria-pressed', String(button.dataset.recipeCategory === ''));
@@ -1185,9 +1187,11 @@ async function openAirtableRecipePicker() {
 function renderAirtableLoadOptions() {
     const category = elements.airtableLoadCategories().querySelector('[aria-pressed="true"]').dataset.recipeCategory;
     const sort = elements.airtableLoadSort().value;
+    const showExcluded = elements.airtableLoadShowExcluded().checked;
     const terms = normalizeAirtableSearch(elements.airtableLoadSearch().value).split(' ').filter(Boolean);
     const compareTitles = (a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
     const matches = airtableLoadOptions.filter((recipe) => {
+        if (!showExcluded && recipe.excluded) return false;
         const matchesCategory = category === 'needs-fixing'
             ? recipe.needsFixing === true
             : !category || recipe.category === category || (category === 'Smoothie' && /\bsmoothies?\b/i.test(recipe.title));
@@ -1207,7 +1211,7 @@ function renderAirtableLoadOptions() {
     document.getElementById('airtable-recipe-count').textContent = `${matches.length} ${matches.length === 1 ? 'recipe' : 'recipes'}`;
     const empty = document.getElementById('airtable-recipe-empty');
     empty.hidden = matches.length > 0;
-    empty.textContent = airtableLoadOptions.length ? 'No recipes match your search and category.' : 'No recipes found in Airtable.';
+    empty.textContent = airtableLoadOptions.length ? 'No recipes match the current filters.' : 'No recipes found in Airtable.';
     selectAirtableLoadRecipe(matches.find(({ id }) => id === airtableLoadSelectedId));
 }
 
@@ -1284,9 +1288,10 @@ async function handleAirtableRecipeLoad(event) {
     const search = elements.airtableLoadSearch();
     const submit = elements.airtableLoadSubmit();
     const sort = elements.airtableLoadSort();
+    const excludedToggle = elements.airtableLoadShowExcluded();
     const grid = elements.airtableLoadGrid();
     const categories = elements.airtableLoadCategories();
-    categories.inert = grid.inert = search.disabled = sort.disabled = submit.disabled = true;
+    categories.inert = grid.inert = search.disabled = sort.disabled = excludedToggle.disabled = submit.disabled = true;
     submit.textContent = 'Loading…';
     updateAirtableLoadStatus('Downloading the recipe file…', 'working');
     try {
@@ -1316,7 +1321,7 @@ async function handleAirtableRecipeLoad(event) {
     } finally {
         if (airtableLoadRequest === request) {
             airtableLoadRequest = null;
-            categories.inert = grid.inert = search.disabled = sort.disabled = submit.disabled = false;
+            categories.inert = grid.inert = search.disabled = sort.disabled = excludedToggle.disabled = submit.disabled = false;
             submit.textContent = 'Load Recipe';
         }
     }
@@ -2616,6 +2621,9 @@ function initializeButtonListeners() {
         if (!airtableLoadRequest) renderAirtableLoadOptions();
     });
     elements.airtableLoadSort()?.addEventListener('change', () => {
+        if (!airtableLoadRequest) renderAirtableLoadOptions();
+    });
+    elements.airtableLoadShowExcluded()?.addEventListener('change', () => {
         if (!airtableLoadRequest) renderAirtableLoadOptions();
     });
     elements.airtableLoadCategories()?.addEventListener('click', (event) => {
@@ -7075,7 +7083,7 @@ function initializeMasterPasteAiControls() {
         event.preventDefault();
         dropzone.classList.remove('is-drag-over');
 
-        const files = getMasterPasteTransferFiles(event.dataTransfer);
+        const files = getTransferredFiles(event.dataTransfer);
         if (files.length) {
             addMasterPasteAiFiles(files);
             return;
@@ -7088,7 +7096,7 @@ function initializeMasterPasteAiControls() {
     });
 
     dropzone.addEventListener('paste', (event) => {
-        const files = getMasterPasteTransferFiles(event.clipboardData);
+        const files = getTransferredFiles(event.clipboardData);
         if (!files.length) return;
 
         event.preventDefault();
@@ -7096,7 +7104,7 @@ function initializeMasterPasteAiControls() {
     });
 }
 
-function getMasterPasteTransferFiles(transfer) {
+function getTransferredFiles(transfer) {
     if (!transfer) return [];
 
     const itemFiles = Array.from(transfer.items || [])
@@ -7209,7 +7217,17 @@ function setPreviewAiStatus(message = '', status = '') {
 function setPreviewAiPhoto(file = null) {
     previewAiImage = file;
     document.getElementById('preview-ai-attachment').hidden = !file;
-    document.getElementById('preview-ai-filename').textContent = file?.name || '';
+    document.getElementById('preview-ai-filename').textContent = file ? file.name || 'Pasted image' : '';
+}
+
+function attachPreviewAiPhoto(file) {
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type) || file.size > MASTER_PASTE_MAX_FILE_BYTES || !file.size) {
+        setPreviewAiStatus('Choose a PNG, JPEG, WebP, or GIF photo up to 4 MB.', 'error');
+        return false;
+    }
+    setPreviewAiPhoto(file);
+    setPreviewAiStatus();
+    return true;
 }
 
 function initializePreviewAiControls() {
@@ -7228,6 +7246,13 @@ function initializePreviewAiControls() {
     form.addEventListener('submit', (event) => {
         event.preventDefault();
         handleGenerateMasterPasteAi('apply', true);
+    });
+    prompt.addEventListener('paste', (event) => {
+        const image = getTransferredFiles(event.clipboardData).find((file) => file.type.startsWith('image/'));
+        if (!image) return;
+
+        event.preventDefault();
+        attachPreviewAiPhoto(image);
     });
     prompt.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
@@ -7248,14 +7273,8 @@ function initializePreviewAiControls() {
     fileInput.addEventListener('change', () => {
         const [file] = fileInput.files;
         fileInput.value = '';
-        if (!file) return;
-        if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type) || file.size > MASTER_PASTE_MAX_FILE_BYTES || !file.size) {
-            setPreviewAiStatus('Choose a PNG, JPEG, WebP, or GIF photo up to 4 MB.', 'error');
-            return;
-        }
-        setPreviewAiPhoto(file);
+        if (!file || !attachPreviewAiPhoto(file)) return;
         if (!prompt.value.trim()) prompt.value = 'Use the attached image as the hero photo.';
-        setPreviewAiStatus();
         prompt.focus();
     });
 }

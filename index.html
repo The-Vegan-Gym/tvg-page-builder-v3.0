@@ -669,7 +669,7 @@
                         </div>
                         <form id="preview-ai-form">
                             <div class="preview-ai-composer">
-                                <textarea id="preview-ai-prompt" rows="2" aria-label="Describe your recipe page edits" placeholder="Make the title smaller, change the header color, or simplify the ingredients."></textarea>
+                                <textarea id="preview-ai-prompt" rows="2" aria-label="Describe your recipe page edits or paste an image" placeholder="Describe your edits or paste an image…"></textarea>
                                 <button type="submit" id="btn-preview-ai-send" class="preview-ai-send" aria-label="Apply AI edits" title="Apply AI Edits">
                                     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21.6 2.4a1 1 0 0 0-1-.2l-18 7a1 1 0 0 0 0 1.9l7.1 2.5 2.5 7.1a1 1 0 0 0 1.9 0l7.7-17.3a1 1 0 0 0-.2-1ZM11 13l5.8-5.8-4.3 7.7-.8-2.2-.7.3Z"/></svg>
                                 </button>
@@ -788,6 +788,10 @@
                 </div>
                 <div class="recipe-browser-toolbar">
                     <span id="airtable-recipe-count" role="status"></span>
+                    <label class="form-toggle recipe-browser-excluded-toggle">
+                        <input type="checkbox" id="airtable-recipe-show-excluded" role="switch" checked>
+                        <span>Show excluded</span>
+                    </label>
                     <label class="visually-hidden" for="airtable-recipe-sort">Sort recipes</label>
                     <select id="airtable-recipe-sort">
                         <option value="az">Name (A–Z)</option>
