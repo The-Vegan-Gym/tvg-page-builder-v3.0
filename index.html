@@ -431,6 +431,24 @@
                         <input type="text" id="page-number" name="pageNumber" placeholder="e.g., 14">
                     </div>
                     <div class="layout-control-container">
+                        <h3>Ingredient Columns</h3>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="ingredient-gap">Ingredient–Amount Gap</label>
+                                <input type="range" id="ingredient-gap" min="0" max="40" step="1" value="12">
+                                <span id="ingredient-gap-value">12px</span>
+                            </div>
+                        </div>
+                        <div class="layout-control-group">
+                            <div class="image-control-row">
+                                <label for="ingredient-amount-width">Amount Column Width</label>
+                                <input type="range" id="ingredient-amount-width" min="30" max="65" step="1" value="46">
+                                <span id="ingredient-amount-width-value">46%</span>
+                            </div>
+                            <p class="form-hint">Widen the amount column to fit longer quantities.</p>
+                        </div>
+                    </div>
+                    <div class="layout-control-container">
                         <h3>APP/JPEG Typography</h3>
                         <div class="layout-control-group">
                             <div class="image-control-row">
@@ -661,7 +679,7 @@
                         <span class="preview-ai-badge" aria-hidden="true"></span>
                         <span>Edit with AI</span>
                     </button>
-                    <section id="preview-ai-panel" class="preview-ai-panel" role="dialog" aria-labelledby="preview-ai-title" inert>
+                    <section id="preview-ai-panel" class="preview-ai-panel" role="dialog" aria-labelledby="preview-ai-title" tabindex="-1" inert>
                         <div class="preview-ai-header">
                             <span class="preview-ai-badge" aria-hidden="true"></span>
                             <h2 id="preview-ai-title">Edit with AI</h2>
@@ -687,8 +705,8 @@
                                 <span id="preview-ai-filename"></span>
                                 <button type="button" id="btn-preview-ai-remove-image" aria-label="Remove attached photo">&times;</button>
                             </div>
-                            <p id="preview-ai-status" class="preview-ai-status" role="status"></p>
                         </form>
+                        <p id="preview-ai-status" class="preview-ai-status" role="status"></p>
                     </section>
                 </div>
                 <div class="preview-zoom-controls" aria-label="Preview zoom controls">
@@ -817,67 +835,72 @@
                 <h3 id="meal-planner-export-title">Export to Meal Planner</h3>
                 <button type="button" class="btn-close-modal" id="btn-close-meal-planner-export">&times;</button>
             </div>
-            <form id="meal-planner-export-form" class="meal-planner-export-body">
-                <div class="form-group" id="meal-planner-export-destination-group">
-                    <label for="meal-planner-export-destination">Export Mode</label>
-                    <select id="meal-planner-export-destination">
-                        <option value="create">Create New Recipe</option>
-                        <option value="update">Update Existing Recipe</option>
-                    </select>
-                </div>
-                <div id="meal-planner-existing-recipe" hidden>
-                    <div class="form-group">
-                        <label for="meal-planner-recipe-search">Search Airtable Recipes</label>
-                        <input type="search" id="meal-planner-recipe-search" placeholder="Search by title or meal series" autocomplete="off">
-                    </div>
-                    <div class="form-group">
-                        <label for="meal-planner-recipe-record">Recipe to Update</label>
-                        <select id="meal-planner-recipe-record" aria-describedby="meal-planner-update-help">
-                            <option value="">Choose a recipe</option>
+            <form id="meal-planner-export-form" class="meal-planner-export-form">
+                <div class="meal-planner-export-body">
+                    <div class="form-group" id="meal-planner-export-destination-group">
+                        <label for="meal-planner-export-destination">Export Mode</label>
+                        <select id="meal-planner-export-destination">
+                            <option value="create">Create New Recipe</option>
+                            <option value="update">Update Existing Recipe</option>
                         </select>
-                        <a id="meal-planner-open-recipe" class="meal-planner-record-link" target="_blank" rel="noopener noreferrer" hidden>Open record in Airtable</a>
                     </div>
-                    <p id="meal-planner-update-help" class="form-hint">Replaces the four page variants and recipe file. Updates filled nutrition fields and the recipe image when supplied.</p>
-                    <label class="form-toggle meal-planner-mark-fixed">
-                        <input type="checkbox" role="switch" id="meal-planner-mark-as-fixed" aria-describedby="meal-planner-mark-fixed-help" disabled>
-                        <span>Mark as fixed</span>
-                    </label>
-                    <p id="meal-planner-mark-fixed-help" class="form-hint">Clears Needs fixing and adds a dated completion line to any review notes.</p>
+                    <div id="meal-planner-existing-recipe" hidden>
+                        <div class="form-group">
+                            <label for="meal-planner-recipe-search">Search Airtable Recipes</label>
+                            <input type="search" id="meal-planner-recipe-search" placeholder="Search by title or meal series" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label for="meal-planner-recipe-record">Recipe to Update</label>
+                            <select id="meal-planner-recipe-record" aria-describedby="meal-planner-update-help">
+                                <option value="">Choose a recipe</option>
+                            </select>
+                            <a id="meal-planner-open-recipe" class="meal-planner-record-link" target="_blank" rel="noopener noreferrer" hidden>Open record in Airtable</a>
+                        </div>
+                        <p id="meal-planner-update-help" class="form-hint">Replaces the four page variants and recipe file. Updates filled nutrition fields and the recipe image when supplied.</p>
+                        <label class="form-toggle meal-planner-mark-fixed">
+                            <input type="checkbox" role="switch" id="meal-planner-mark-as-fixed" aria-describedby="meal-planner-mark-fixed-help" disabled>
+                            <span>Mark as fixed</span>
+                        </label>
+                        <p id="meal-planner-mark-fixed-help" class="form-hint">Clears Needs fixing and adds a dated completion line to any review notes.</p>
+                    </div>
+                    <div class="meal-planner-export-actions">
+                        <button type="button" id="btn-generate-meal-planner-metadata" class="btn-secondary">Generate</button>
+                    </div>
+                    <div class="form-group" id="my-pages-coach-profile-group" hidden>
+                        <label for="my-pages-coach-profile">Coach Profile</label>
+                        <select id="my-pages-coach-profile" name="coachProfile">
+                            <option value="">Select coach profile</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="meal-planner-category">Category</label>
+                        <select id="meal-planner-category" name="category" required>
+                            <option value="">Select category</option>
+                            <option value="Breakfast">Breakfast</option>
+                            <option value="Lunch / Dinner">Lunch / Dinner</option>
+                            <option value="Dessert">Dessert</option>
+                            <option value="Snack">Snack</option>
+                            <option value="Sauce">Sauce</option>
+                            <option value="Sides">Sides</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="meal-planner-ingredients">Ingredients</label>
+                        <textarea id="meal-planner-ingredients" name="ingredients" rows="6" placeholder="One ingredient per line"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="meal-planner-cronometer">Cronometer</label>
+                        <textarea id="meal-planner-cronometer" name="cronometer" rows="5" placeholder="One ingredient with amount per line&#10;1 cup rolled oats&#10;5 tbsp almond butter&#10;2 tbsp maple syrup&#10;2 tsp vanilla extract&#10;4 tbsp mini vegan chocolate chips"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="meal-planner-allergy">Allergy</label>
+                        <textarea id="meal-planner-allergy" name="allergy" rows="3" placeholder="One allergy tag per line"></textarea>
+                    </div>
                 </div>
-                <div class="meal-planner-export-actions">
-                    <button type="button" id="btn-generate-meal-planner-metadata" class="btn-secondary">Generate</button>
+                <div class="meal-planner-export-feedback">
+                    <div id="meal-planner-export-status" class="master-paste-status" role="status"></div>
+                    <progress id="meal-planner-export-progress" max="100" value="0" aria-label="Export progress" hidden></progress>
                 </div>
-                <div class="form-group" id="my-pages-coach-profile-group" hidden>
-                    <label for="my-pages-coach-profile">Coach Profile</label>
-                    <select id="my-pages-coach-profile" name="coachProfile">
-                        <option value="">Select coach profile</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="meal-planner-category">Category</label>
-                    <select id="meal-planner-category" name="category" required>
-                        <option value="">Select category</option>
-                        <option value="Breakfast">Breakfast</option>
-                        <option value="Lunch / Dinner">Lunch / Dinner</option>
-                        <option value="Dessert">Dessert</option>
-                        <option value="Snack">Snack</option>
-                        <option value="Sauce">Sauce</option>
-                        <option value="Sides">Sides</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="meal-planner-ingredients">Ingredients</label>
-                    <textarea id="meal-planner-ingredients" name="ingredients" rows="6" placeholder="One ingredient per line"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="meal-planner-cronometer">Cronometer</label>
-                    <textarea id="meal-planner-cronometer" name="cronometer" rows="5" placeholder="One ingredient with amount per line&#10;1 cup rolled oats&#10;5 tbsp almond butter&#10;2 tbsp maple syrup&#10;2 tsp vanilla extract&#10;4 tbsp mini vegan chocolate chips"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="meal-planner-allergy">Allergy</label>
-                    <textarea id="meal-planner-allergy" name="allergy" rows="3" placeholder="One allergy tag per line"></textarea>
-                </div>
-                <div id="meal-planner-export-status" class="master-paste-status" role="status"></div>
                 <div class="equipment-modal-footer">
                     <button type="button" id="btn-cancel-meal-planner-export" class="btn-secondary">Cancel</button>
                     <button type="submit" id="btn-submit-meal-planner-export" class="btn-primary">Export</button>
@@ -888,6 +911,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js"></script>
+    <script src="ingredient-layout.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

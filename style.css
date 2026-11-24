@@ -1982,6 +1982,12 @@ body {
     }
 }
 
+.meal-planner-export-form {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
 .meal-planner-export-body {
     display: flex;
     flex-direction: column;
@@ -2031,10 +2037,63 @@ body {
     font-size: var(--editor-helper-size);
 }
 
-.meal-planner-export-body .master-paste-status.working {
+.meal-planner-export-feedback {
+    flex: none;
+    padding: 0 var(--spacing-lg) var(--spacing-lg);
+}
+
+.meal-planner-export-feedback:not(:has(.working, .success, .error, .canceled)) {
+    padding-bottom: 0;
+}
+
+.meal-planner-export-feedback .master-paste-status {
+    margin: 0;
+}
+
+.meal-planner-export-feedback .master-paste-status:is(.working, .canceled) {
     display: block;
     color: #cbd6e1;
-    background: #202a34;
+    padding: 0;
+}
+
+.meal-planner-export-modal .btn-close-modal:disabled {
+    opacity: .45;
+    cursor: default;
+    background: #242c34;
+}
+
+#meal-planner-export-progress:not([hidden]) {
+    display: block;
+    width: 100%;
+    height: 8px;
+    margin-top: var(--spacing-sm);
+    appearance: none;
+    accent-color: var(--color-primary);
+    background: #303943;
+    border: 0;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+#meal-planner-export-progress::-webkit-progress-bar {
+    background: #303943;
+}
+
+#meal-planner-export-progress::-webkit-progress-value {
+    background: var(--color-primary);
+    border-radius: 999px;
+    transition: width 180ms ease-out;
+}
+
+#meal-planner-export-progress::-moz-progress-bar {
+    background: var(--color-primary);
+    border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #meal-planner-export-progress::-webkit-progress-value {
+        transition: none;
+    }
 }
 
 .meal-planner-export-body label {
@@ -2060,12 +2119,12 @@ body {
     resize: vertical;
 }
 
-.meal-planner-export-body .equipment-modal-footer {
-    margin: var(--spacing-sm) calc(var(--spacing-lg) * -1) calc(var(--spacing-lg) * -1);
+.meal-planner-export-form .equipment-modal-footer {
+    flex: none;
 }
 
-.meal-planner-export-body .equipment-modal-footer .btn-primary,
-.meal-planner-export-body .equipment-modal-footer .btn-secondary {
+.meal-planner-export-form .equipment-modal-footer .btn-primary,
+.meal-planner-export-form .equipment-modal-footer .btn-secondary {
     flex: 1;
 }
 
@@ -3787,6 +3846,49 @@ body {
 .preview-ai-status.success { color: #a6f0a1; }
 .preview-ai-status.error { color: #ffb7b5; }
 
+.preview-ai-panel.is-working {
+    overflow: hidden;
+    cursor: wait;
+}
+
+.preview-ai-panel.is-working:focus {
+    outline: none;
+}
+
+.preview-ai-panel.is-working :is(#preview-ai-form, .preview-ai-close) {
+    opacity: .35;
+}
+
+.preview-ai-status.working {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+    margin: 0;
+    padding: 9px 18px;
+    border: 1px solid #69d760;
+    border-radius: 999px;
+    background: #19271f;
+    box-shadow: 0 4px 20px #0008;
+    color: #d7ffe0;
+    font-size: 14px;
+    font-weight: 700;
+    -webkit-animation: pulsate-bck 0.5s ease-in-out infinite both;
+    animation: pulsate-bck 0.5s ease-in-out infinite both;
+}
+
+/* Pulsate Back by Animista, licensed under the FreeBSD License.
+   https://animista.net/license */
+@-webkit-keyframes pulsate-bck {
+    0%, 100% { -webkit-transform: scale(1); transform: scale(1); }
+    50% { -webkit-transform: scale(0.9); transform: scale(0.9); }
+}
+
+@keyframes pulsate-bck {
+    0%, 100% { -webkit-transform: scale(1); transform: scale(1); }
+    50% { -webkit-transform: scale(0.9); transform: scale(0.9); }
+}
+
 @media (max-width: 1000px) {
     .preview-ai-launch { bottom: 12px; left: 12px; padding: 3px; }
     .preview-ai-launch span:last-child { display: none; }
@@ -3799,6 +3901,10 @@ body {
     .preview-ai-tools .preview-ai-panel,
     .preview-ai-tools.is-open .preview-ai-panel {
         transition: none;
+    }
+
+    .preview-ai-status.working {
+        animation: none;
     }
 }
 
@@ -3997,6 +4103,7 @@ body {
     width: var(--page-width);
     height: auto;
     margin: 0;
+    transform-origin: top left;
     will-change: transform;
 }
 
@@ -4005,11 +4112,10 @@ body {
 }
 
 .recipe-page-stack {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 24px;
-    transform-origin: top left;
-    transition: transform 0.2s;
 }
 
 .recipe-page-stack > #continuation-pages {
@@ -4491,7 +4597,7 @@ body {
 
 .ingredient-item {
     display: flex;
-    justify-content: space-between;
+    column-gap: var(--ingredient-column-gap, 12px);
     padding: var(--spacing-8) 0;
     border-bottom: 1px solid #c3c3c3;
     font-size: var(--body-text-font-size, 12px);
@@ -4549,7 +4655,7 @@ body {
     color: var(--recipe-body-color, #000000);
     flex: 1;
     min-width: 0;
-    padding-right: var(--spacing-16);
+    overflow-wrap: anywhere;
     font-size: var(--body-text-font-size, 14px);
     font-weight: 500;
     font-style: normal;
@@ -4558,7 +4664,7 @@ body {
 
 .ingredient-amount-cell {
     color: var(--recipe-body-color, #000000);
-    flex: 0 1 42%;
+    flex: 0 0 var(--ingredient-amount-width, 46%);
     min-width: 0;
     text-align: right;
     overflow-wrap: anywhere;

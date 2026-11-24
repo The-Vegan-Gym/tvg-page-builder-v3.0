@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const { getIngredientLayout, keepIngredientMeasurementsTogether } = require('./ingredient-layout');
 const { handleMealPlannerAction } = require('./meal-planner-export');
 const { generateMealPlannerMetadata } = require('./meal-planner-metadata');
 const { generateMasterPaste, extractResponseText, cleanStructuredOutput } = require('./master-paste-ai');
@@ -582,6 +583,10 @@ function drawMaterialsPlaceholder(doc, recipe, column) {
 }
 
 function drawIngredients(doc, recipe, column) {
+    const { ingredientGap, ingredientAmountWidth } = getIngredientLayout(recipe);
+    const amountWidth = column.width * ingredientAmountWidth / 100;
+    const amountX = column.x + column.width - amountWidth;
+    const nameWidth = column.width - amountWidth - ingredientGap * (72 / 96);
     const sections = recipe.ingredientSections.length > 0
         ? recipe.ingredientSections
         : [{ label: '', ingredients: recipe.ingredients || [] }];
@@ -617,25 +622,17 @@ function drawIngredients(doc, recipe, column) {
                 return;
             }
 
-            column.y = ensureSpace(doc, column.y, 24);
-            const rowTop = column.y;
-            const nameWidth = column.width * 0.58;
-            const amountX = column.x + (column.width * 0.6);
-            const amountWidth = column.width * 0.4;
-            doc.font('Helvetica-Bold')
-                .fontSize(9)
-                .fillColor(TEXT_DARK)
-                .text(ingredient.name || '', column.x, rowTop, { width: nameWidth });
-            doc.font('Helvetica-Bold')
-                .fontSize(9)
-                .fillColor(TEXT_DARK)
-                .text(ingredient.amount || '', amountX, rowTop, {
-                    width: amountWidth,
-                    align: amountAlignment
-                });
-            const nameHeight = doc.heightOfString(ingredient.name || '', { width: nameWidth });
-            const amountHeight = doc.heightOfString(ingredient.amount || '', { width: amountWidth, align: amountAlignment });
+            const name = ingredient.name || '';
+            const amount = keepIngredientMeasurementsTogether(ingredient.amount);
+            const nameOptions = { width: nameWidth };
+            const amountOptions = { width: amountWidth, align: amountAlignment };
+            doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT_DARK);
+            const nameHeight = doc.heightOfString(name, nameOptions);
+            const amountHeight = doc.heightOfString(amount, amountOptions);
             const rowHeight = Math.max(nameHeight, amountHeight, 14);
+            const rowTop = ensureSpace(doc, column.y, rowHeight + 9);
+            doc.text(name, column.x, rowTop, nameOptions);
+            doc.text(amount, amountX, rowTop, amountOptions);
             doc.moveTo(column.x, rowTop + rowHeight + 4).lineTo(column.x + column.width, rowTop + rowHeight + 4).strokeColor(BORDER).lineWidth(0.75).stroke();
             column.y = rowTop + rowHeight + 9;
         });

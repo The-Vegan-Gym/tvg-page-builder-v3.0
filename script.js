@@ -66,11 +66,16 @@ const TYPOGRAPHY_SIZE_CONTROLS = [
 ];
 
 const DEFAULT_INGREDIENT_ALIGNMENT = 'right';
+const INGREDIENT_LAYOUT_CONTROLS = [
+    { key: 'ingredientGap', id: 'ingredient-gap', unit: 'px' },
+    { key: 'ingredientAmountWidth', id: 'ingredient-amount-width', unit: '%' }
+];
 
 /**
  * Empty recipe template (starts blank)
  */
 const EMPTY_RECIPE = {
+    ...getIngredientLayout(),
     pageType: "recipe",
     pageStyle: "standard",
     title: "",
@@ -295,7 +300,7 @@ let spellcheckCorrections = [];
 let activeAirtableExportMode = 'meal-planner';
 let mealPlannerRecipeOptions = null;
 let loadingMealPlannerRecipes = false;
-let updatingMealPlannerRecipe = false;
+let airtableExportController = null;
 let editingMealPlannerRecordId = '';
 const airtableReviewNotes = new Map();
 let airtableLoadOptions = [];
@@ -323,6 +328,7 @@ function normalizeRecipe(recipe = {}) {
     const normalized = {
         ...EMPTY_RECIPE,
         ...recipe,
+        ...getIngredientLayout(recipe),
         imageSettings: {
             ...EMPTY_RECIPE.imageSettings,
             ...(recipe.imageSettings || {})
@@ -471,20 +477,6 @@ function parseBooleanFlag(value, defaultValue = true) {
     const normalized = String(value ?? '').trim().toLowerCase();
     if (!normalized) return defaultValue;
     return !['0', 'false', 'no', 'off', 'hide', 'hidden'].includes(normalized);
-}
-
-function getRecipePageDimensions() {
-    const page = elements.recipePage();
-
-    if (!page) {
-        return { width: 0, height: 0 };
-    }
-
-    // offsetWidth/offsetHeight return the layout size before CSS transforms,
-    // so the transform doesn't need to be removed for measurement. The old
-    // approach conflicted with the `transition: transform 0.2s` on
-    // .recipe-page-stack and measured mid-transition scaled sizes.
-    return { width: page.offsetWidth, height: page.offsetHeight };
 }
 
 // ================================================
@@ -657,6 +649,7 @@ const elements = {
     mealPlannerCronometer: () => document.getElementById('meal-planner-cronometer'),
     mealPlannerAllergy: () => document.getElementById('meal-planner-allergy'),
     mealPlannerExportStatus: () => document.getElementById('meal-planner-export-status'),
+    mealPlannerExportProgress: () => document.getElementById('meal-planner-export-progress'),
     btnCloseMealPlannerExport: () => document.getElementById('btn-close-meal-planner-export'),
     btnCancelMealPlannerExport: () => document.getElementById('btn-cancel-meal-planner-export'),
     btnGenerateMealPlannerMetadata: () => document.getElementById('btn-generate-meal-planner-metadata'),
@@ -2393,6 +2386,12 @@ function initializeFormListeners() {
         updateSubtitleToStepSpacingDisplay(value);
         updateRecipeFromForm();
     });
+    for (const { id } of INGREDIENT_LAYOUT_CONTROLS) {
+        document.getElementById(id).addEventListener('input', () => {
+            updateRecipeFromForm();
+            syncIngredientLayoutControls(currentRecipe);
+        });
+    }
 
     // Image upload
     elements.imageUploadArea()?.addEventListener('click', () => {
@@ -2588,7 +2587,7 @@ function initializeButtonListeners() {
     elements.mealPlannerRecipeRecord()?.addEventListener('change', showSelectedMealPlannerRecipe);
     elements.btnGenerateMealPlannerMetadata()?.addEventListener('click', handleGenerateMealPlannerMetadata);
     elements.btnCloseMealPlannerExport()?.addEventListener('click', closeMealPlannerExportOverlay);
-    elements.btnCancelMealPlannerExport()?.addEventListener('click', closeMealPlannerExportOverlay);
+    elements.btnCancelMealPlannerExport()?.addEventListener('click', cancelAirtableExport);
     elements.mealPlannerExportOverlay()?.addEventListener('click', (event) => {
         if (event.target === elements.mealPlannerExportOverlay()) {
             closeMealPlannerExportOverlay();
@@ -2663,18 +2662,15 @@ function initializeButtonListeners() {
 
     // Zoom controls
     elements.btnZoomIn()?.addEventListener('click', () => {
-        zoomLevel = Math.min(Number(elements.zoomSlider().max), zoomLevel + 10);
-        updateZoom();
+        updateZoom(Math.min(Number(elements.zoomSlider().max), zoomLevel + 10));
     });
 
     elements.btnZoomOut()?.addEventListener('click', () => {
-        zoomLevel = Math.max(Number(elements.zoomSlider().min), zoomLevel - 10);
-        updateZoom();
+        updateZoom(Math.max(Number(elements.zoomSlider().min), zoomLevel - 10));
     });
 
     elements.zoomSlider()?.addEventListener('input', () => {
-        zoomLevel = Number.parseInt(elements.zoomSlider().value, 10) || 100;
-        updateZoom();
+        updateZoom(elements.zoomSlider().valueAsNumber);
     });
 
     elements.btnFocusPreview()?.addEventListener('click', focusFirstPreviewPage);
@@ -2699,6 +2695,7 @@ function loadRecipeToForm(recipe) {
     elements.titleFontSize().value = titleFontSize;
     elements.titleFontSizeValue().value = titleFontSize;
     syncTypographyControls(recipe);
+    syncIngredientLayoutControls(recipe);
     const printerTitleTopPadding = getPrinterTitleTopPadding(recipe);
     if (elements.printerTitleTopPadding()) {
         elements.printerTitleTopPadding().value = printerTitleTopPadding;
@@ -2878,6 +2875,9 @@ function updateRecipeFromForm() {
         title: elements.title()?.value || '',
         titleFontSize: parseInt(elements.titleFontSize()?.value, 10) || 40,
         typographySizes: getTypographySizesFromControls(),
+        ...getIngredientLayout(Object.fromEntries(INGREDIENT_LAYOUT_CONTROLS.map(({ key, id }) => [
+            key, document.getElementById(id).value
+        ]))),
         sectionLabelSpacing: getSectionLabelSpacing({ sectionLabelSpacing: elements.sectionLabelSpacing()?.value }),
         stepToHeaderSpacing: getStepToHeaderSpacing({ stepToHeaderSpacing: elements.stepToHeaderSpacing()?.value }),
         subtitleToStepSpacing: getSubtitleToStepSpacing({ subtitleToStepSpacing: elements.subtitleToStepSpacing()?.value }),
@@ -3107,8 +3107,20 @@ function getTypographySizesFromControls() {
     }, {});
 }
 
+function syncIngredientLayoutControls(recipe) {
+    const layout = getIngredientLayout(recipe);
+    for (const { key, id, unit } of INGREDIENT_LAYOUT_CONTROLS) {
+        const input = document.getElementById(id);
+        const value = layout[key];
+        input.value = value;
+        input.setAttribute('aria-valuetext', unit === '%' ? `${value} percent` : `${value} pixels`);
+        document.getElementById(`${id}-value`).textContent = `${value}${unit}`;
+    }
+}
+
 function createTypographyStyle(recipe = currentRecipe) {
     const sizes = getTypographySizes(recipe);
+    const { ingredientGap, ingredientAmountWidth } = getIngredientLayout(recipe);
     return [
         `--macro-bar-font-size: ${sizes.macroBar}px`,
         `--description-font-size: ${sizes.description}px`,
@@ -3116,6 +3128,8 @@ function createTypographyStyle(recipe = currentRecipe) {
         `--section-label-spacing: ${getSectionLabelSpacing(recipe)}px`,
         `--step-to-header-spacing: ${getStepToHeaderSpacing(recipe)}px`,
         `--subtitle-to-step-spacing: ${getSubtitleToStepSpacing(recipe)}px`,
+        `--ingredient-column-gap: ${ingredientGap}px`,
+        `--ingredient-amount-width: ${ingredientAmountWidth}%`,
         `--body-text-font-size: ${sizes.bodyText}px`,
         `--black-box-header-font-size: ${sizes.blackBoxHeader}px`,
         `--instruction-badge-font-size: ${sizes.instructionBadge}px`,
@@ -5258,7 +5272,7 @@ function createIngredientNode(ingredient, alignment) {
     item.classList.add(`ingredient-item--align-${normalizedAlignment}`);
     item.innerHTML = `
         <span class="ingredient-name-cell">${escapeHtml(ingredient.name)}</span>
-        <span class="ingredient-amount-cell">${escapeHtml(ingredient.amount)}</span>
+        <span class="ingredient-amount-cell">${escapeHtml(keepIngredientMeasurementsTogether(ingredient.amount))}</span>
     `;
     return item;
 }
@@ -5957,6 +5971,8 @@ function paginateDayPlanFlow() {
  * Handle JPG export (A4 at 300 DPI = 2480x3508 pixels)
  */
 async function handleExportJpg(options = {}) {
+    const signal = options?.signal;
+    const waitForRenderStep = (task) => waitForExportStep(task, signal);
     const recipePageStack = elements.recipePage();
     const recipePages = Array.from(recipePageStack?.querySelectorAll('.recipe-page') || []);
     const exportBtn = options?.exportButton || elements.btnExportJpg();
@@ -5974,7 +5990,9 @@ async function handleExportJpg(options = {}) {
         exportBtn.disabled = true;
     }
 
+    let exportContainer;
     try {
+        signal?.throwIfAborted();
         if (recipePages.length === 0) {
             throw new Error('No recipe pages found for JPG export.');
         }
@@ -5991,6 +6009,8 @@ async function handleExportJpg(options = {}) {
         const exportedFiles = [];
 
         for (let pageIndex = 0; pageIndex < recipePages.length; pageIndex += 1) {
+            signal?.throwIfAborted();
+            options?.onPageStart?.(pageIndex, recipePages.length);
             const recipePage = recipePages[pageIndex];
 
             // Use the page's natural box size, not the zoomed preview size.
@@ -6005,7 +6025,7 @@ async function handleExportJpg(options = {}) {
             const scaleRatio = Math.max(targetWidth / cssPageWidth, targetHeight / cssPageHeight);
 
             // Create a clone for export
-            const exportContainer = document.createElement('div');
+            exportContainer = document.createElement('div');
             exportContainer.style.position = 'absolute';
             exportContainer.style.left = '-9999px';
             exportContainer.style.top = '0';
@@ -6093,8 +6113,8 @@ async function handleExportJpg(options = {}) {
             document.body.appendChild(exportContainer);
 
             // Wait for fonts and images to load
-            await document.fonts.ready;
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await waitForRenderStep(() => document.fonts.ready);
+            await waitForRenderStep(() => new Promise(resolve => setTimeout(resolve, 100)));
 
             const scaleX = targetWidth / cssPageWidth;
             const scaleY = targetHeight / cssPageHeight;
@@ -6164,11 +6184,11 @@ async function handleExportJpg(options = {}) {
                 : null;
 
             const heroOverlayCanvas = !printerFriendly && heroSection
-                ? await createHeroOverlayCanvas(heroSection, scaleRatio)
+                ? await createHeroOverlayCanvas(heroSection, scaleRatio, signal)
                 : null;
 
             // Capture with html2canvas - scale up from natural size to target
-            const canvas = await html2canvas(clone, {
+            const canvas = await waitForRenderStep(() => html2canvas(clone, {
                 scale: scaleRatio,
                 useCORS: true,
                 backgroundColor: pageColor,
@@ -6176,10 +6196,10 @@ async function handleExportJpg(options = {}) {
                 height: cssPageHeight,
                 windowWidth: cssPageWidth,
                 windowHeight: cssPageHeight
-            });
+            }));
 
             // Remove the temporary container
-            document.body.removeChild(exportContainer);
+            exportContainer.remove();
 
             // Resize canvas to exact target dimensions
             const finalCanvas = document.createElement('canvas');
@@ -6194,22 +6214,24 @@ async function handleExportJpg(options = {}) {
 
             if (!printerFriendly && currentRecipe.image && heroRect) {
                 try {
-                    const sourceHeroImage = await loadImageElement(currentRecipe.image);
+                    const sourceHeroImage = await waitForRenderStep(() => loadImageElement(currentRecipe.image));
                     drawHeroImageToCanvas(ctx, sourceHeroImage, heroRect, currentRecipe.imageSettings || { scale: 100, posX: 50, posY: 50 });
 
                     if (heroOverlayCanvas) {
                         ctx.drawImage(heroOverlayCanvas, heroRect.x, heroRect.y, heroRect.width, heroRect.height);
                     }
                 } catch (heroError) {
+                    signal?.throwIfAborted();
                     console.warn('Unable to redraw original hero image at export resolution.', heroError);
                 }
             }
 
             if (cornerLogoRect && currentRecipe.showCornerLogo === true) {
                 try {
-                    const cornerLogoImage = await loadImageElement(printerFriendly ? 'logo-grayscale.png' : 'logo.png');
+                    const cornerLogoImage = await waitForRenderStep(() => loadImageElement(printerFriendly ? 'logo-grayscale.png' : 'logo.png'));
                     drawCornerLogoToCanvas(ctx, cornerLogoImage, cornerLogoRect, { printerFriendly });
                 } catch (cornerLogoError) {
+                    signal?.throwIfAborted();
                     console.warn('Unable to redraw corner logo at export resolution.', cornerLogoError);
                 }
             }
@@ -6232,7 +6254,7 @@ async function handleExportJpg(options = {}) {
             for (const mealImageRect of mealImageRects) {
                 try {
                     if (!mealImageCache.has(mealImageRect.src)) {
-                        mealImageCache.set(mealImageRect.src, await loadImageElement(mealImageRect.src));
+                        mealImageCache.set(mealImageRect.src, await waitForRenderStep(() => loadImageElement(mealImageRect.src)));
                     }
 
                     drawCoverImageToCanvas(
@@ -6242,6 +6264,7 @@ async function handleExportJpg(options = {}) {
                         { radius: mealImageRect.radius }
                     );
                 } catch (mealImageError) {
+                    signal?.throwIfAborted();
                     console.warn('Unable to redraw meal image at export resolution.', mealImageError);
                 }
             }
@@ -6273,12 +6296,14 @@ async function handleExportJpg(options = {}) {
 
         return exportedFiles;
     } catch (error) {
+        signal?.throwIfAborted();
         console.error('Export error:', error);
         if (options?.rethrow === true) {
             throw error;
         }
         alert('Error exporting image. Please try again.');
     } finally {
+        exportContainer?.remove();
         // Restore button state
         if (shouldManageButtonState && exportBtn) {
             exportBtn.textContent = originalText;
@@ -6296,7 +6321,7 @@ function waitForPreviewRender() {
 }
 
 function openAirtableExportOverlay(mode = 'meal-planner') {
-    if (updatingMealPlannerRecipe) return;
+    if (airtableExportController) return;
     updateRecipeFromForm();
     activeAirtableExportMode = mode;
     const overlay = elements.mealPlannerExportOverlay();
@@ -6342,8 +6367,18 @@ function openMealPlannerExportOverlay() {
 }
 
 function closeMealPlannerExportOverlay() {
-    if (updatingMealPlannerRecipe) return;
+    if (airtableExportController) return;
     elements.mealPlannerExportOverlay()?.classList.remove('active');
+}
+
+function cancelAirtableExport() {
+    if (!airtableExportController) {
+        closeMealPlannerExportOverlay();
+        return;
+    }
+    airtableExportController.abort();
+    elements.btnCancelMealPlannerExport().disabled = true;
+    updateMealPlannerExportStatus('Export stopped. Checking for changes already sent to Airtable…', 'canceled');
 }
 
 function isUpdatingMealPlannerRecipe() {
@@ -6366,7 +6401,7 @@ function updateMealPlannerExportMode() {
 
     const submit = elements.btnSubmitMealPlannerExport();
     submit.textContent = isUpdate ? 'Update Recipe' : (isMyPages ? 'Export to My Pages' : 'Export');
-    submit.disabled = isUpdate;
+    submit.disabled = isUpdate || elements.btnGenerateMealPlannerMetadata().disabled;
     updateMealPlannerExportStatus('');
     if (isUpdate) {
         if (mealPlannerRecipeOptions) renderMealPlannerRecipeOptions(elements.mealPlannerRecipeRecord().value || editingMealPlannerRecordId);
@@ -6432,8 +6467,8 @@ function showSelectedMealPlannerRecipe() {
     const markFixed = elements.mealPlannerMarkAsFixed();
     if (markFixed.dataset.recordId !== selectedId) markFixed.checked = false;
     markFixed.dataset.recordId = selectedId;
-    markFixed.disabled = !record || updatingMealPlannerRecipe;
-    elements.btnSubmitMealPlannerExport().disabled = !record || updatingMealPlannerRecipe;
+    markFixed.disabled = !record || Boolean(airtableExportController);
+    elements.btnSubmitMealPlannerExport().disabled = markFixed.disabled || elements.btnGenerateMealPlannerMetadata().disabled;
 }
 
 function setCategoryOptions(categories = [], placeholder = 'Select category') {
@@ -6519,9 +6554,11 @@ async function loadCoachProfilesForMyPages() {
 }
 
 async function handleGenerateMealPlannerMetadata() {
+    if (airtableExportController) return;
     updateRecipeFromForm();
 
     const generateButton = elements.btnGenerateMealPlannerMetadata();
+    const submit = elements.btnSubmitMealPlannerExport();
     const originalText = generateButton?.textContent || 'Generate';
 
     try {
@@ -6529,6 +6566,7 @@ async function handleGenerateMealPlannerMetadata() {
             generateButton.disabled = true;
             generateButton.textContent = 'Generating...';
         }
+        submit.disabled = true;
         updateMealPlannerExportStatus(activeAirtableExportMode === 'my-pages'
             ? 'Cleaning ingredients and allergy tags...'
             : 'Generating Meal Planner fields...', '');
@@ -6563,6 +6601,8 @@ async function handleGenerateMealPlannerMetadata() {
             generateButton.disabled = false;
             generateButton.textContent = originalText;
         }
+        if (isUpdatingMealPlannerRecipe()) showSelectedMealPlannerRecipe();
+        else submit.disabled = false;
     }
 }
 
@@ -6589,137 +6629,172 @@ async function postMealPlannerMetadata(payload) {
 
 async function handleMealPlannerExportSubmit(event) {
     event.preventDefault();
-    if (updatingMealPlannerRecipe) return;
+    const generate = elements.btnGenerateMealPlannerMetadata();
+    if (airtableExportController || generate.disabled) return;
     updateRecipeFromForm();
 
-    if (activeAirtableExportMode === 'my-pages') {
-        await handleMyPagesExportSubmit();
+    const isUpdate = isUpdatingMealPlannerRecipe();
+    const submit = elements.btnSubmitMealPlannerExport();
+    const originalText = submit.textContent;
+    const controls = [
+        submit, generate, elements.mealPlannerExportDestination(), elements.mealPlannerRecipeSearch(),
+        elements.mealPlannerRecipeRecord(), elements.mealPlannerMarkAsFixed(), elements.myPagesCoachProfile(),
+        elements.btnCloseMealPlannerExport()
+    ];
+    const disabledStates = controls.map((control) => control.disabled);
+    const controller = new AbortController();
+    airtableExportController = controller;
+    controls.forEach((control) => { control.disabled = true; });
+    submit.textContent = isUpdate ? 'Updating…' : 'Exporting…';
+    try {
+        // Let an Airtable write already sent settle before checking or removing staged files.
+        if (isUpdate) await handleMealPlannerRecipeUpdate(controller.signal);
+        else await handleNewAirtableExport(controller.signal, { forMyPages: activeAirtableExportMode === 'my-pages' });
+    } finally {
+        airtableExportController = null;
+        elements.btnCancelMealPlannerExport().disabled = false;
+        controls.forEach((control, index) => { control.disabled = disabledStates[index]; });
+        submit.textContent = originalText;
+        if (isUpdate) showSelectedMealPlannerRecipe();
+    }
+}
+
+async function handleNewAirtableExport(signal, { forMyPages }) {
+    const coachProfileId = elements.myPagesCoachProfile()?.value || '';
+    if (forMyPages && !coachProfileId) {
+        updateMealPlannerExportStatus('Choose a coach profile before exporting.', 'error');
         return;
     }
 
-    if (isUpdatingMealPlannerRecipe()) {
-        await handleMealPlannerRecipeUpdate();
-        return;
-    }
-
-    const submitButton = elements.btnSubmitMealPlannerExport();
-    const originalText = submitButton?.textContent || 'Export';
     const metadata = {
         category: AIRTABLE_EXPORT_CATEGORY,
         ingredients: elements.mealPlannerIngredients()?.value || '',
-        cronometer: elements.mealPlannerCronometer()?.value || '',
-        allergy: elements.mealPlannerAllergy()?.value || ''
+        allergy: elements.mealPlannerAllergy()?.value || '',
+        ...(forMyPages ? { coachProfileId } : { cronometer: elements.mealPlannerCronometer()?.value || '' })
     };
+    const shouldUpdatePageRecord = forMyPages && appMode === 'edit' && Boolean(editingPageRecordId) && !editingMealPlannerRecordId;
+    const destination = forMyPages ? 'My Pages' : 'Meal Planner';
+    const fileLabel = forMyPages ? 'page' : 'recipe';
+    let recordWriteStarted = false;
 
     try {
-        if (submitButton) {
-            submitButton.disabled = true;
-            submitButton.textContent = 'Exporting...';
-        }
-        updateMealPlannerExportStatus('Preparing hero image...', '');
-        const exportRecipe = await prepareRecipeForMealPlannerExport(currentRecipe);
-        updateMealPlannerExportStatus('Creating Airtable recipe...', '');
+        updateMealPlannerExportStatus(`Preparing ${fileLabel} files…`, 'working', 2);
+        const recipe = await waitForExportStep(() => prepareRecipeForMealPlannerExport(currentRecipe), signal);
+        const pageAttachments = await collectAirtableJpgAttachments(recipe, { forMyPages, signal });
+        if (!pageAttachments.length) throw new Error(`No JPG pages were generated for ${destination} export.`);
+
+        signal.throwIfAborted();
+        updateMealPlannerExportStatus(`${shouldUpdatePageRecord ? 'Updating' : 'Creating'} the Airtable ${fileLabel} record…`, 'working', 56);
+        recordWriteStarted = true;
         const record = await postMealPlannerExport({
-            action: 'create-record',
-            recipe: {
-                ...exportRecipe,
-                image: ''
-            },
+            action: forMyPages ? (shouldUpdatePageRecord ? 'update-page-record' : 'create-page-record') : 'create-record',
+            recordId: shouldUpdatePageRecord ? editingPageRecordId : undefined,
+            recipe: { ...recipe, image: '' },
             metadata
         });
-
-        const pageAttachments = await collectMealPlannerJpgAttachments(exportRecipe, submitButton);
-        if (!Array.isArray(pageAttachments) || pageAttachments.length === 0) {
-            throw new Error('No JPG pages were generated for Meal Planner export.');
+        if (shouldUpdatePageRecord) {
+            editingPageRecordId = record.id || editingPageRecordId;
+            document.body.dataset.pageRecordId = editingPageRecordId;
         }
 
-        for (let index = 0; index < pageAttachments.length; index += 1) {
-            updateMealPlannerExportStatus(`Uploading JPG page ${index + 1}/${pageAttachments.length}...`, '');
+        const upload = { action: forMyPages ? 'upload-page-record-attachments' : 'upload-attachments', recordId: record.id };
+        const fileOption = forMyPages ? 'includePageFile' : 'includeRecipeFile';
+        for (const [index, page] of pageAttachments.entries()) {
+            signal.throwIfAborted();
+            showAirtablePageUploadProgress(index, pageAttachments.length);
             await postMealPlannerExport({
-                action: 'upload-attachments',
-                recordId: record.id,
-                recipe: { title: exportRecipe.title },
-                pageAttachments: [pageAttachments[index]],
-                attachmentOptions: {
-                    includePhoto: false,
-                    includeRecipeFile: false
-                }
+                ...upload,
+                recipe: { title: recipe.title },
+                pageAttachments: [page],
+                attachmentOptions: { includePhoto: false, [fileOption]: false }
             });
         }
 
-        updateMealPlannerExportStatus('Uploading recipe image and save file...', '');
+        if (recipe.image) {
+            signal.throwIfAborted();
+            updateMealPlannerExportStatus(`Uploading the ${fileLabel} image…`, 'working', 90);
+            await postMealPlannerExport({
+                ...upload, recipe: { title: recipe.title, image: recipe.image },
+                attachmentOptions: { includePageAttachments: false, [fileOption]: false }
+            });
+        }
+
+        signal.throwIfAborted();
+        updateMealPlannerExportStatus(`Uploading the ${fileLabel} file…`, 'working', 95);
         await postMealPlannerExport({
-            action: 'upload-attachments',
-            recordId: record.id,
-            recipe: exportRecipe,
-            pageAttachments: [],
-            attachmentOptions: {
-                includePageAttachments: false
-            }
+            ...upload, recipe,
+            attachmentOptions: { includePageAttachments: false, includePhoto: false }
         });
 
-        updateMealPlannerExportStatus(`Exported to Meal Planner${record.id ? ` (${record.id})` : ''}.`, 'success');
+        updateMealPlannerExportStatus(signal.aborted
+            ? `The export to ${destination} finished before it could be canceled.`
+            : `Exported to ${destination}${record.id ? ` (${record.id})` : ''}.`, 'success', 100);
     } catch (error) {
-        console.error('Meal planner export error:', error);
-        updateMealPlannerExportStatus(error.message || 'Unable to export to Meal Planner.', 'error');
-    } finally {
-        if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.textContent = originalText;
+        if (signal.aborted) {
+            updateMealPlannerExportStatus(recordWriteStarted
+                ? 'Export canceled. Check Airtable for the record or files already sent.'
+                : 'Export canceled.', 'canceled');
+        } else {
+            console.error(`${destination} export error:`, error);
+            updateMealPlannerExportStatus(error.message || `Unable to export to ${destination}.`, 'error');
         }
     }
 }
 
-async function handleMealPlannerRecipeUpdate() {
+async function handleMealPlannerRecipeUpdate(signal) {
     const recordId = elements.mealPlannerRecipeRecord().value;
     if (!mealPlannerRecipeOptions?.some(({ id }) => id === recordId)) {
         updateMealPlannerExportStatus('Choose the Airtable recipe you want to update.', 'error');
         return;
     }
 
-    const submit = elements.btnSubmitMealPlannerExport();
     const markFixed = elements.mealPlannerMarkAsFixed();
     const markAsFixed = markFixed.checked;
-    const controls = [
-        submit, elements.mealPlannerExportDestination(), elements.mealPlannerRecipeSearch(),
-        elements.mealPlannerRecipeRecord(), markFixed, elements.btnCancelMealPlannerExport(), elements.btnCloseMealPlannerExport()
-    ];
-    updatingMealPlannerRecipe = true;
-    controls.forEach((control) => { control.disabled = true; });
-    submit.textContent = 'Updating…';
     let updateToken;
     let finalizing = false;
     try {
-        updateMealPlannerExportStatus('Preparing replacement files…', 'working');
-        const recipe = await prepareRecipeForMealPlannerExport(currentRecipe);
+        updateMealPlannerExportStatus('Preparing replacement files…', 'working', 2);
+        const recipe = await waitForExportStep(() => prepareRecipeForMealPlannerExport(currentRecipe), signal);
         const replacePhoto = Boolean(recipe.image);
-        const pages = await collectMealPlannerJpgAttachments(recipe, submit, 'working');
+        const pages = await collectAirtableJpgAttachments(recipe, { signal });
         const counts = {};
         const stagedPages = pages.map((pageAttachment) => {
             const pageIndex = counts[pageAttachment.fieldName] || 0;
             counts[pageAttachment.fieldName] = pageIndex + 1;
             return { pageAttachment, pageIndex };
         });
+        signal.throwIfAborted();
+        updateMealPlannerExportStatus('Checking the selected Airtable recipe…', 'working', 56);
         const session = await postMealPlannerExport({
             action: 'begin-meal-planner-recipe-update', recordId, pageCounts: counts,
             macros: recipe.macros, replacePhoto, markAsFixed
-        });
+        }, { signal });
         updateToken = session.updateToken;
         const stage = { action: 'stage-meal-planner-recipe-update', updateToken };
         for (const [index, page] of stagedPages.entries()) {
-            updateMealPlannerExportStatus(`Uploading replacement page ${index + 1}/${stagedPages.length}…`, 'working');
+            signal.throwIfAborted();
+            showAirtablePageUploadProgress(index, stagedPages.length);
             await postMealPlannerExport({ ...stage, ...page });
         }
-        updateMealPlannerExportStatus(replacePhoto ? 'Uploading recipe file and image…' : 'Uploading recipe file…', 'working');
-        await postMealPlannerExport({ ...stage, recipe });
-        updateMealPlannerExportStatus('Updating Airtable nutrition and files…', 'working');
+        if (replacePhoto) {
+            signal.throwIfAborted();
+            updateMealPlannerExportStatus('Uploading the recipe image…', 'working', 90);
+            await postMealPlannerExport({ ...stage, recipe: { title: recipe.title, image: recipe.image }, attachmentKind: 'photo' });
+        }
+        signal.throwIfAborted();
+        updateMealPlannerExportStatus('Uploading the recipe file…', 'working', 95);
+        await postMealPlannerExport({ ...stage, recipe, attachmentKind: 'file' });
+        signal.throwIfAborted();
+        updateMealPlannerExportStatus(markAsFixed
+            ? 'Saving nutrition, files, and review status in Airtable…'
+            : 'Saving nutrition and files in Airtable…', 'working', 97);
         finalizing = true;
         const finish = { action: 'finish-meal-planner-recipe-update', updateToken };
         let updated;
         try {
             updated = await postMealPlannerExport(finish);
         } catch (error) {
-            if (!(error instanceof TypeError)) throw error;
+            if (signal.aborted || !(error instanceof TypeError)) throw error;
             updated = await postMealPlannerExport(finish);
         }
         if (updated.id !== recordId) throw new Error('Airtable did not confirm the selected recipe update.');
@@ -6727,110 +6802,43 @@ async function handleMealPlannerRecipeUpdate() {
         markFixed.checked = false;
         mealPlannerRecipeOptions = mealPlannerRecipeOptions.map((record) => record.id === recordId ? updated : record);
         renderMealPlannerRecipeOptions();
-        updateMealPlannerExportStatus(updated.markedAsFixed
+        const success = updated.markedAsFixed
             ? 'Updated the selected Airtable recipe and marked it as fixed.'
-            : 'Updated the selected Airtable recipe.', 'success');
+            : 'Updated the selected Airtable recipe.';
+        updateMealPlannerExportStatus(signal.aborted
+            ? 'The Airtable update finished before it could be canceled.'
+            : success, 'success', 100);
     } catch (error) {
         let message = error.message || 'Unable to update the Airtable recipe.';
+        let cleanupConfirmed = !updateToken;
         if (updateToken && !finalizing) {
-            try {
-                const result = await postMealPlannerExport({ action: 'cancel-meal-planner-recipe-update', updateToken });
-                if (!result.canceled) message += ' Check the selected Airtable record before retrying.';
-            } catch {
-                message += ' Check the Airtable record for any files uploaded before the failure.';
+            if (!signal.aborted) {
+                updateMealPlannerExportStatus('Removing incomplete uploads…', 'working', elements.mealPlannerExportProgress().value);
             }
-        } else if (finalizing) {
-            message += ' Check the selected Airtable record before retrying.';
+            const result = await postMealPlannerExport({
+                action: 'cancel-meal-planner-recipe-update', updateToken, beforeCommit: true
+            }).catch(() => null);
+            cleanupConfirmed = result?.canceled === true;
         }
-        updateMealPlannerExportStatus(message, 'error');
-    } finally {
-        updatingMealPlannerRecipe = false;
-        controls.forEach((control) => { control.disabled = false; });
-        submit.textContent = 'Update Recipe';
-        showSelectedMealPlannerRecipe();
+        if (signal.aborted) message = 'Export canceled.';
+        if (!cleanupConfirmed) message += ' Check the selected Airtable record for any changes already sent.';
+        updateMealPlannerExportStatus(message, signal.aborted ? 'canceled' : 'error');
     }
 }
 
-async function handleMyPagesExportSubmit() {
-    const submitButton = elements.btnSubmitMealPlannerExport();
-    const originalText = submitButton?.textContent || 'Export to My Pages';
-    const coachProfileId = elements.myPagesCoachProfile()?.value || '';
-    const category = AIRTABLE_EXPORT_CATEGORY;
-    const ingredients = elements.mealPlannerIngredients()?.value || '';
-    const allergy = elements.mealPlannerAllergy()?.value || '';
+async function waitForExportStep(task, signal) {
+    if (!signal) return task();
+    signal.throwIfAborted();
 
-    if (!coachProfileId) {
-        updateMealPlannerExportStatus('Choose a coach profile before exporting.', 'error');
-        return;
-    }
+    let onAbort;
+    const canceled = new Promise((_, reject) => {
+        onAbort = () => reject(signal.reason);
+        signal.addEventListener('abort', onAbort, { once: true });
+    });
     try {
-        if (submitButton) {
-            submitButton.disabled = true;
-            submitButton.textContent = 'Exporting...';
-        }
-        updateMealPlannerExportStatus('Preparing hero image...', '');
-        const exportRecipe = await prepareRecipeForMealPlannerExport(currentRecipe);
-        const shouldUpdatePageRecord = appMode === 'edit' && Boolean(editingPageRecordId) && !editingMealPlannerRecordId;
-        updateMealPlannerExportStatus(shouldUpdatePageRecord ? 'Updating Page Record...' : 'Creating Page Record...', '');
-
-        const record = await postMealPlannerExport({
-            action: shouldUpdatePageRecord ? 'update-page-record' : 'create-page-record',
-            recordId: shouldUpdatePageRecord ? editingPageRecordId : undefined,
-            recipe: {
-                ...exportRecipe,
-                image: ''
-            },
-            metadata: {
-                coachProfileId,
-                category,
-                ingredients,
-                allergy
-            }
-        });
-        if (shouldUpdatePageRecord) {
-            editingPageRecordId = record.id || editingPageRecordId;
-            document.body.dataset.pageRecordId = editingPageRecordId;
-        }
-
-        const pageAttachments = await collectMyPagesJpgAttachments(exportRecipe, submitButton);
-        if (!Array.isArray(pageAttachments) || pageAttachments.length === 0) {
-            throw new Error('No JPG pages were generated for My Pages export.');
-        }
-
-        for (let index = 0; index < pageAttachments.length; index += 1) {
-            updateMealPlannerExportStatus(`Uploading Page JPG ${index + 1}/${pageAttachments.length}...`, '');
-            await postMealPlannerExport({
-                action: 'upload-page-record-attachments',
-                recordId: record.id,
-                recipe: { title: exportRecipe.title },
-                pageAttachments: [pageAttachments[index]],
-                attachmentOptions: {
-                    includePhoto: false,
-                    includePageFile: false
-                }
-            });
-        }
-
-        updateMealPlannerExportStatus('Uploading hero image...', '');
-        await postMealPlannerExport({
-            action: 'upload-page-record-attachments',
-            recordId: record.id,
-            recipe: exportRecipe,
-            pageAttachments: [],
-            attachmentOptions: {
-                includePageAttachments: false
-            }
-        });
-
-        updateMealPlannerExportStatus(`Exported to My Pages${record.id ? ` (${record.id})` : ''}.`, 'success');
-    } catch (error) {
-        console.error('My Pages export error:', error);
-        updateMealPlannerExportStatus(error.message || 'Unable to export to My Pages.', 'error');
+        return await Promise.race([canceled, task()]);
     } finally {
-        if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.textContent = originalText;
-        }
+        signal.removeEventListener('abort', onAbort);
     }
 }
 
@@ -6850,12 +6858,18 @@ async function postMealPlannerExport(payload, { signal } = {}) {
     return data;
 }
 
-function updateMealPlannerExportStatus(message, status = '') {
+function updateMealPlannerExportStatus(message, status = '', progress) {
     const statusEl = elements.mealPlannerExportStatus();
-    if (!statusEl) return;
-
+    const progressEl = elements.mealPlannerExportProgress();
     statusEl.className = status ? `master-paste-status ${status}` : 'master-paste-status';
     statusEl.textContent = message;
+    progressEl.hidden = progress === undefined;
+    progressEl.value = progress ?? 0;
+}
+
+function showAirtablePageUploadProgress(index, total) {
+    const progress = 60 + 30 * index / total;
+    updateMealPlannerExportStatus(`Uploading JPG ${index + 1} of ${total} to Airtable…`, 'working', progress);
 }
 
 function getMealPlannerIngredientNames(recipe = currentRecipe) {
@@ -6879,91 +6893,51 @@ function getMealPlannerIngredientNames(recipe = currentRecipe) {
     return names;
 }
 
-async function collectMealPlannerJpgAttachments(exportRecipe, submitButton, status = '') {
+async function collectAirtableJpgAttachments(exportRecipe, { forMyPages = false, signal } = {}) {
     const originalRecipe = JSON.parse(JSON.stringify(currentRecipe));
-    const variants = [
-        { label: 'Standard', pageStyle: 'standard', showMacroBar: true, clearHeroImage: false, fieldName: 'Recipe PDF' },
-        { label: 'No Macros', pageStyle: 'standard', showMacroBar: false, clearHeroImage: false, fieldName: 'Recipe PDF no macros' },
-        { label: 'Printer Friendly', pageStyle: 'printer-friendly', showMacroBar: true, clearHeroImage: true, fieldName: 'Printer Friendly Recipe PDF' },
-        { label: 'Printer Friendly No Macros', pageStyle: 'printer-friendly', showMacroBar: false, clearHeroImage: true, fieldName: 'Printer Friendly Recipe PDF no macros' }
+    const variants = forMyPages ? [
+        { label: 'standard', pageStyle: 'standard', showMacroBar: true, fieldName: 'Page' },
+        { label: 'printer-friendly', pageStyle: 'printer-friendly', showMacroBar: true, fieldName: 'Page Printer Friendly', filenameSuffix: ' - Printer Friendly' }
+    ] : [
+        { label: 'standard', pageStyle: 'standard', showMacroBar: true, fieldName: 'Recipe PDF' },
+        { label: 'macro-free', pageStyle: 'standard', showMacroBar: false, fieldName: 'Recipe PDF no macros' },
+        { label: 'printer-friendly', pageStyle: 'printer-friendly', showMacroBar: true, fieldName: 'Printer Friendly Recipe PDF' },
+        { label: 'macro-free printer-friendly', pageStyle: 'printer-friendly', showMacroBar: false, fieldName: 'Printer Friendly Recipe PDF no macros' }
     ];
     const pageAttachments = [];
 
     try {
-        for (let index = 0; index < variants.length; index += 1) {
-            const variant = variants[index];
-            updateMealPlannerExportStatus(`Rendering JPG pages ${index + 1}/4...`, status);
+        for (const [index, variant] of variants.entries()) {
+            signal?.throwIfAborted();
+            const stage = `Rendering ${variant.label} JPGs (${index + 1} of ${variants.length})`;
+            const renderProgress = (fraction) => 12 + 43 * (index + fraction) / variants.length;
+            updateMealPlannerExportStatus(`${stage}…`, 'working', renderProgress(0));
 
             currentRecipe = normalizeRecipe({
                 ...exportRecipe,
                 pageStyle: variant.pageStyle,
                 showMacroBar: variant.showMacroBar,
-                image: variant.clearHeroImage ? '' : exportRecipe.image
+                image: variant.pageStyle === 'printer-friendly' ? '' : exportRecipe.image
             });
             loadRecipeToForm(currentRecipe);
             renderRecipePage();
-            await waitForPreviewRender();
+            await waitForExportStep(waitForPreviewRender, signal);
 
             const files = await handleExportJpg({
-                exportButton: submitButton,
+                signal,
                 manageButtonState: false,
                 rethrow: true,
                 collectFiles: true,
                 forcePageFilenames: true,
-                filenameBase: getExportTitle(),
+                filenameBase: getExportTitle() + (variant.filenameSuffix || ''),
                 targetWidth: 1240,
                 targetHeight: 1754,
-                jpegQuality: 0.82
-            });
-            pageAttachments.push(...files.map((file) => ({
-                ...file,
-                fieldName: variant.fieldName
-            })));
-        }
-    } finally {
-        currentRecipe = normalizeRecipe(originalRecipe);
-        loadRecipeToForm(currentRecipe);
-        renderRecipePage();
-    }
-
-    return pageAttachments;
-}
-
-async function collectMyPagesJpgAttachments(exportRecipe, submitButton) {
-    const originalRecipe = JSON.parse(JSON.stringify(currentRecipe));
-    const variants = [
-        { label: 'Standard', pageStyle: 'standard', showMacroBar: true, clearHeroImage: false, fieldName: 'Page' },
-        { label: 'Printer Friendly', pageStyle: 'printer-friendly', showMacroBar: true, clearHeroImage: true, fieldName: 'Page Printer Friendly' }
-    ];
-    const pageAttachments = [];
-
-    try {
-        for (let index = 0; index < variants.length; index += 1) {
-            const variant = variants[index];
-            updateMealPlannerExportStatus(`Rendering My Pages JPGs ${index + 1}/2...`, '');
-
-            currentRecipe = normalizeRecipe({
-                ...exportRecipe,
-                pageStyle: variant.pageStyle,
-                showMacroBar: variant.showMacroBar,
-                image: variant.clearHeroImage ? '' : exportRecipe.image
-            });
-            loadRecipeToForm(currentRecipe);
-            renderRecipePage();
-            await waitForPreviewRender();
-
-            const files = await handleExportJpg({
-                exportButton: submitButton,
-                manageButtonState: false,
-                rethrow: true,
-                collectFiles: true,
-                forcePageFilenames: true,
-                filenameBase: variant.label === 'Printer Friendly'
-                    ? `${getExportTitle()} - Printer Friendly`
-                    : getExportTitle(),
-                targetWidth: 1240,
-                targetHeight: 1754,
-                jpegQuality: 0.82
+                jpegQuality: 0.82,
+                onPageStart(pageIndex, pageCount) {
+                    if (pageCount > 1) {
+                        updateMealPlannerExportStatus(`${stage} · Page ${pageIndex + 1} of ${pageCount}…`, 'working', renderProgress(pageIndex / pageCount));
+                    }
+                }
             });
             pageAttachments.push(...files.map((file) => ({
                 ...file,
@@ -7215,8 +7189,11 @@ function fileToDataUrl(file) {
 function setPreviewAiOpen(open) {
     const tools = elements.previewAiTools();
     const launcher = elements.btnPreviewAiOpen();
+    const panel = elements.previewAiPanel();
+    if (panel.classList.contains('is-working')) return;
+
     tools.classList.toggle('is-open', open);
-    elements.previewAiPanel().inert = !open;
+    panel.inert = !open;
     launcher.inert = open;
     launcher.setAttribute('aria-expanded', String(open));
     if (open) elements.previewAiPrompt().focus({ preventScroll: true });
@@ -7227,6 +7204,21 @@ function setPreviewAiStatus(message = '', status = '') {
     const element = document.getElementById('preview-ai-status');
     element.className = ['preview-ai-status', status].filter(Boolean).join(' ');
     element.textContent = message;
+}
+
+function setPreviewAiWorking(working) {
+    const panel = elements.previewAiPanel();
+    const focusIsInside = panel.contains(document.activeElement);
+    panel.classList.toggle('is-working', working);
+    document.getElementById('preview-ai-form').inert = working;
+    document.getElementById('btn-preview-ai-close').disabled = working;
+    if (working) {
+        panel.scrollTop = 0;
+        setPreviewAiStatus('Working...', 'working');
+        if (focusIsInside) panel.focus({ preventScroll: true });
+    } else if (document.activeElement === panel) {
+        elements.previewAiPrompt().focus({ preventScroll: true });
+    }
 }
 
 function setPreviewAiPhoto(file = null) {
@@ -7311,6 +7303,7 @@ async function requestRecipeAi(payload, signal) {
 }
 
 async function handleGenerateMasterPasteAi(mode, fromPreview = false) {
+    if (fromPreview && elements.previewAiPanel().classList.contains('is-working')) return;
     const setStatus = fromPreview ? setPreviewAiStatus : setMasterPasteAiStatus;
     if (masterPasteAiRequest) {
         setStatus('An AI edit is already in progress.', 'error');
@@ -7354,9 +7347,13 @@ async function handleGenerateMasterPasteAi(mode, fromPreview = false) {
     const originalText = editedButton.textContent;
     const request = new AbortController();
     masterPasteAiRequest = request;
+    if (fromPreview) {
+        setPreviewAiWorking(true);
+    } else {
+        editedButton.textContent = { apply: 'Editing Page…', reply: 'Sending…', recipe: 'Generating…' }[mode];
+        setStatus();
+    }
     actions.forEach((action) => { action.disabled = true; });
-    if (!fromPreview) editedButton.textContent = { apply: 'Editing Page…', reply: 'Sending…', recipe: 'Generating…' }[mode];
-    setStatus(fromPreview ? 'Editing the recipe page…' : '');
 
     try {
         const files = await Promise.all(sourceFiles.map(async (file) => ({
@@ -7380,7 +7377,7 @@ async function handleGenerateMasterPasteAi(mode, fromPreview = false) {
 
         if (request.signal.aborted) return;
         if (isApply) {
-            const nextRecipe = await prepareMasterPasteAiEdits(recipe, data, files, request.signal, setStatus);
+            const nextRecipe = await prepareMasterPasteAiEdits(recipe, data, files, request.signal, fromPreview ? undefined : setStatus);
             if (request.signal.aborted) return;
             if (editorChanged || serializeRecipeHistoryState(currentRecipe) !== recipeState) {
                 throw new Error('The recipe changed while AI was working. Send the prompt again to edit the latest version.');
@@ -7410,7 +7407,8 @@ async function handleGenerateMasterPasteAi(mode, fromPreview = false) {
         masterPasteAiRequest = null;
         if (isApply) document.removeEventListener('input', trackEditorInput);
         actions.forEach((action) => { action.disabled = false; });
-        if (!fromPreview) editedButton.textContent = originalText;
+        if (fromPreview) setPreviewAiWorking(false);
+        else editedButton.textContent = originalText;
     }
 }
 
@@ -7449,7 +7447,7 @@ async function prepareMasterPasteAiEdits(recipe, { changes, imageEdits = [] }, f
         nextRecipe.instructionsStartMode = firstSection?.startMode || recipe.instructionsStartMode;
     }
 
-    if (imageEdits.some(({ action }) => action === 'generate' || action === 'edit')) setStatus('Preparing the requested photos…');
+    if (imageEdits.some(({ action }) => action === 'generate' || action === 'edit')) setStatus?.('Preparing the requested photos…');
     await Promise.all(imageEdits.map(async (edit) => {
         const target = edit.target === 'hero' ? nextRecipe : nextRecipe.dayMeals[edit.mealIndex];
         const attached = files[edit.attachmentIndex]?.dataUrl;
@@ -7758,10 +7756,14 @@ function capturePreviewRegions() {
             const content = element.querySelector('.instruction-text-wrapper') || element;
             const text = element.querySelector('.ingredient-name-cell, .instruction-text, .note-text, .section-title') || element;
             const style = getComputedStyle(text);
+            const ingredientLayout = element.matches('.ingredient-item') ? [
+                style.getPropertyValue('--ingredient-column-gap'), style.getPropertyValue('--ingredient-amount-width')
+            ] : null;
             const signature = [
                 content.innerHTML, element.getAttribute('style'),
                 Array.from(element.classList).filter((name) => name !== 'preview-location-highlight').join(' '),
                 Boolean(element.querySelector('.instruction-bullet')),
+                ingredientLayout,
                 style.color, style.fontSize, getComputedStyle(element).backgroundColor,
                 ...Array.from(element.querySelectorAll('.instruction-number, .checkbox-box, .portion-variation-card-label, .portion-variation-card-value, .portion-variation-card-unit, .instructions-header'), (child) => {
                     const childStyle = getComputedStyle(child);
@@ -9218,80 +9220,67 @@ function layoutHeroImageLayers(root = document) {
     });
 }
 
-/**
- * Update zoom level display and transform
- */
-function updateZoom(focusBounds) {
-    const scale = zoomLevel / 100;
-    const page = elements.recipePage();
-    if (!page) return;
+function getPreviewContentBounds(container) {
+    const header = container.closest('.preview-panel')?.querySelector('.preview-header');
+    const controls = container.querySelector('.preview-zoom-controls');
+    return { top: header?.offsetHeight || 0, bottom: controls?.offsetTop ?? container.clientHeight };
+}
 
-    const wrapper = page.closest('.recipe-page-wrapper');
-    const { width: pageWidth, height: pageHeight } = getRecipePageDimensions();
+function getNearestPreviewPage(centerY) {
+    let target;
+    let shortestDistance = Infinity;
+    for (const page of elements.recipePage().querySelectorAll('.recipe-page')) {
+        const rect = page.getBoundingClientRect();
+        const distance = Math.abs((rect.top + rect.bottom) / 2 - centerY);
+        if (distance < shortestDistance) {
+            shortestDistance = distance;
+            target = page;
+        }
+    }
+    return target;
+}
+
+function updateZoom(level, targetPage, animate = false) {
     const container = elements.previewContainer();
+    if (!container) return;
 
+    const { top, bottom } = getPreviewContentBounds(container);
+    const centerY = (top + bottom) / 2;
+    targetPage ??= getNearestPreviewPage(container.getBoundingClientRect().top + centerY);
+    if (!targetPage) return;
+
+    zoomLevel = level;
     const slider = elements.zoomSlider();
     slider.min = Math.min(Number(slider.min), zoomLevel);
     slider.max = Math.max(Number(slider.max), zoomLevel);
     slider.value = zoomLevel;
     elements.zoomLevelDisplay().textContent = `${zoomLevel}%`;
-    page.style.transform = `scale(${scale})`;
 
-    // Update wrapper dimensions to match scaled page size
-    // This prevents the scaled content from being cropped
-    if (wrapper) {
-        wrapper.style.width = `${pageWidth * scale}px`;
-        wrapper.style.height = `${pageHeight * scale}px`;
-    }
-
-    if (container && wrapper) {
-        const { width, height, top, bottom } = focusBounds || {
-            width: pageWidth,
-            height: pageHeight,
-            top: 0,
-            bottom: container.clientHeight
-        };
-        previewPanX = (container.clientWidth - width * scale) / 2;
-        previewPanY = (top + bottom - height * scale) / 2;
-        applyPreviewPan();
-    }
+    // Use the page's unscaled position within the stack, including continuation pages.
+    const scale = zoomLevel / 100;
+    previewPanX = container.clientWidth / 2 - (targetPage.offsetLeft + targetPage.offsetWidth / 2) * scale;
+    previewPanY = centerY - (targetPage.offsetTop + targetPage.offsetHeight / 2) * scale;
+    applyPreviewPan(animate);
 }
 
 function focusFirstPreviewPage() {
+    fitFirstPreviewPage(12);
+}
+
+function fitFirstPreviewPage(gutter, maxScale = Infinity) {
     const container = elements.previewContainer();
     const firstPage = elements.recipePage()?.querySelector('.page-primary');
     if (!container || !firstPage) return;
 
-    const header = container.closest('.preview-panel')?.querySelector('.preview-header');
-    const controls = container.querySelector('.preview-zoom-controls');
-    const top = header?.offsetHeight || 0;
-    const bottom = controls?.offsetTop ?? container.clientHeight;
+    const { top, bottom } = getPreviewContentBounds(container);
     const width = firstPage.offsetWidth;
     const height = firstPage.offsetHeight;
-    const gutter = 12;
     const availableWidth = container.clientWidth - gutter * 2;
     const availableHeight = bottom - top - gutter * 2;
     if (availableWidth <= 0 || availableHeight <= 0 || !width || !height) return;
 
-    const scale = Math.min(availableWidth / width, availableHeight / height);
-    zoomLevel = Math.max(1, Math.floor(scale * 100));
-    updateZoom({ width, height, top, bottom });
-}
-
-function centerPreviewWithBehavior(behavior = 'auto') {
-    const container = elements.previewContainer();
-    const wrapper = elements.recipePage()?.closest('.recipe-page-wrapper');
-
-    if (!container || !wrapper) return;
-
-    const containerRect = container.getBoundingClientRect();
-    const wrapperRect = wrapper.getBoundingClientRect();
-    const deltaX = (containerRect.left + (containerRect.width / 2)) - (wrapperRect.left + (wrapperRect.width / 2));
-    const deltaY = (containerRect.top + (containerRect.height / 2)) - (wrapperRect.top + (wrapperRect.height / 2));
-
-    previewPanX += deltaX;
-    previewPanY += deltaY;
-    applyPreviewPan(behavior === 'smooth');
+    const scale = Math.min(availableWidth / width, availableHeight / height, maxScale);
+    updateZoom(Math.max(1, Math.floor(scale * 100)), firstPage);
 }
 
 function centerPreviewOnElement(target) {
@@ -9349,7 +9338,7 @@ function schedulePreviewAutoCenterIfOutOfView() {
                 previewAutoCenterTimer = null;
 
                 if (!hasVisiblePreviewPage()) {
-                    centerPreviewWithBehavior('smooth');
+                    updateZoom(zoomLevel, undefined, true);
                 }
             }, 250);
         }
@@ -9369,31 +9358,11 @@ function applyPreviewPan(animate = false) {
         wrapper.classList.remove('is-centering');
     }
 
-    wrapper.style.transform = `translate(${previewPanX}px, ${previewPanY}px)`;
+    wrapper.style.transform = `translate(${previewPanX}px, ${previewPanY}px) scale(${zoomLevel / 100})`;
 }
 
-/**
- * Calculate and set zoom level to fit the page in the preview container
- */
 function setZoomToFit() {
-    const container = elements.previewContainer();
-    const page = elements.recipePage();
-    if (!container || !page) return;
-
-    const containerWidth = Math.max(1, container.clientWidth - 64);
-    const containerHeight = Math.max(1, container.clientHeight - 64);
-    const { width: pageWidth, height: pageHeight } = getRecipePageDimensions();
-
-    if (!pageWidth || !pageHeight) return;
-
-    // Calculate scale to fit entire page with some margin
-    const scaleX = containerWidth / pageWidth;
-    const scaleY = containerHeight / pageHeight;
-    const scale = Math.min(scaleX, scaleY, 1); // Don't scale up, only down
-
-    zoomLevel = Math.round(scale * 100);
-    updateZoom();
-    requestAnimationFrame(() => centerPreviewWithBehavior('auto'));
+    fitFirstPreviewPage(32, 1);
 }
 
 // Recalculate zoom on window resize
@@ -9456,7 +9425,7 @@ function loadImageElement(src) {
     });
 }
 
-async function createHeroOverlayCanvas(heroSection, scaleRatio) {
+async function createHeroOverlayCanvas(heroSection, scaleRatio, signal) {
     if (!heroSection) {
         return null;
     }
@@ -9484,7 +9453,7 @@ async function createHeroOverlayCanvas(heroSection, scaleRatio) {
     document.body.appendChild(overlayClone);
 
     try {
-        return await html2canvas(overlayClone, {
+        return await waitForExportStep(() => html2canvas(overlayClone, {
             scale: scaleRatio,
             useCORS: true,
             backgroundColor: null,
@@ -9492,7 +9461,7 @@ async function createHeroOverlayCanvas(heroSection, scaleRatio) {
             height: heroSection.offsetHeight,
             windowWidth: heroSection.offsetWidth,
             windowHeight: heroSection.offsetHeight
-        });
+        }), signal);
     } finally {
         overlayClone.remove();
     }

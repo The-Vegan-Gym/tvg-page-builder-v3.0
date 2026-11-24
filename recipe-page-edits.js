@@ -1,3 +1,5 @@
+const { INGREDIENT_LAYOUT_SETTINGS } = require('./ingredient-layout');
+
 const text = { type: 'string' };
 const flag = { type: 'boolean' };
 const integer = { type: 'integer' };
@@ -63,6 +65,8 @@ const recipeFields = {
     sectionLabelSpacing: range(0, 60),
     stepToHeaderSpacing: range(0, 100),
     subtitleToStepSpacing: range(0, 100),
+    ingredientGap: range(INGREDIENT_LAYOUT_SETTINGS.ingredientGap.min, INGREDIENT_LAYOUT_SETTINGS.ingredientGap.max),
+    ingredientAmountWidth: range(INGREDIENT_LAYOUT_SETTINGS.ingredientAmountWidth.min, INGREDIENT_LAYOUT_SETTINGS.ingredientAmountWidth.max),
     printerTitleTopPadding: range(0, 120),
     printerTitleMacroSpacing: range(0, 200),
     pageBottomMargin: range(0, 200),
@@ -96,6 +100,7 @@ const editInstructions = `Edit the recipe page in the Recipe Page Generator. App
 - Use the provided equipment IDs when changing materials. Keep existing selections that are unaffected.
 - For new ingredient sets use right alignment and auto start unless the user requests another layout. For new instruction sets use numbered stepStyle and force-right-column start unless the user requests another placement.
 - Change layout and typography only when requested. For colors use six-digit hex or "" for the default. "Header color" refers to the hero or the named section. When changing backgrounds, preserve readable contrast by changing the corresponding text color if needed.
+- ingredientGap is the horizontal space in pixels between ingredient names and amounts. ingredientAmountWidth is the percentage of the ingredient row reserved for amounts.
 - In dayMeals, copy sourceIndex for each existing card even if it moves. Use null for new cards. To change equipment quantities, return only the edited materialCounts with existing equipment IDs. Use 1 to clear a badge.
 - For images, use imageSettings for hero positioning and zoom. Only return imageEdits for expressly requested photo changes. Use target hero (mealIndex null) or meal (zero-based index in the resulting dayMeals list). For replacement with an uploaded photo use action attachment and its zero-based attachmentIndex as listed. For remove use no attachment. For generate supply a descriptive prompt about this recipe. For edit supply a prompt and use the existing photo, or supply attachmentIndex to edit an upload. Never invent a photo URL.
 - Message should briefly describe the proposed changes, or explain why no changes were proposed. Use plain text. For a question without a requested edit, return null for every field.`;

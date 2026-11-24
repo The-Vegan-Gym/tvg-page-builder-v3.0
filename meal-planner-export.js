@@ -185,26 +185,35 @@ async function stageMealPlannerRecipeUpdate(payload) {
     const environment = getAirtableEnvironment();
     const plan = readRecipeUpdate(payload.updateToken, environment);
     const page = payload.pageAttachment;
+    const attachmentKind = payload.attachmentKind;
+    const expectsPhoto = Object.hasOwn(plan.expected, ATTACHMENT_FIELDS.photo);
+    if (attachmentKind !== undefined &&
+        (page || (attachmentKind !== 'file' && (attachmentKind !== 'photo' || !expectsPhoto)))) {
+        throw new Error('A replacement attachment type was invalid.');
+    }
     let attachments;
     if (page) {
         if (!PAGE_ATTACHMENT_FIELDS.has(page.fieldName)) throw new Error('A recipe page export field was invalid.');
         attachments = normalizePageAttachments([page], 'Recipe');
     } else {
-        if (Object.hasOwn(plan.expected, ATTACHMENT_FIELDS.photo) && !/^data:image\/(jpeg|png|webp|gif);base64,/.test(payload.recipe?.image || '')) {
+        const includePhoto = expectsPhoto && attachmentKind !== 'file';
+        if (includePhoto && !/^data:image\/(jpeg|png|webp|gif);base64,/.test(payload.recipe?.image || '')) {
             throw new Error('The replacement recipe image could not be read.');
         }
         attachments = await buildRecipeAttachments(payload.recipe || {}, [], {
             includePageAttachments: false,
-            includePhoto: Object.hasOwn(plan.expected, ATTACHMENT_FIELDS.photo)
+            includePhoto,
+            includeRecipeFile: attachmentKind !== 'photo'
         });
         const saveFile = attachments.find((item) => item.fieldName === ATTACHMENT_FIELDS.recipeFile);
-        saveFile.filename = saveFile.filename.replace(/\.json$/i, '.recipe');
+        if (saveFile) saveFile.filename = saveFile.filename.replace(/\.json$/i, '.recipe');
     }
 
     const index = page ? payload.pageIndex : 0;
-    if (!Number.isInteger(index) || index < 0 || attachments.some(({ fieldName, buffer }) =>
+    const expectedCount = page || attachmentKind ? 1 : (expectsPhoto ? 2 : 1);
+    if (!Number.isInteger(index) || index < 0 || attachments.length !== expectedCount || attachments.some(({ fieldName, buffer }) =>
         !Object.hasOwn(plan.expected, fieldName) || index >= plan.expected[fieldName] || !buffer.length || buffer.length > 5_000_000
-    ) || (!page && attachments.length !== Object.keys(plan.expected).length - PAGE_ATTACHMENT_FIELDS.size)) {
+    )) {
         throw new Error('A replacement file is missing or exceeds Airtable’s 5 MB upload limit.');
     }
 
@@ -288,7 +297,9 @@ async function cancelMealPlannerRecipeUpdate(payload) {
     const allFilesStaged = Object.entries(plan.expected).every(([field, count]) =>
         stagedRecipeFiles(fields[field], plan).length === count
     );
-    if (!priorFilesRemain || allFilesStaged) return { canceled: false };
+    const hasPriorFiles = Object.values(plan.previousFiles).some((ids) => ids.length > 0);
+    // With no originals, a complete set of staged files is indistinguishable from a finished export.
+    if (!priorFilesRemain || (allFilesStaged && !(payload.beforeCommit === true && hasPriorFiles))) return { canceled: false };
     await removeStagedRecipeFiles(environment, plan, fields);
     return { canceled: true };
 }
