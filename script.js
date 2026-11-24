@@ -649,6 +649,7 @@ const elements = {
     mealPlannerExportDestination: () => document.getElementById('meal-planner-export-destination'),
     mealPlannerRecipeSearch: () => document.getElementById('meal-planner-recipe-search'),
     mealPlannerRecipeRecord: () => document.getElementById('meal-planner-recipe-record'),
+    mealPlannerMarkAsFixed: () => document.getElementById('meal-planner-mark-as-fixed'),
     myPagesCoachProfileGroup: () => document.getElementById('my-pages-coach-profile-group'),
     myPagesCoachProfile: () => document.getElementById('my-pages-coach-profile'),
     mealPlannerCategory: () => document.getElementById('meal-planner-category'),
@@ -663,7 +664,6 @@ const elements = {
     btnClear: () => document.getElementById('btn-clear'),
     btnZoomIn: () => document.getElementById('btn-zoom-in'),
     btnZoomOut: () => document.getElementById('btn-zoom-out'),
-    btnCenterPreview: () => document.getElementById('btn-center-preview'),
     btnFocusPreview: () => document.getElementById('btn-focus-preview'),
     previewAiTools: () => document.getElementById('preview-ai-tools'),
     previewAiPanel: () => document.getElementById('preview-ai-panel'),
@@ -2677,7 +2677,6 @@ function initializeButtonListeners() {
         updateZoom();
     });
 
-    elements.btnCenterPreview()?.addEventListener('click', centerPreview);
     elements.btnFocusPreview()?.addEventListener('click', focusFirstPreviewPage);
 }
 
@@ -6310,6 +6309,8 @@ function openAirtableExportOverlay(mode = 'meal-planner') {
     elements.mealPlannerExportDestination().value = !isMyPagesExport && editingMealPlannerRecordId ? 'update' : 'create';
     elements.mealPlannerRecipeSearch().value = '';
     elements.mealPlannerRecipeRecord().value = '';
+    elements.mealPlannerMarkAsFixed().checked = false;
+    elements.mealPlannerMarkAsFixed().disabled = true;
     mealPlannerRecipeOptions = null;
     document.getElementById('meal-planner-export-destination-group').hidden = isMyPagesExport;
     elements.myPagesCoachProfileGroup()?.toggleAttribute('hidden', !isMyPagesExport);
@@ -6354,6 +6355,10 @@ function updateMealPlannerExportMode() {
     const isMyPages = activeAirtableExportMode === 'my-pages';
     document.getElementById('meal-planner-existing-recipe').hidden = !isUpdate;
     elements.mealPlannerRecipeRecord().required = isUpdate;
+    if (!isUpdate) {
+        elements.mealPlannerMarkAsFixed().checked = false;
+        elements.mealPlannerMarkAsFixed().disabled = true;
+    }
     elements.btnGenerateMealPlannerMetadata()?.closest('.meal-planner-export-actions')?.toggleAttribute('hidden', isUpdate);
     elements.mealPlannerIngredients()?.closest('.form-group')?.toggleAttribute('hidden', isUpdate);
     elements.mealPlannerAllergy()?.closest('.form-group')?.toggleAttribute('hidden', isUpdate);
@@ -6424,6 +6429,10 @@ function showSelectedMealPlannerRecipe() {
     link.hidden = !record;
     if (record) link.href = record.url;
     else link.removeAttribute('href');
+    const markFixed = elements.mealPlannerMarkAsFixed();
+    if (markFixed.dataset.recordId !== selectedId) markFixed.checked = false;
+    markFixed.dataset.recordId = selectedId;
+    markFixed.disabled = !record || updatingMealPlannerRecipe;
     elements.btnSubmitMealPlannerExport().disabled = !record || updatingMealPlannerRecipe;
 }
 
@@ -6669,9 +6678,11 @@ async function handleMealPlannerRecipeUpdate() {
     }
 
     const submit = elements.btnSubmitMealPlannerExport();
+    const markFixed = elements.mealPlannerMarkAsFixed();
+    const markAsFixed = markFixed.checked;
     const controls = [
         submit, elements.mealPlannerExportDestination(), elements.mealPlannerRecipeSearch(),
-        elements.mealPlannerRecipeRecord(), elements.btnCancelMealPlannerExport(), elements.btnCloseMealPlannerExport()
+        elements.mealPlannerRecipeRecord(), markFixed, elements.btnCancelMealPlannerExport(), elements.btnCloseMealPlannerExport()
     ];
     updatingMealPlannerRecipe = true;
     controls.forEach((control) => { control.disabled = true; });
@@ -6691,7 +6702,7 @@ async function handleMealPlannerRecipeUpdate() {
         });
         const session = await postMealPlannerExport({
             action: 'begin-meal-planner-recipe-update', recordId, pageCounts: counts,
-            macros: recipe.macros, replacePhoto
+            macros: recipe.macros, replacePhoto, markAsFixed
         });
         updateToken = session.updateToken;
         const stage = { action: 'stage-meal-planner-recipe-update', updateToken };
@@ -6712,9 +6723,13 @@ async function handleMealPlannerRecipeUpdate() {
             updated = await postMealPlannerExport(finish);
         }
         if (updated.id !== recordId) throw new Error('Airtable did not confirm the selected recipe update.');
+        if (updated.markedAsFixed) cacheAirtableReviewNotes(recordId, updated.reviewNotes);
+        markFixed.checked = false;
         mealPlannerRecipeOptions = mealPlannerRecipeOptions.map((record) => record.id === recordId ? updated : record);
         renderMealPlannerRecipeOptions();
-        updateMealPlannerExportStatus('Updated the selected Airtable recipe.', 'success');
+        updateMealPlannerExportStatus(updated.markedAsFixed
+            ? 'Updated the selected Airtable recipe and marked it as fixed.'
+            : 'Updated the selected Airtable recipe.', 'success');
     } catch (error) {
         let message = error.message || 'Unable to update the Airtable recipe.';
         if (updateToken && !finalizing) {
@@ -7488,7 +7503,7 @@ function applyMasterPasteAiEdits(nextRecipe, message, recipeState, setStatus) {
     }
 
     recordRecipeHistory(currentRecipe);
-    loadRecipeObject(nextRecipe);
+    loadRecipeWithPreviewHighlights(nextRecipe);
     setStatus(message ? `Page updated. ${message} Use Undo to revert.` : 'Page updated. Use Undo to revert.', 'success');
     return true;
 }
@@ -7683,10 +7698,131 @@ function focusSuggestionInPreview(correction) {
     if (!match?.element) return;
 
     centerPreviewOnElement(match.element);
-    match.element.classList.add('preview-location-highlight');
-    window.setTimeout(() => {
-        match.element.classList.remove('preview-location-highlight');
-    }, 1400);
+    highlightPreviewElement(match.element, 1400);
+}
+
+const previewHighlightTimers = new WeakMap();
+
+function highlightPreviewElement(element, duration) {
+    const active = previewHighlightTimers.get(element);
+    const expiresAt = performance.now() + duration;
+    if (active?.expiresAt >= expiresAt) return;
+    window.clearTimeout(active?.timer);
+    element.classList.add('preview-location-highlight');
+    const timer = window.setTimeout(() => {
+        element.classList.remove('preview-location-highlight');
+        previewHighlightTimers.delete(element);
+    }, duration);
+    previewHighlightTimers.set(element, { timer, expiresAt });
+}
+
+const PREVIEW_CHANGE_REGIONS = [
+    ['.recipe-page', '', (element) => [getComputedStyle(element).backgroundColor, currentRecipe.pageType, currentRecipe.pageStyle]],
+    ['.hero-section', '', (element) => {
+        const hasPhoto = Boolean(element.querySelector('.hero-image-layer'));
+        return [
+            element.style.cssText, hasPhoto ? currentRecipe.image : '', hasPhoto ? currentRecipe.imageSettings : null,
+            currentRecipe.showCornerLogo, getComputedStyle(element.querySelector('.hero-placeholder') || element).backgroundColor
+        ];
+    }],
+    ['.recipe-title'],
+    ['.macro-bar-content', '.hero-section'],
+    ['.description-text', '.hero-section'],
+    ['.materials-section', '.content-area', (element) => [
+        element.innerHTML, element.dataset.materialsAutoSpacing, currentRecipe.materialsLayout,
+        getComputedStyle(element.querySelector('.section-title')).fontSize,
+        getComputedStyle(element.querySelector('.section-title')).color
+    ]],
+    ['.portion-variations-section', '.content-area'],
+    ['.ingredients-header, .flow-section-title:not(.instruction-part-header), .ingredient-item', '.ingredients-header'],
+    ['.flow-column .instructions-header:not(.ingredients-header), .instruction-part-header, .instruction-item', '.flow-column .instructions-header:not(.ingredients-header)'],
+    ['.note-text', '.content-area'],
+    ['.day-meal-card', '.day-plan-content'],
+    ['.day-plan-column-left > .section-title', '.day-plan-content'],
+    ['.day-plan-panel, .day-totals-section', '.day-plan-content'],
+    ['.page-number', '.page-footer'],
+    ['.page-primary .content-area', '', () => [
+        currentRecipe.pageBottomMargin, currentRecipe.continuationContentSpacing,
+        currentRecipe.sectionLabelSpacing, currentRecipe.stepToHeaderSpacing, currentRecipe.subtitleToStepSpacing,
+        getIngredientSectionsForForm(currentRecipe).filter(({ ingredients }) => ingredients.length).map(({ startMode }) => startMode).join(','),
+        getInstructionSectionsForForm(currentRecipe).filter(({ steps }) => steps.length).map(({ startMode }) => startMode).join(',')
+    ]]
+];
+
+function capturePreviewRegions() {
+    const preview = elements.recipePage();
+    return PREVIEW_CHANGE_REGIONS.map(([selector, , readContent]) =>
+        Array.from(preview.querySelectorAll(selector), (element) => {
+            if (readContent) return { element, signature: JSON.stringify(readContent(element)) };
+            // Step numbers are assigned during layout and can shift when a step is inserted.
+            const content = element.querySelector('.instruction-text-wrapper') || element;
+            const text = element.querySelector('.ingredient-name-cell, .instruction-text, .note-text, .section-title') || element;
+            const style = getComputedStyle(text);
+            const signature = [
+                content.innerHTML, element.getAttribute('style'),
+                Array.from(element.classList).filter((name) => name !== 'preview-location-highlight').join(' '),
+                Boolean(element.querySelector('.instruction-bullet')),
+                style.color, style.fontSize, getComputedStyle(element).backgroundColor,
+                ...Array.from(element.querySelectorAll('.instruction-number, .checkbox-box, .portion-variation-card-label, .portion-variation-card-value, .portion-variation-card-unit, .instructions-header'), (child) => {
+                    const childStyle = getComputedStyle(child);
+                    return [childStyle.fontSize, child.matches('.checkbox-box') ? childStyle.width : '', childStyle.color, childStyle.backgroundColor];
+                })
+            ];
+            return { element, signature: JSON.stringify(signature) };
+        })
+    );
+}
+
+function loadRecipeWithPreviewHighlights(nextRecipe) {
+    const before = capturePreviewRegions();
+    loadRecipeObject(nextRecipe);
+    const appliedRecipe = currentRecipe;
+
+    // The render queues pagination before this frame, so highlights follow the final preview.
+    requestAnimationFrame(() => {
+        if (currentRecipe !== appliedRecipe) return;
+        const preview = elements.recipePage();
+        const highlights = new Set();
+        capturePreviewRegions().forEach((after, index) => {
+            const previous = before[index];
+            if (previous.length === after.length) {
+                after.forEach(({ element, signature }, position) => {
+                    if (signature !== previous[position].signature) highlights.add(element);
+                });
+                return;
+            }
+
+            const remaining = new Map();
+            for (const { signature } of previous) {
+                remaining.set(signature, (remaining.get(signature) || 0) + 1);
+            }
+            const changed = after.filter(({ signature }) => {
+                const count = remaining.get(signature) || 0;
+                remaining.set(signature, count - 1);
+                return count <= 0;
+            });
+            changed.forEach(({ element }) => highlights.add(element));
+            if (after.length < previous.length && changed.length === 0) {
+                const fallback = PREVIEW_CHANGE_REGIONS[index][1];
+                const section = (fallback && preview.querySelector(fallback)) || preview.querySelector('.content-area');
+                if (section) highlights.add(section);
+            }
+        });
+
+        if (!highlights.size) return;
+        const viewport = elements.previewContainer().getBoundingClientRect();
+        const panel = elements.previewAiPanel();
+        const overlay = panel.inert ? null : panel.getBoundingClientRect();
+        const inView = [...highlights].some((element) => {
+            const rect = element.getBoundingClientRect();
+            const bottom = overlay && rect.left < overlay.right && rect.right > overlay.left
+                ? Math.min(overlay.top, viewport.bottom) : viewport.bottom;
+            return rect.left < viewport.right && rect.right > viewport.left &&
+                rect.top < bottom && rect.bottom > viewport.top;
+        });
+        if (!inView) centerPreviewOnElement(highlights.values().next().value);
+        highlights.forEach((element) => highlightPreviewElement(element, 5000));
+    });
 }
 
 async function handleSpellcheckAi() {
@@ -7823,7 +7959,7 @@ function applySpellcheckCorrections(corrections = []) {
         }
         setValueAtPath(updatedRecipe, correction.path, correction.corrected);
     });
-    loadRecipeObject(updatedRecipe);
+    loadRecipeWithPreviewHighlights(updatedRecipe);
     spellcheckCorrections = spellcheckCorrections.filter((correction) => !validCorrections.includes(correction));
     renderSpellcheckCorrections();
     if (elements.spellcheckStatus()) {
@@ -9119,10 +9255,6 @@ function updateZoom(focusBounds) {
         previewPanY = (top + bottom - height * scale) / 2;
         applyPreviewPan();
     }
-}
-
-function centerPreview() {
-    centerPreviewWithBehavior('smooth');
 }
 
 function focusFirstPreviewPage() {

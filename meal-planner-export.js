@@ -44,11 +44,13 @@ const PAGE_RECORD_PAGE_ATTACHMENT_FIELDS = new Set([
 const EASTERN_TIME_ZONE = 'America/New_York';
 const AIRTABLE_EXPORT_CATEGORY = 'Client Recipes';
 const NUTRITION_FIELDS = { Calories: 'calories', Protein: 'protein', Carbs: 'carbs', Fat: 'fat' };
+const NEEDS_FIXING_FIELD = 'Needs fixing';
+const REVIEW_COMPLETION_FOOTER = /(?:^|\n)Complete ✅ - \d{2}-\d{2}-\d{4} \d{1,2}:\d{2}(?:am|pm)(?:\s*-{3,})?\s*$/i;
 
 async function listMealPlannerRecipes({ withRecipeFile = false, gallery = false } = {}) {
     const environment = getAirtableEnvironment();
     const fields = ['Title', ...Object.keys(NUTRITION_FIELDS), 'Meal Series', 'date'];
-    if (gallery === true) fields.push('Category', 'Exclude', 'Needs fixing', 'Photo', ATTACHMENT_FIELDS.photo, ATTACHMENT_FIELDS.recipeFile);
+    if (gallery === true) fields.push('Category', 'Exclude', NEEDS_FIXING_FIELD, 'Photo', ATTACHMENT_FIELDS.photo, ATTACHMENT_FIELDS.recipeFile);
     const records = await listAirtableRecords({
         ...environment, fields, sortField: 'Title',
         lookup: 'Airtable recipe lookup',
@@ -66,7 +68,7 @@ async function listMealPlannerRecipes({ withRecipeFile = false, gallery = false 
             ...summary,
             category: typeof fields.Category === 'string' ? fields.Category : '',
             excluded: fields.Exclude === true,
-            needsFixing: fields['Needs fixing'] === true,
+            needsFixing: fields[NEEDS_FIXING_FIELD] === true,
             hasRecipeFile: Boolean(findRecipeFile(fields[ATTACHMENT_FIELDS.recipeFile])),
             thumbnailUrl
         };
@@ -86,17 +88,40 @@ async function getMealPlannerRecipeFile(payload) {
     const attachment = findRecipeFile(files);
     if (!attachment) throw new Error('The Recipe File column has no .recipe or .json attachment.');
 
-    const reviewNotes = Object.entries({
-        'Andrew Notes': record.fields['Andrew Notes'],
-        Feedback: record.fields.feedback ?? record.fields.Feedback
-    })
-        .map(([label, value]) => ({ label, text: typeof value === 'string' ? value.trim() : '' }))
-        .filter(({ text }) => text);
     return {
         ...mealPlannerRecordLink(environment, record.id),
         attachmentUrl: attachment.url,
-        reviewNotes
+        reviewNotes: describeRecipeReviewNotes(record.fields)
     };
+}
+
+function getRecipeReviewFields(fields) {
+    const feedbackField = Object.hasOwn(fields, 'feedback') ? 'feedback' : 'Feedback';
+    return [
+        { field: 'Andrew Notes', label: 'Andrew Notes', text: fields['Andrew Notes'] },
+        { field: feedbackField, label: 'Feedback', text: fields[feedbackField] }
+    ].filter(({ text }) => typeof text === 'string' && text.trim());
+}
+
+function describeRecipeReviewNotes(fields = {}) {
+    return getRecipeReviewFields(fields).map(({ label, text }) => ({ label, text: text.trim() }));
+}
+
+function buildReviewCompletionFields(fields, date = new Date()) {
+    const wasFlagged = fields[NEEDS_FIXING_FIELD] === true;
+    const changes = wasFlagged ? { [NEEDS_FIXING_FIELD]: false } : {};
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+        timeZone: EASTERN_TIME_ZONE,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: 'numeric', minute: '2-digit', hour12: true
+    }).formatToParts(date).map(({ type, value }) => [type, value]));
+    const line = `Complete ✅ - ${parts.month}-${parts.day}-${parts.year} ${parts.hour}:${parts.minute}${parts.dayPeriod.toLowerCase()}`;
+    for (const { field, text } of getRecipeReviewFields(fields)) {
+        if (!wasFlagged && REVIEW_COMPLETION_FOOTER.test(text)) continue;
+        const divider = field === 'Andrew Notes' ? '\n--------------------' : '';
+        changes[field] = `${text}\n\n${line}${divider}`;
+    }
+    return changes;
 }
 
 function findRecipeFile(files) {
@@ -147,6 +172,7 @@ async function beginMealPlannerRecipeUpdate(payload) {
         expires: Date.now() + 60 * 60 * 1000,
         expected,
         nutrition,
+        markAsFixed: payload.markAsFixed === true,
         previousNutrition: Object.fromEntries(Object.keys(nutrition).map((field) => [field, fields[field] ?? null])),
         previousFiles: Object.fromEntries(Object.keys(expected).map((field) => [field, fileIds(fields[field])]))
     };
@@ -215,28 +241,38 @@ async function finishMealPlannerRecipeUpdate(payload) {
         currentOriginals[field] = fileIds(fields[field]).filter((id) => !stagedIds.has(id));
     }
     const nutritionMatches = (values) => Object.entries(values).every(([field, value]) => (fields[field] ?? null) === value);
-    if (Object.values(currentOriginals).every((ids) => ids.length === 0) && nutritionMatches(plan.nutrition)) {
-        return describeMealPlannerRecipe(environment, record);
+    const exportIsCurrent = Object.values(currentOriginals).every((ids) => ids.length === 0) && nutritionMatches(plan.nutrition);
+    const reviewUpdates = plan.markAsFixed ? buildReviewCompletionFields(fields) : {};
+    const describeUpdate = (result) => ({
+        ...describeMealPlannerRecipe(environment, result),
+        ...(plan.markAsFixed ? { markedAsFixed: true, reviewNotes: describeRecipeReviewNotes(result.fields) } : {})
+    });
+    if (exportIsCurrent && Object.keys(reviewUpdates).length === 0) {
+        return describeUpdate(record);
     }
 
     const fileConflict = Object.entries(plan.previousFiles).some(([field, ids]) =>
         JSON.stringify(ids) !== JSON.stringify(currentOriginals[field])
     );
-    if (fileConflict || !nutritionMatches(plan.previousNutrition)) {
+    if (!exportIsCurrent && (fileConflict || !nutritionMatches(plan.previousNutrition))) {
         await removeStagedRecipeFiles(environment, plan, fields);
         throw new Error('This Airtable recipe changed during export. Review the record before trying the update again.');
     }
 
     const updated = await updateAirtableRecord({
         ...environment, recordId: plan.recordId, resource: 'Recipe',
-        fields: { ...plan.nutrition, ...replacements }
+        fields: { ...plan.nutrition, ...replacements, ...reviewUpdates }
     });
     if (Object.entries(replacements).some(([field, files]) =>
         JSON.stringify(fileIds(updated.fields?.[field])) !== JSON.stringify(fileIds(files))
     )) {
         throw new Error('Airtable did not confirm every replacement file.');
     }
-    return describeMealPlannerRecipe(environment, updated);
+    if (plan.markAsFixed && (updated.fields?.[NEEDS_FIXING_FIELD] === true || Object.keys(reviewUpdates)
+        .some((field) => field !== NEEDS_FIXING_FIELD && !REVIEW_COMPLETION_FOOTER.test(updated.fields?.[field] || '')))) {
+        throw new Error('Airtable did not confirm that the recipe was marked as fixed.');
+    }
+    return describeUpdate(updated);
 }
 
 async function cancelMealPlannerRecipeUpdate(payload) {

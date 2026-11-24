@@ -696,8 +696,7 @@
                     <input type="range" id="zoom-slider" class="zoom-slider" min="50" max="150" step="1" value="100" aria-label="Zoom level">
                     <span id="zoom-level">100%</span>
                     <button type="button" id="btn-zoom-in" class="btn-zoom" aria-label="Zoom in">+</button>
-                    <button type="button" id="btn-center-preview" class="btn-zoom btn-center-preview" title="Center Preview">Center</button>
-                    <button type="button" id="btn-focus-preview" class="btn-zoom btn-focus-preview" title="Focus Page 1" aria-label="Focus page 1"></button>
+                    <button type="button" id="btn-focus-preview" class="btn-zoom btn-focus-preview" title="Center and fit page 1" aria-label="Center and fit page 1">Center</button>
                 </div>
             </div>
         </main>
@@ -839,6 +838,11 @@
                         <a id="meal-planner-open-recipe" class="meal-planner-record-link" target="_blank" rel="noopener noreferrer" hidden>Open record in Airtable</a>
                     </div>
                     <p id="meal-planner-update-help" class="form-hint">Replaces the four page variants and recipe file. Updates filled nutrition fields and the recipe image when supplied.</p>
+                    <label class="form-toggle meal-planner-mark-fixed">
+                        <input type="checkbox" role="switch" id="meal-planner-mark-as-fixed" aria-describedby="meal-planner-mark-fixed-help" disabled>
+                        <span>Mark as fixed</span>
+                    </label>
+                    <p id="meal-planner-mark-fixed-help" class="form-hint">Clears Needs fixing and adds a dated completion line to any review notes.</p>
                 </div>
                 <div class="meal-planner-export-actions">
                     <button type="button" id="btn-generate-meal-planner-metadata" class="btn-secondary">Generate</button>

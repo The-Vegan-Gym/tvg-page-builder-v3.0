@@ -977,11 +977,15 @@ body {
     line-height: 1.4;
 }
 
-.preview-location-highlight {
+.preview-container .preview-location-highlight {
     outline: 3px solid rgba(66, 213, 59, 0.75);
     outline-offset: 5px;
     border-radius: 4px;
     transition: outline-color 0.2s;
+}
+
+.preview-container :is(.recipe-page, .hero-section).preview-location-highlight {
+    outline-offset: -4px;
 }
 
 /* Image Upload Area */
@@ -2004,6 +2008,20 @@ body {
 #meal-planner-existing-recipe {
     display: grid;
     gap: var(--spacing-md);
+}
+
+.meal-planner-mark-fixed.form-toggle {
+    margin: 0;
+}
+
+.meal-planner-mark-fixed:has(input:disabled) {
+    opacity: .55;
+    cursor: default;
+}
+
+.meal-planner-mark-fixed:has(input:focus-visible) {
+    outline: 2px solid #8ff087;
+    outline-offset: 2px;
 }
 
 .meal-planner-record-link {
@@ -3774,7 +3792,6 @@ body {
     .preview-ai-launch span:last-child { display: none; }
     .preview-ai-panel { bottom: 12px; width: calc(100% - 24px); }
     .preview-zoom-controls { max-width: calc(100% - 70px); }
-    .btn-center-preview { min-width: 0; padding: 0 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3875,9 +3892,10 @@ body {
     font-family: var(--font-primary);
 }
 
-.btn-center-preview {
+.btn-focus-preview {
     width: auto;
     min-width: 70px;
+    gap: 6px;
     padding: 0 10px;
     font-size: 0.8rem;
     font-weight: 800;
