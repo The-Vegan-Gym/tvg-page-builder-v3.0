@@ -169,6 +169,10 @@ async function beginMealPlannerRecipeUpdate(payload) {
     if (ingredientTags && ingredientTags.length === 0) {
         throw new Error('Generate ingredient tags before updating the Ingredients field.');
     }
+    const description = typeof payload.description === 'string' ? payload.description.trim() : undefined;
+    if (payload.description !== undefined && description === undefined) {
+        throw new Error('The recipe description must be text.');
+    }
     const record = await getAirtableRecord({ ...environment, recordId, resource: 'Recipe' });
     const fields = record.fields || {};
     const plan = {
@@ -178,6 +182,7 @@ async function beginMealPlannerRecipeUpdate(payload) {
         expected,
         nutrition,
         ...(ingredientTags ? { ingredientTags, previousIngredientTags: normalizeIngredientTags(fields[INGREDIENTS_FIELD]) } : {}),
+        ...(description !== undefined ? { description, previousDescription: String(fields.Description ?? '').trim() } : {}),
         markAsFixed: payload.markAsFixed === true,
         previousNutrition: Object.fromEntries(Object.keys(nutrition).map((field) => [field, fields[field] ?? null])),
         previousFiles: Object.fromEntries(Object.keys(expected).map((field) => [field, fileIds(fields[field])]))
@@ -258,11 +263,15 @@ async function finishMealPlannerRecipeUpdate(payload) {
     const nutritionMatches = (values) => Object.entries(values).every(([field, value]) => (fields[field] ?? null) === value);
     const onlyReplacementFiles = Object.values(currentOriginals).every((ids) => ids.length === 0);
     const ingredientTagsAreCurrent = !plan.ingredientTags || sameIngredientTags(fields[INGREDIENTS_FIELD], plan.ingredientTags);
-    const exportIsCurrent = onlyReplacementFiles && nutritionMatches(plan.nutrition) && ingredientTagsAreCurrent;
+    const wantsDescriptionUpdate = plan.description !== undefined;
+    const description = String(fields.Description ?? '').trim();
+    const descriptionIsCurrent = !wantsDescriptionUpdate || description === plan.description;
+    const exportIsCurrent = onlyReplacementFiles && nutritionMatches(plan.nutrition) && ingredientTagsAreCurrent && descriptionIsCurrent;
     const reviewUpdates = plan.markAsFixed ? buildReviewCompletionFields(fields) : {};
     const describeUpdate = (result) => ({
         ...describeMealPlannerRecipe(environment, result),
         ...(plan.ingredientTags ? { updatedIngredientTags: true } : {}),
+        ...(wantsDescriptionUpdate ? { updatedDescription: true } : {}),
         ...(plan.markAsFixed ? { markedAsFixed: true, reviewNotes: describeRecipeReviewNotes(result.fields) } : {})
     });
     if (exportIsCurrent && Object.keys(reviewUpdates).length === 0) {
@@ -273,16 +282,18 @@ async function finishMealPlannerRecipeUpdate(payload) {
         JSON.stringify(ids) !== JSON.stringify(currentOriginals[field])
     );
     const ingredientConflict = !ingredientTagsAreCurrent && !sameIngredientTags(fields[INGREDIENTS_FIELD], plan.previousIngredientTags);
-    if (!exportIsCurrent && (fileConflict || ingredientConflict || !nutritionMatches(plan.previousNutrition))) {
+    const descriptionConflict = !descriptionIsCurrent && description !== plan.previousDescription;
+    if (!exportIsCurrent && (fileConflict || ingredientConflict || descriptionConflict || !nutritionMatches(plan.previousNutrition))) {
         // The replacement set may already have been committed if a previous response was lost.
         if (!onlyReplacementFiles) await removeStagedRecipeFiles(environment, plan, fields);
         throw new Error('This Airtable recipe changed during export. Review the record before trying the update again.');
     }
 
     const ingredientUpdates = plan.ingredientTags ? { [INGREDIENTS_FIELD]: plan.ingredientTags } : {};
+    const descriptionUpdate = wantsDescriptionUpdate ? { Description: plan.description } : {};
     const updated = await updateAirtableRecord({
         ...environment, recordId: plan.recordId, resource: 'Recipe',
-        fields: { ...plan.nutrition, ...replacements, ...ingredientUpdates, ...reviewUpdates }
+        fields: { ...plan.nutrition, ...replacements, ...ingredientUpdates, ...descriptionUpdate, ...reviewUpdates }
     });
     if (Object.entries(replacements).some(([field, files]) =>
         JSON.stringify(fileIds(updated.fields?.[field])) !== JSON.stringify(fileIds(files))
@@ -291,6 +302,9 @@ async function finishMealPlannerRecipeUpdate(payload) {
     }
     if (plan.ingredientTags && !sameIngredientTags(updated.fields?.[INGREDIENTS_FIELD], plan.ingredientTags)) {
         throw new Error('Airtable did not confirm the ingredient tags.');
+    }
+    if (wantsDescriptionUpdate && String(updated.fields?.Description ?? '').trim() !== plan.description) {
+        throw new Error('Airtable did not confirm the description.');
     }
     if (plan.markAsFixed && (updated.fields?.[NEEDS_FIXING_FIELD] === true || Object.keys(reviewUpdates)
         .some((field) => field !== NEEDS_FIXING_FIELD && !REVIEW_COMPLETION_FOOTER.test(updated.fields?.[field] || '')))) {

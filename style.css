@@ -1004,6 +1004,8 @@ body {
         .preview-container .description-text,
     &:has([data-layout-preview="note-text-font-size"]:hover, [data-layout-preview="note-text-font-size"] :focus-visible)
         .preview-container .note-text,
+    &:has([data-layout-preview="note-icon"]:hover, [data-layout-preview="note-icon"] :focus-visible)
+        .preview-container .note-icon,
     &:has([data-layout-preview="body-text-font-size"]:hover, [data-layout-preview="body-text-font-size"] :focus-visible)
         .preview-container :is(.ingredient-item, .instruction-text-wrapper),
     &:has([data-layout-preview="ingredient-gap"]:hover, [data-layout-preview="ingredient-gap"] :focus-visible)
@@ -2131,37 +2133,18 @@ body {
     gap: var(--spacing-md);
 }
 
-.meal-planner-mark-fixed.form-toggle {
+.meal-planner-update-toggle.form-toggle {
     margin: 0;
 }
 
-.meal-planner-mark-fixed:has(input:disabled) {
+.meal-planner-update-toggle:has(input:disabled) {
     opacity: .55;
     cursor: default;
 }
 
-.meal-planner-mark-fixed:has(input:focus-visible) {
+.meal-planner-update-toggle:has(input:focus-visible) {
     outline: 2px solid #8ff087;
     outline-offset: 2px;
-}
-
-.meal-planner-ingredient-tags {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-}
-
-.meal-planner-ingredient-tags:has(input:disabled) {
-    opacity: .55;
-    cursor: default;
-}
-
-.meal-planner-export-body .meal-planner-ingredient-tags input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    margin: 0;
-    accent-color: var(--color-primary);
 }
 
 .meal-planner-record-link {
@@ -3986,29 +3969,63 @@ body {
     top: 50%;
     left: 50%;
     translate: -50% -50%;
+    isolation: isolate;
     margin: 0;
-    padding: 9px 18px;
-    border: 1px solid #69d760;
+    padding: 10px 19px;
     border-radius: 999px;
-    background: #19271f;
     box-shadow: 0 4px 20px #0008;
     color: #d7ffe0;
     font-size: 14px;
     font-weight: 700;
-    -webkit-animation: pulsate-bck 0.5s ease-in-out infinite both;
-    animation: pulsate-bck 0.5s ease-in-out infinite both;
+    animation: preview-ai-working-pulse 3.4s ease-in-out infinite;
 }
 
-/* Pulsate Back by Animista, licensed under the FreeBSD License.
+.preview-ai-status.working::before,
+.preview-ai-status.working::after {
+    content: '';
+    position: absolute;
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+.preview-ai-status.working::before {
+    z-index: -2;
+    inset: -4px;
+    background: conic-gradient(from var(--preview-ai-glow-angle, 0deg),
+        transparent 40%, #42d53b55 60%, #b9ffa8 77%, #66e759a0 84%, transparent 99%);
+    filter: blur(7px);
+    opacity: .62;
+    animation: preview-ai-working-orbit 7.5s linear infinite, preview-ai-working-glow 4.8s ease-in-out infinite;
+}
+
+.preview-ai-status.working::after {
+    z-index: -1;
+    inset: 0;
+    border: 1px solid #69d76080;
+    background: #19271f;
+}
+
+@property --preview-ai-glow-angle {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+}
+
+/* Adapted from Animista's Pulsate Back, licensed under the FreeBSD License.
    https://animista.net/license */
-@-webkit-keyframes pulsate-bck {
-    0%, 100% { -webkit-transform: scale(1); transform: scale(1); }
-    50% { -webkit-transform: scale(0.9); transform: scale(0.9); }
+@keyframes preview-ai-working-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(.975); }
 }
 
-@keyframes pulsate-bck {
-    0%, 100% { -webkit-transform: scale(1); transform: scale(1); }
-    50% { -webkit-transform: scale(0.9); transform: scale(0.9); }
+@keyframes preview-ai-working-orbit {
+    to { --preview-ai-glow-angle: 360deg; }
+}
+
+@keyframes preview-ai-working-glow {
+    0%, 100% { opacity: .55; }
+    33% { opacity: .94; }
+    68% { opacity: .38; }
 }
 
 @media (max-width: 1000px) {
@@ -4025,7 +4042,8 @@ body {
         transition: none;
     }
 
-    .preview-ai-status.working {
+    .preview-ai-status.working,
+    .preview-ai-status.working::before {
         animation: none;
     }
 }
@@ -4919,6 +4937,10 @@ body {
     align-items: stretch;
 }
 
+.flow-column:has(.note-section-wrapper) {
+    overflow: visible;
+}
+
 .flow-column .note-callout {
     width: 100%;
     max-width: 100%;
@@ -4946,6 +4968,8 @@ body {
     flex-shrink: 0;
     margin-top: 1px;
     margin-left: -18px;
+    transform: translate(var(--note-icon-x, -19px), var(--note-icon-y, 0px))
+        rotate(var(--note-icon-rotation, 0deg)) scale(var(--note-icon-scale, 1.5));
 }
 
 .note-icon svg {

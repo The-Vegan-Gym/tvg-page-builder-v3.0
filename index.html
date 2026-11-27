@@ -495,6 +495,37 @@
                                 <input type="number" id="note-text-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="12" aria-label="Note text font size value">
                             </div>
                         </div>
+                        <div class="layout-control-subsection">
+                            <h4>Note Alert Icon</h4>
+                            <div class="layout-control-group" data-layout-preview="note-icon">
+                                <div class="image-control-row">
+                                    <label for="note-icon-x">X Offset (px)</label>
+                                    <input type="range" id="note-icon-x" min="-48" max="48" step="1" value="-19">
+                                    <input type="number" id="note-icon-x-value" class="slider-value-input" min="-48" max="48" step="1" value="-19" aria-label="Note alert icon X offset in pixels">
+                                </div>
+                            </div>
+                            <div class="layout-control-group" data-layout-preview="note-icon">
+                                <div class="image-control-row">
+                                    <label for="note-icon-y">Y Offset (px)</label>
+                                    <input type="range" id="note-icon-y" min="-48" max="48" step="1" value="0">
+                                    <input type="number" id="note-icon-y-value" class="slider-value-input" min="-48" max="48" step="1" value="0" aria-label="Note alert icon Y offset in pixels">
+                                </div>
+                            </div>
+                            <div class="layout-control-group" data-layout-preview="note-icon">
+                                <div class="image-control-row">
+                                    <label for="note-icon-rotation">Rotation (°)</label>
+                                    <input type="range" id="note-icon-rotation" min="-180" max="180" step="1" value="0">
+                                    <input type="number" id="note-icon-rotation-value" class="slider-value-input" min="-180" max="180" step="1" value="0" aria-label="Note alert icon rotation in degrees">
+                                </div>
+                            </div>
+                            <div class="layout-control-group" data-layout-preview="note-icon">
+                                <div class="image-control-row">
+                                    <label for="note-icon-scale">Scale (%)</label>
+                                    <input type="range" id="note-icon-scale" min="25" max="200" step="1" value="150">
+                                    <input type="number" id="note-icon-scale-value" class="slider-value-input" min="25" max="200" step="1" value="150" aria-label="Note alert icon scale percentage">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="layout-control-container">
                         <h3>Ingredients &amp; Instructions</h3>
@@ -877,15 +908,20 @@
                             <a id="meal-planner-open-recipe" class="meal-planner-record-link" target="_blank" rel="noopener noreferrer" hidden>Open record in Airtable</a>
                         </div>
                         <p id="meal-planner-update-help" class="form-hint">Replaces the four page variants and recipe file. Updates filled nutrition fields and the recipe image when supplied.</p>
-                        <label class="form-toggle meal-planner-mark-fixed">
+                        <label class="form-toggle meal-planner-update-toggle">
                             <input type="checkbox" role="switch" id="meal-planner-mark-as-fixed" aria-describedby="meal-planner-mark-fixed-help" disabled>
                             <span>Mark as fixed</span>
                         </label>
                         <p id="meal-planner-mark-fixed-help" class="form-hint">Clears Needs fixing and adds a dated completion line to any review notes.</p>
-                        <label class="meal-planner-ingredient-tags">
-                            <input type="checkbox" id="meal-planner-generate-ingredient-tags" disabled>
+                        <label class="form-toggle meal-planner-update-toggle">
+                            <input type="checkbox" role="switch" id="meal-planner-generate-ingredient-tags" disabled>
                             <span>Generate and replace ingredient tags</span>
                         </label>
+                        <label class="form-toggle meal-planner-update-toggle">
+                            <input type="checkbox" role="switch" id="meal-planner-update-description" aria-describedby="meal-planner-update-description-help" checked disabled>
+                            <span>Update description</span>
+                        </label>
+                        <p id="meal-planner-update-description-help" class="form-hint">Copies the current description to Airtable. A blank description clears the field.</p>
                     </div>
                     <div class="meal-planner-export-actions">
                         <button type="button" id="btn-generate-meal-planner-metadata" class="btn-secondary">Generate</button>

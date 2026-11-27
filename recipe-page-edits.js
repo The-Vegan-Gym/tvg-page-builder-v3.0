@@ -37,6 +37,10 @@ const recipeFields = {
     title: text,
     description: text,
     notes: list(text),
+    noteIconX: range(-48, 48),
+    noteIconY: range(-48, 48),
+    noteIconRotation: range(-180, 180),
+    noteIconScale: range(25, 200),
     servingsLabel: text,
     instructionsLabel: text,
     ingredientSections: list(object({ label: text, startMode, alignment, ingredients: list(ingredient) })),
@@ -101,6 +105,7 @@ const editInstructions = `Edit the recipe page in the Recipe Page Generator. App
 - For new ingredient sets use right alignment and auto start unless the user requests another layout. For new instruction sets use numbered stepStyle and force-right-column start unless the user requests another placement.
 - Change layout and typography only when requested. For colors use six-digit hex or "" for the default. "Header color" refers to the hero or the named section. When changing backgrounds, preserve readable contrast by changing the corresponding text color if needed.
 - ingredientGap is the horizontal space in pixels between ingredient names and amounts. ingredientAmountWidth is the percentage of the ingredient row reserved for amounts.
+- noteIconX and noteIconY move the alert icons on note callouts in pixels. Positive values move them right and down. noteIconRotation is in degrees and noteIconScale is a percentage.
 - In dayMeals, copy sourceIndex for each existing card even if it moves. Use null for new cards. To change equipment quantities, return only the edited materialCounts with existing equipment IDs. Use 1 to clear a badge.
 - For images, use imageSettings for hero positioning and zoom. Only return imageEdits for expressly requested photo changes. Use target hero (mealIndex null) or meal (zero-based index in the resulting dayMeals list). For replacement with an uploaded photo use action attachment and its zero-based attachmentIndex as listed. For remove use no attachment. For generate supply a descriptive prompt about this recipe. For edit supply a prompt and use the existing photo, or supply attachmentIndex to edit an upload. Never invent a photo URL.
 - Message should briefly describe the proposed changes, or explain why no changes were proposed. Use plain text. For a question without a requested edit, return null for every field.`;

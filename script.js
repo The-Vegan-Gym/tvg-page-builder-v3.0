@@ -71,11 +71,19 @@ const INGREDIENT_LAYOUT_CONTROLS = [
     { key: 'ingredientAmountWidth', id: 'ingredient-amount-width', unit: '%' }
 ];
 
+const NOTE_ICON_CONTROLS = [
+    { key: 'noteIconX', id: 'note-icon-x', min: -48, max: 48, defaultValue: -19 },
+    { key: 'noteIconY', id: 'note-icon-y', min: -48, max: 48, defaultValue: 0 },
+    { key: 'noteIconRotation', id: 'note-icon-rotation', min: -180, max: 180, defaultValue: 0 },
+    { key: 'noteIconScale', id: 'note-icon-scale', min: 25, max: 200, defaultValue: 150 }
+];
+
 /**
  * Empty recipe template (starts blank)
  */
 const EMPTY_RECIPE = {
     ...getIngredientLayout(),
+    ...getNoteIconPlacement(),
     pageType: "recipe",
     pageStyle: "standard",
     title: "",
@@ -329,6 +337,7 @@ function normalizeRecipe(recipe = {}) {
         ...EMPTY_RECIPE,
         ...recipe,
         ...getIngredientLayout(recipe),
+        ...getNoteIconPlacement(recipe),
         imageSettings: {
             ...EMPTY_RECIPE.imageSettings,
             ...(recipe.imageSettings || {})
@@ -643,6 +652,7 @@ const elements = {
     mealPlannerRecipeRecord: () => document.getElementById('meal-planner-recipe-record'),
     mealPlannerMarkAsFixed: () => document.getElementById('meal-planner-mark-as-fixed'),
     mealPlannerGenerateIngredientTags: () => document.getElementById('meal-planner-generate-ingredient-tags'),
+    mealPlannerUpdateDescription: () => document.getElementById('meal-planner-update-description'),
     myPagesCoachProfileGroup: () => document.getElementById('my-pages-coach-profile-group'),
     myPagesCoachProfile: () => document.getElementById('my-pages-coach-profile'),
     mealPlannerCategory: () => document.getElementById('meal-planner-category'),
@@ -2397,6 +2407,24 @@ function initializeFormListeners() {
             syncIngredientLayoutControls(currentRecipe);
         });
     }
+    for (const { id, defaultValue } of NOTE_ICON_CONTROLS) {
+        const slider = document.getElementById(id);
+        const number = document.getElementById(`${id}-value`);
+        slider.addEventListener('input', () => {
+            number.value = slider.value;
+            updateRecipeFromForm();
+        });
+        number.addEventListener('input', () => {
+            if (!Number.isFinite(number.valueAsNumber) || !number.validity.valid) return;
+            slider.value = number.value;
+            updateRecipeFromForm();
+        });
+        number.addEventListener('change', () => {
+            slider.value = getClampedControlValue(number, slider, defaultValue);
+            number.value = slider.value;
+            updateRecipeFromForm();
+        });
+    }
 
     // Image upload
     elements.imageUploadArea()?.addEventListener('click', () => {
@@ -2696,6 +2724,11 @@ function loadRecipeToForm(recipe) {
     elements.titleFontSizeValue().value = titleFontSize;
     syncTypographyControls(recipe);
     syncIngredientLayoutControls(recipe);
+    const noteIconPlacement = getNoteIconPlacement(recipe);
+    for (const { key, id } of NOTE_ICON_CONTROLS) {
+        document.getElementById(id).value = noteIconPlacement[key];
+        document.getElementById(`${id}-value`).value = noteIconPlacement[key];
+    }
     const printerTitleTopPadding = getPrinterTitleTopPadding(recipe);
     if (elements.printerTitleTopPadding()) {
         elements.printerTitleTopPadding().value = printerTitleTopPadding;
@@ -2876,6 +2909,9 @@ function updateRecipeFromForm() {
         titleFontSize: parseInt(elements.titleFontSize()?.value, 10) || 40,
         typographySizes: getTypographySizesFromControls(),
         ...getIngredientLayout(Object.fromEntries(INGREDIENT_LAYOUT_CONTROLS.map(({ key, id }) => [
+            key, document.getElementById(id).value
+        ]))),
+        ...getNoteIconPlacement(Object.fromEntries(NOTE_ICON_CONTROLS.map(({ key, id }) => [
             key, document.getElementById(id).value
         ]))),
         sectionLabelSpacing: getSectionLabelSpacing({ sectionLabelSpacing: elements.sectionLabelSpacing()?.value }),
@@ -3118,9 +3154,17 @@ function syncIngredientLayoutControls(recipe) {
     }
 }
 
+function getNoteIconPlacement(recipe = {}) {
+    return Object.fromEntries(NOTE_ICON_CONTROLS.map(({ key, min, max, defaultValue }) => {
+        const value = Number.parseInt(recipe[key], 10);
+        return [key, Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : defaultValue];
+    }));
+}
+
 function createTypographyStyle(recipe = currentRecipe) {
     const sizes = getTypographySizes(recipe);
     const { ingredientGap, ingredientAmountWidth } = getIngredientLayout(recipe);
+    const { noteIconX, noteIconY, noteIconRotation, noteIconScale } = getNoteIconPlacement(recipe);
     return [
         `--macro-bar-font-size: ${sizes.macroBar}px`,
         `--description-font-size: ${sizes.description}px`,
@@ -3135,6 +3179,10 @@ function createTypographyStyle(recipe = currentRecipe) {
         `--instruction-badge-font-size: ${sizes.instructionBadge}px`,
         `--checkbox-box-font-size: ${sizes.checkboxBox}px`,
         `--note-text-font-size: ${sizes.noteText}px`,
+        `--note-icon-x: ${noteIconX}px`,
+        `--note-icon-y: ${noteIconY}px`,
+        `--note-icon-rotation: ${noteIconRotation}deg`,
+        `--note-icon-scale: ${noteIconScale / 100}`,
         `--page-number-font-size: ${sizes.pageNumber}px`,
         `--portion-label-font-size: ${sizes.portionLabel}px`,
         `--portion-macro-value-font-size: ${sizes.portionMacroValue}px`,
@@ -6385,12 +6433,15 @@ function isUpdatingMealPlannerRecipe() {
 }
 
 function mealPlannerUpdateOptions() {
-    return [elements.mealPlannerMarkAsFixed(), elements.mealPlannerGenerateIngredientTags()];
+    return [
+        elements.mealPlannerMarkAsFixed(), elements.mealPlannerGenerateIngredientTags(),
+        elements.mealPlannerUpdateDescription()
+    ];
 }
 
 function resetMealPlannerUpdateOptions() {
     for (const option of mealPlannerUpdateOptions()) {
-        option.checked = false;
+        option.checked = option.defaultChecked;
         option.disabled = true;
     }
 }
@@ -6473,7 +6524,7 @@ function showSelectedMealPlannerRecipe() {
     else link.removeAttribute('href');
     const disabled = !record || Boolean(airtableExportController);
     for (const option of mealPlannerUpdateOptions()) {
-        if (option.dataset.recordId !== selectedId) option.checked = false;
+        if (option.dataset.recordId !== selectedId) option.checked = option.defaultChecked;
         option.dataset.recordId = selectedId;
         option.disabled = disabled;
     }
@@ -6760,6 +6811,7 @@ async function handleMealPlannerRecipeUpdate(signal) {
 
     const markAsFixed = elements.mealPlannerMarkAsFixed().checked;
     const generateIngredientTags = elements.mealPlannerGenerateIngredientTags().checked;
+    const updateDescription = elements.mealPlannerUpdateDescription().checked;
     let updateToken;
     let finalizing = false;
     try {
@@ -6789,7 +6841,8 @@ async function handleMealPlannerRecipeUpdate(signal) {
         updateMealPlannerExportStatus('Checking the selected Airtable recipe…', 'working', 56);
         const session = await postMealPlannerExport({
             action: 'begin-meal-planner-recipe-update', recordId, pageCounts: counts,
-            macros: recipe.macros, replacePhoto, markAsFixed, ingredientTags
+            macros: recipe.macros, replacePhoto, markAsFixed, ingredientTags,
+            description: updateDescription ? recipe.description : undefined
         }, { signal });
         updateToken = session.updateToken;
         const stage = { action: 'stage-meal-planner-recipe-update', updateToken };
@@ -6808,6 +6861,7 @@ async function handleMealPlannerRecipeUpdate(signal) {
         await postMealPlannerExport({ ...stage, recipe, attachmentKind: 'file' });
         signal.throwIfAborted();
         const saving = ['nutrition', 'files'];
+        if (updateDescription) saving.push('description');
         if (generateIngredientTags) saving.push('ingredient tags');
         if (markAsFixed) saving.push('review status');
         const savingList = saving.length === 2 ? saving.join(' and ') : `${saving.slice(0, -1).join(', ')}, and ${saving.at(-1)}`;
@@ -6830,6 +6884,7 @@ async function handleMealPlannerRecipeUpdate(signal) {
             ? 'Updated the selected Airtable recipe and marked it as fixed.'
             : 'Updated the selected Airtable recipe.';
         if (updated.updatedIngredientTags) success += ' Ingredient tags updated.';
+        if (updated.updatedDescription) success += ' Description updated.';
         updateMealPlannerExportStatus(signal.aborted
             ? 'The Airtable update finished before it could be canceled.'
             : success, 'success', 100);
@@ -7760,6 +7815,7 @@ const PREVIEW_CHANGE_REGIONS = [
     ['.ingredients-header, .flow-section-title:not(.instruction-part-header), .ingredient-item', '.ingredients-header'],
     ['.flow-column .instructions-header:not(.ingredients-header), .instruction-part-header, .instruction-item', '.flow-column .instructions-header:not(.ingredients-header)'],
     ['.note-text', '.content-area'],
+    ['.note-icon', '.note-callout', (element) => getComputedStyle(element).transform],
     ['.day-meal-card', '.day-plan-content'],
     ['.day-plan-column-left > .section-title', '.day-plan-content'],
     ['.day-plan-panel, .day-totals-section', '.day-plan-content'],
