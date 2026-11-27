@@ -252,8 +252,8 @@ const SECTION_INFO_CONTENT = {
         title: 'Page Layout',
         items: [
             'Style switches between standard and printer-friendly page designs.',
-            'Page Number adds an optional page number to the recipe.',
-            'The sliders adjust title sizing, printer-friendly spacing, continuation-page spacing, and bottom flow clearance.'
+            'Hover over a control or focus it with the keyboard to outline what it affects in the preview.',
+            'Typography controls apply to the preview and JPG exports. Editable PDF font sizes are handled separately.'
         ]
     },
     overview: {
@@ -626,7 +626,7 @@ const elements = {
     loadRecipeOverlay: () => document.getElementById('load-recipe-overlay'),
     recentRecipesList: () => document.getElementById('recent-recipes-list'),
     btnCloseLoadRecipe: () => document.getElementById('btn-close-load-recipe'),
-    btnLoadFromComputer: () => document.getElementById('btn-load-from-computer'),
+    btnLoadFromDevice: () => document.getElementById('btn-load-from-device'),
     btnLoadFromAirtable: () => document.getElementById('btn-load-from-airtable'),
     airtableLoadForm: () => document.getElementById('load-airtable-recipe-form'),
     airtableLoadSearch: () => document.getElementById('load-airtable-recipe-search'),
@@ -642,6 +642,7 @@ const elements = {
     mealPlannerRecipeSearch: () => document.getElementById('meal-planner-recipe-search'),
     mealPlannerRecipeRecord: () => document.getElementById('meal-planner-recipe-record'),
     mealPlannerMarkAsFixed: () => document.getElementById('meal-planner-mark-as-fixed'),
+    mealPlannerGenerateIngredientTags: () => document.getElementById('meal-planner-generate-ingredient-tags'),
     myPagesCoachProfileGroup: () => document.getElementById('my-pages-coach-profile-group'),
     myPagesCoachProfile: () => document.getElementById('my-pages-coach-profile'),
     mealPlannerCategory: () => document.getElementById('meal-planner-category'),
@@ -1107,7 +1108,7 @@ function renderRecentRecipes() {
 
 function openLoadRecipeOverlay() {
     elements.loadRecipeOverlay()?.classList.add('active');
-    showRecentRecipePicker();
+    openAirtableRecipePicker();
 }
 
 function closeLoadRecipeOverlay() {
@@ -1120,7 +1121,7 @@ function showRecentRecipePicker() {
     elements.airtableLoadForm().hidden = true;
     document.getElementById('load-recipe-recent').hidden = false;
     elements.loadRecipeOverlay().querySelector('.load-recipe-modal').classList.remove('is-browsing-airtable');
-    document.getElementById('load-recipe-heading').textContent = 'Load Recipe';
+    document.getElementById('load-recipe-heading').textContent = 'Recent Recipes';
     renderRecentRecipes();
     elements.btnLoadFromAirtable().focus();
 }
@@ -1150,6 +1151,7 @@ async function openAirtableRecipePicker() {
     sort.value = 'az';
     sort.disabled = false;
     elements.airtableLoadShowExcluded().disabled = false;
+    elements.btnLoadFromDevice().disabled = false;
     categories.inert = false;
     categories.querySelectorAll('[data-recipe-category]').forEach((button) => {
         button.setAttribute('aria-pressed', String(button.dataset.recipeCategory === ''));
@@ -1284,7 +1286,9 @@ async function handleAirtableRecipeLoad(event) {
     const excludedToggle = elements.airtableLoadShowExcluded();
     const grid = elements.airtableLoadGrid();
     const categories = elements.airtableLoadCategories();
+    const device = elements.btnLoadFromDevice();
     categories.inert = grid.inert = search.disabled = sort.disabled = excludedToggle.disabled = submit.disabled = true;
+    device.disabled = true;
     submit.textContent = 'Loading…';
     updateAirtableLoadStatus('Downloading the recipe file…', 'working');
     try {
@@ -1315,6 +1319,7 @@ async function handleAirtableRecipeLoad(event) {
         if (airtableLoadRequest === request) {
             airtableLoadRequest = null;
             categories.inert = grid.inert = search.disabled = sort.disabled = excludedToggle.disabled = submit.disabled = false;
+            device.disabled = false;
             submit.textContent = 'Load Recipe';
         }
     }
@@ -2605,17 +2610,13 @@ function initializeButtonListeners() {
     elements.btnSaveJsonPreview()?.addEventListener('click', handleSaveJson);
 
     // Load JSON button
-    const openLoadRecipe = () => {
-        openLoadRecipeOverlay();
-    };
-
-    elements.btnLoadJson()?.addEventListener('click', openLoadRecipe);
-    elements.btnLoadJsonPreview()?.addEventListener('click', openLoadRecipe);
+    elements.btnLoadJson()?.addEventListener('click', openLoadRecipeOverlay);
+    elements.btnLoadJsonPreview()?.addEventListener('click', openLoadRecipeOverlay);
 
     elements.jsonFileInput()?.addEventListener('change', handleLoadJson);
     elements.btnCloseLoadRecipe()?.addEventListener('click', closeLoadRecipeOverlay);
     elements.btnLoadFromAirtable()?.addEventListener('click', openAirtableRecipePicker);
-    document.getElementById('btn-back-load-recipe')?.addEventListener('click', showRecentRecipePicker);
+    document.getElementById('btn-load-recent-recipes')?.addEventListener('click', showRecentRecipePicker);
     elements.airtableLoadSearch()?.addEventListener('input', () => {
         if (!airtableLoadRequest) renderAirtableLoadOptions();
     });
@@ -2639,9 +2640,8 @@ function initializeButtonListeners() {
         selectAirtableLoadRecipe(airtableLoadOptions.find(({ id }) => id === card.dataset.recipeId));
     });
     elements.airtableLoadForm()?.addEventListener('submit', handleAirtableRecipeLoad);
-    elements.btnLoadFromComputer()?.addEventListener('click', () => {
-        closeLoadRecipeOverlay();
-        elements.jsonFileInput()?.click();
+    elements.loadRecipeOverlay()?.querySelectorAll('[data-load-from-device]').forEach((button) => {
+        button.addEventListener('click', () => elements.jsonFileInput()?.click());
     });
     elements.recentRecipesList()?.addEventListener('click', handleRecentRecipeClick);
     elements.loadRecipeOverlay()?.addEventListener('click', (event) => {
@@ -6334,8 +6334,7 @@ function openAirtableExportOverlay(mode = 'meal-planner') {
     elements.mealPlannerExportDestination().value = !isMyPagesExport && editingMealPlannerRecordId ? 'update' : 'create';
     elements.mealPlannerRecipeSearch().value = '';
     elements.mealPlannerRecipeRecord().value = '';
-    elements.mealPlannerMarkAsFixed().checked = false;
-    elements.mealPlannerMarkAsFixed().disabled = true;
+    resetMealPlannerUpdateOptions();
     mealPlannerRecipeOptions = null;
     document.getElementById('meal-planner-export-destination-group').hidden = isMyPagesExport;
     elements.myPagesCoachProfileGroup()?.toggleAttribute('hidden', !isMyPagesExport);
@@ -6385,15 +6384,23 @@ function isUpdatingMealPlannerRecipe() {
     return activeAirtableExportMode === 'meal-planner' && elements.mealPlannerExportDestination().value === 'update';
 }
 
+function mealPlannerUpdateOptions() {
+    return [elements.mealPlannerMarkAsFixed(), elements.mealPlannerGenerateIngredientTags()];
+}
+
+function resetMealPlannerUpdateOptions() {
+    for (const option of mealPlannerUpdateOptions()) {
+        option.checked = false;
+        option.disabled = true;
+    }
+}
+
 function updateMealPlannerExportMode() {
     const isUpdate = isUpdatingMealPlannerRecipe();
     const isMyPages = activeAirtableExportMode === 'my-pages';
     document.getElementById('meal-planner-existing-recipe').hidden = !isUpdate;
     elements.mealPlannerRecipeRecord().required = isUpdate;
-    if (!isUpdate) {
-        elements.mealPlannerMarkAsFixed().checked = false;
-        elements.mealPlannerMarkAsFixed().disabled = true;
-    }
+    if (!isUpdate) resetMealPlannerUpdateOptions();
     elements.btnGenerateMealPlannerMetadata()?.closest('.meal-planner-export-actions')?.toggleAttribute('hidden', isUpdate);
     elements.mealPlannerIngredients()?.closest('.form-group')?.toggleAttribute('hidden', isUpdate);
     elements.mealPlannerAllergy()?.closest('.form-group')?.toggleAttribute('hidden', isUpdate);
@@ -6464,11 +6471,13 @@ function showSelectedMealPlannerRecipe() {
     link.hidden = !record;
     if (record) link.href = record.url;
     else link.removeAttribute('href');
-    const markFixed = elements.mealPlannerMarkAsFixed();
-    if (markFixed.dataset.recordId !== selectedId) markFixed.checked = false;
-    markFixed.dataset.recordId = selectedId;
-    markFixed.disabled = !record || Boolean(airtableExportController);
-    elements.btnSubmitMealPlannerExport().disabled = markFixed.disabled || elements.btnGenerateMealPlannerMetadata().disabled;
+    const disabled = !record || Boolean(airtableExportController);
+    for (const option of mealPlannerUpdateOptions()) {
+        if (option.dataset.recordId !== selectedId) option.checked = false;
+        option.dataset.recordId = selectedId;
+        option.disabled = disabled;
+    }
+    elements.btnSubmitMealPlannerExport().disabled = disabled || elements.btnGenerateMealPlannerMetadata().disabled;
 }
 
 function setCategoryOptions(categories = [], placeholder = 'Select category') {
@@ -6612,11 +6621,12 @@ function buildMealPlannerMetadataRecipePayload(recipe = currentRecipe) {
     return payload;
 }
 
-async function postMealPlannerMetadata(payload) {
+async function postMealPlannerMetadata(payload, { signal } = {}) {
     const response = await fetch('/api/generate-meal-planner-metadata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal
     });
     const data = await response.json().catch(() => ({}));
 
@@ -6638,7 +6648,7 @@ async function handleMealPlannerExportSubmit(event) {
     const originalText = submit.textContent;
     const controls = [
         submit, generate, elements.mealPlannerExportDestination(), elements.mealPlannerRecipeSearch(),
-        elements.mealPlannerRecipeRecord(), elements.mealPlannerMarkAsFixed(), elements.myPagesCoachProfile(),
+        elements.mealPlannerRecipeRecord(), ...mealPlannerUpdateOptions(), elements.myPagesCoachProfile(),
         elements.btnCloseMealPlannerExport()
     ];
     const disabledStates = controls.map((control) => control.disabled);
@@ -6748,13 +6758,25 @@ async function handleMealPlannerRecipeUpdate(signal) {
         return;
     }
 
-    const markFixed = elements.mealPlannerMarkAsFixed();
-    const markAsFixed = markFixed.checked;
+    const markAsFixed = elements.mealPlannerMarkAsFixed().checked;
+    const generateIngredientTags = elements.mealPlannerGenerateIngredientTags().checked;
     let updateToken;
     let finalizing = false;
     try {
         updateMealPlannerExportStatus('Preparing replacement files…', 'working', 2);
         const recipe = await waitForExportStep(() => prepareRecipeForMealPlannerExport(currentRecipe), signal);
+        let ingredientTags;
+        if (generateIngredientTags) {
+            if (!getMealPlannerIngredientNames(recipe).length) {
+                throw new Error('Add ingredients to the recipe before generating tags.');
+            }
+            updateMealPlannerExportStatus('Generating ingredient tags…', 'working', 7);
+            const metadata = await postMealPlannerMetadata({ recipe: buildMealPlannerMetadataRecipePayload(recipe) }, { signal });
+            ingredientTags = metadata.ingredients;
+            if (!Array.isArray(ingredientTags) || !ingredientTags.some((tag) => typeof tag === 'string' && tag.trim())) {
+                throw new Error('AI returned no ingredient tags. Try the update again.');
+            }
+        }
         const replacePhoto = Boolean(recipe.image);
         const pages = await collectAirtableJpgAttachments(recipe, { signal });
         const counts = {};
@@ -6767,7 +6789,7 @@ async function handleMealPlannerRecipeUpdate(signal) {
         updateMealPlannerExportStatus('Checking the selected Airtable recipe…', 'working', 56);
         const session = await postMealPlannerExport({
             action: 'begin-meal-planner-recipe-update', recordId, pageCounts: counts,
-            macros: recipe.macros, replacePhoto, markAsFixed
+            macros: recipe.macros, replacePhoto, markAsFixed, ingredientTags
         }, { signal });
         updateToken = session.updateToken;
         const stage = { action: 'stage-meal-planner-recipe-update', updateToken };
@@ -6785,9 +6807,11 @@ async function handleMealPlannerRecipeUpdate(signal) {
         updateMealPlannerExportStatus('Uploading the recipe file…', 'working', 95);
         await postMealPlannerExport({ ...stage, recipe, attachmentKind: 'file' });
         signal.throwIfAborted();
-        updateMealPlannerExportStatus(markAsFixed
-            ? 'Saving nutrition, files, and review status in Airtable…'
-            : 'Saving nutrition and files in Airtable…', 'working', 97);
+        const saving = ['nutrition', 'files'];
+        if (generateIngredientTags) saving.push('ingredient tags');
+        if (markAsFixed) saving.push('review status');
+        const savingList = saving.length === 2 ? saving.join(' and ') : `${saving.slice(0, -1).join(', ')}, and ${saving.at(-1)}`;
+        updateMealPlannerExportStatus(`Saving ${savingList} in Airtable…`, 'working', 97);
         finalizing = true;
         const finish = { action: 'finish-meal-planner-recipe-update', updateToken };
         let updated;
@@ -6799,12 +6823,13 @@ async function handleMealPlannerRecipeUpdate(signal) {
         }
         if (updated.id !== recordId) throw new Error('Airtable did not confirm the selected recipe update.');
         if (updated.markedAsFixed) cacheAirtableReviewNotes(recordId, updated.reviewNotes);
-        markFixed.checked = false;
+        resetMealPlannerUpdateOptions();
         mealPlannerRecipeOptions = mealPlannerRecipeOptions.map((record) => record.id === recordId ? updated : record);
         renderMealPlannerRecipeOptions();
-        const success = updated.markedAsFixed
+        let success = updated.markedAsFixed
             ? 'Updated the selected Airtable recipe and marked it as fixed.'
             : 'Updated the selected Airtable recipe.';
+        if (updated.updatedIngredientTags) success += ' Ingredient tags updated.';
         updateMealPlannerExportStatus(signal.aborted
             ? 'The Airtable update finished before it could be canceled.'
             : success, 'success', 100);
@@ -9136,6 +9161,7 @@ function handleLoadJson(event) {
         try {
             loadRecipeObject(JSON.parse(e.target.result), '');
             saveRecentRecipe(currentRecipe);
+            closeLoadRecipeOverlay();
         } catch (error) {
             alert('Error loading JSON file. Please ensure it is a valid recipe file.');
             console.error('JSON parse error:', error);

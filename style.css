@@ -988,6 +988,93 @@ body {
     outline-offset: -4px;
 }
 
+/* Layout guides stay in the live preview and follow newly rendered pages. */
+.app-container:has([data-section-key="pageLayout"].is-editor-active:not(.is-collapsed)) {
+    &:has([data-layout-preview="page-style"]:hover, [data-layout-preview="page-style"] :focus-visible)
+        .preview-container .recipe-page,
+    &:has([data-layout-preview="title-font-size"]:hover, [data-layout-preview="title-font-size"] :focus-visible)
+        .preview-container .recipe-title,
+    &:has([data-layout-preview="printer-title-top-padding"]:hover, [data-layout-preview="printer-title-top-padding"] :focus-visible)
+        .preview-container .page-primary.printer-friendly-page .hero-section,
+    &:has([data-layout-preview="printer-title-macro-spacing"]:hover, [data-layout-preview="printer-title-macro-spacing"] :focus-visible)
+        .preview-container :is(.recipe-title, .macro-bar-content),
+    &:has([data-layout-preview="macro-bar-font-size"]:hover, [data-layout-preview="macro-bar-font-size"] :focus-visible)
+        .preview-container .macro-bar-content,
+    &:has([data-layout-preview="description-font-size"]:hover, [data-layout-preview="description-font-size"] :focus-visible)
+        .preview-container .description-text,
+    &:has([data-layout-preview="note-text-font-size"]:hover, [data-layout-preview="note-text-font-size"] :focus-visible)
+        .preview-container .note-text,
+    &:has([data-layout-preview="body-text-font-size"]:hover, [data-layout-preview="body-text-font-size"] :focus-visible)
+        .preview-container :is(.ingredient-item, .instruction-text-wrapper),
+    &:has([data-layout-preview="ingredient-gap"]:hover, [data-layout-preview="ingredient-gap"] :focus-visible)
+        .preview-container .ingredient-item,
+    &:has([data-layout-preview="ingredient-amount-width"]:hover, [data-layout-preview="ingredient-amount-width"] :focus-visible)
+        .preview-container .ingredient-amount-cell,
+    &:has([data-layout-preview="section-header-font-size"]:hover, [data-layout-preview="section-header-font-size"] :focus-visible)
+        .preview-container .section-title,
+    &:has([data-layout-preview="section-label-spacing"]:hover, [data-layout-preview="section-label-spacing"] :focus-visible)
+        .preview-container .flow-section-title:has(+ .flow-section-title),
+    &:has([data-layout-preview="step-to-header-spacing"]:hover, [data-layout-preview="step-to-header-spacing"] :focus-visible)
+        .preview-container :is(.instruction-item:has(+ .instruction-part-header), .instruction-item + .instruction-part-header),
+    &:has([data-layout-preview="subtitle-to-step-spacing"]:hover, [data-layout-preview="subtitle-to-step-spacing"] :focus-visible)
+        .preview-container :is(.instruction-subtitle:has(+ .instruction-item), .instruction-subtitle + .instruction-item),
+    &:has([data-layout-preview="black-box-header-font-size"]:hover, [data-layout-preview="black-box-header-font-size"] :focus-visible)
+        .preview-container .instructions-header,
+    &:has([data-layout-preview="instruction-badge-font-size"]:hover, [data-layout-preview="instruction-badge-font-size"] :focus-visible)
+        .preview-container .instruction-number,
+    &:has([data-layout-preview="checkbox-box-font-size"]:hover, [data-layout-preview="checkbox-box-font-size"] :focus-visible)
+        .preview-container .checkbox-box,
+    &:has([data-layout-preview="portion-label-font-size"]:hover, [data-layout-preview="portion-label-font-size"] :focus-visible)
+        .preview-container .portion-variation-card-label,
+    &:has([data-layout-preview="portion-macro-value-font-size"]:hover, [data-layout-preview="portion-macro-value-font-size"] :focus-visible)
+        .preview-container .portion-variation-card-value,
+    &:has([data-layout-preview="portion-macro-unit-font-size"]:hover, [data-layout-preview="portion-macro-unit-font-size"] :focus-visible)
+        .preview-container .portion-variation-card-unit,
+    :is(
+        &:has([data-layout-preview="page-number"]:hover, [data-layout-preview="page-number"] :focus-visible),
+        &:has([data-layout-preview="page-number-font-size"]:hover, [data-layout-preview="page-number-font-size"] :focus-visible)
+    ) .preview-container .page-number:not(:empty) {
+        outline: 2px solid var(--color-primary);
+        outline-offset: -2px;
+        border-radius: 3px;
+    }
+
+    :is(
+        &:has([data-layout-preview="page-number"]:hover, [data-layout-preview="page-number"] :focus-visible),
+        &:has([data-layout-preview="page-number-font-size"]:hover, [data-layout-preview="page-number-font-size"] :focus-visible)
+    ) .preview-container .page-number:empty::before {
+        content: '';
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 1.8em;
+        height: 1.2em;
+        outline: 2px solid var(--color-primary);
+        outline-offset: -2px;
+        border-radius: 3px;
+        pointer-events: none;
+    }
+
+    &:has([data-layout-preview="continuation-content-spacing"]:hover, [data-layout-preview="continuation-content-spacing"] :focus-visible)
+        .preview-container .content-area--continuation::before {
+        content: '';
+        position: absolute;
+        left: var(--spacing-50);
+        right: var(--spacing-50);
+        height: max(3px, var(--continuation-content-spacing, 50px));
+        transform: translateY(calc(-1 * var(--continuation-content-spacing, 50px)));
+        outline: 2px solid var(--color-primary);
+        outline-offset: -2px;
+        pointer-events: none;
+    }
+
+    &:has([data-layout-preview="page-bottom-margin"]:hover, [data-layout-preview="page-bottom-margin"] :focus-visible)
+        .preview-container .page-bottom-margin-guide {
+        border-top-style: solid;
+        opacity: 1;
+    }
+}
+
 /* Image Upload Area */
 .image-upload-area {
     border: 2px dashed var(--color-gray-300);
@@ -1190,6 +1277,26 @@ body {
     color: #f3f6f8;
     font-size: var(--editor-subheading-size);
     font-weight: 700;
+}
+
+.layout-control-subsection {
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid #2b343d;
+}
+
+.layout-control-subsection h4 {
+    margin: 0 0 var(--spacing-sm);
+    color: #a8b6c3;
+    font-size: var(--editor-label-size);
+    font-weight: 700;
+}
+
+.layout-control-subsection + .layout-control-subsection {
+    margin-top: var(--spacing-sm);
+}
+
+[data-layout-preview]:is(:hover, :has(:focus-visible)) label {
+    color: #a6f0a1;
 }
 
 .layout-control-container .layout-control-group:last-of-type {
@@ -1647,8 +1754,8 @@ body {
 }
 
 .load-recipe-modal.is-browsing-airtable {
-    max-width: 860px;
-    height: min(760px, calc(100dvh - 40px));
+    max-width: 960px;
+    height: min(840px, calc(100dvh - 40px));
     max-height: none;
     border-radius: 14px;
 }
@@ -1958,7 +2065,7 @@ body {
     margin: 3px auto 0;
 }
 
-.airtable-recipe-browser .btn-primary:disabled {
+.airtable-recipe-browser .load-recipe-actions > button:disabled {
     opacity: .5;
     cursor: not-allowed;
 }
@@ -1979,6 +2086,14 @@ body {
     .recipe-browser-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
+    }
+
+    .airtable-recipe-browser .load-recipe-actions .btn-secondary {
+        flex: 1 1 0;
+    }
+
+    .airtable-recipe-browser .load-recipe-actions .btn-primary {
+        flex-basis: 100%;
     }
 }
 
@@ -2028,6 +2143,25 @@ body {
 .meal-planner-mark-fixed:has(input:focus-visible) {
     outline: 2px solid #8ff087;
     outline-offset: 2px;
+}
+
+.meal-planner-ingredient-tags {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.meal-planner-ingredient-tags:has(input:disabled) {
+    opacity: .55;
+    cursor: default;
+}
+
+.meal-planner-export-body .meal-planner-ingredient-tags input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--color-primary);
 }
 
 .meal-planner-record-link {
@@ -2126,14 +2260,6 @@ body {
 .meal-planner-export-form .equipment-modal-footer .btn-primary,
 .meal-planner-export-form .equipment-modal-footer .btn-secondary {
     flex: 1;
-}
-
-.load-recipe-section-title {
-    color: var(--color-gray-700);
-    font-size: var(--editor-heading-size);
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
 }
 
 .recent-recipes-list {
@@ -3324,10 +3450,6 @@ body {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(66, 213, 59, 0.18);
     outline: none;
-}
-
-.load-recipe-section-title {
-    color: #c8d1db;
 }
 
 .recent-recipe-item {

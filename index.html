@@ -418,39 +418,36 @@
                 <!-- Page Layout Section -->
                 <section class="form-section" data-section-key="pageLayout">
                     <h2>Page Layout</h2>
-                    <div class="form-group">
-                        <label>Style</label>
-                        <input type="hidden" id="page-style" name="pageStyle" value="standard">
-                        <div class="segmented-control" role="group" aria-label="Style">
-                            <button type="button" class="segmented-control-button is-active" data-page-style="standard">Standard</button>
-                            <button type="button" class="segmented-control-button" data-page-style="printer-friendly">Printer Friendly</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="page-number">Page Number</label>
-                        <input type="text" id="page-number" name="pageNumber" placeholder="e.g., 14">
-                    </div>
                     <div class="layout-control-container">
-                        <h3>Ingredient Columns</h3>
-                        <div class="layout-control-group">
-                            <div class="image-control-row">
-                                <label for="ingredient-gap">Ingredient–Amount Gap</label>
-                                <input type="range" id="ingredient-gap" min="0" max="40" step="1" value="12">
-                                <span id="ingredient-gap-value">12px</span>
+                        <h3>Page</h3>
+                        <div class="form-group" data-layout-preview="page-style">
+                            <label>Style</label>
+                            <input type="hidden" id="page-style" name="pageStyle" value="standard">
+                            <div class="segmented-control" role="group" aria-label="Style">
+                                <button type="button" class="segmented-control-button is-active" data-page-style="standard">Standard</button>
+                                <button type="button" class="segmented-control-button" data-page-style="printer-friendly">Printer Friendly</button>
                             </div>
                         </div>
-                        <div class="layout-control-group">
+                        <div class="layout-control-group" data-layout-preview="page-bottom-margin">
                             <div class="image-control-row">
-                                <label for="ingredient-amount-width">Amount Column Width</label>
-                                <input type="range" id="ingredient-amount-width" min="30" max="65" step="1" value="46">
-                                <span id="ingredient-amount-width-value">46%</span>
+                                <label for="page-bottom-margin">Bottom Margin</label>
+                                <input type="range" id="page-bottom-margin" min="0" max="200" step="5" value="20">
+                                <span id="page-bottom-margin-value">20px</span>
                             </div>
-                            <p class="form-hint">Widen the amount column to fit longer quantities.</p>
+                            <p class="form-hint">Adds extra bottom clearance before content flows to the next column or page.</p>
+                        </div>
+                        <div class="layout-control-group" data-layout-preview="continuation-content-spacing">
+                            <div class="image-control-row">
+                                <label for="continuation-content-spacing">Continuation Top Spacing</label>
+                                <input type="range" id="continuation-content-spacing" min="0" max="200" step="5" value="50">
+                                <span id="continuation-content-spacing-value">50px</span>
+                            </div>
+                            <p class="form-hint">Controls the top gap before content starts on continuation pages.</p>
                         </div>
                     </div>
                     <div class="layout-control-container">
-                        <h3>APP/JPEG Typography</h3>
-                        <div class="layout-control-group">
+                        <h3>Title &amp; Macro Bar</h3>
+                        <div class="layout-control-group" data-layout-preview="title-font-size">
                             <div class="image-control-row">
                                 <label for="title-font-size">Title Font Size</label>
                                 <input type="range" id="title-font-size" min="24" max="64" value="40">
@@ -458,147 +455,170 @@
                             </div>
                             <p class="form-hint">Adjusts the recipe title size in the page header.</p>
                         </div>
-                        <div class="layout-control-group">
+                        <div class="layout-control-group" data-layout-preview="printer-title-top-padding">
+                            <div class="image-control-row">
+                                <label for="printer-title-top-padding">Printer Title Top Padding</label>
+                                <input type="range" id="printer-title-top-padding" min="0" max="120" step="1" value="70">
+                                <span id="printer-title-top-padding-value">70px</span>
+                            </div>
+                            <p class="form-hint">Sets the top space above the title on printer-friendly pages.</p>
+                        </div>
+                        <div class="layout-control-group" data-layout-preview="printer-title-macro-spacing">
+                            <div class="image-control-row">
+                                <label for="printer-title-macro-spacing">Title to Macro Spacing</label>
+                                <input type="range" id="printer-title-macro-spacing" min="0" max="200" step="1" value="35">
+                                <span id="printer-title-macro-spacing-value">35px</span>
+                            </div>
+                            <p class="form-hint">Controls the gap between the title and macro bar.</p>
+                        </div>
+                        <div class="layout-control-group" data-layout-preview="macro-bar-font-size">
                             <div class="image-control-row">
                                 <label for="macro-bar-font-size">Macro Bar</label>
                                 <input type="range" id="macro-bar-font-size" min="10" max="24" step="1" value="15">
                                 <input type="number" id="macro-bar-font-size-value" class="slider-value-input" min="10" max="24" step="1" value="15" aria-label="Macro bar font size value">
                             </div>
                         </div>
-                        <div class="layout-control-group">
+                    </div>
+                    <div class="layout-control-container">
+                        <h3>Description &amp; Notes</h3>
+                        <div class="layout-control-group" data-layout-preview="description-font-size">
                             <div class="image-control-row">
                                 <label for="description-font-size">Description</label>
                                 <input type="range" id="description-font-size" min="9" max="22" step="1" value="13">
                                 <input type="number" id="description-font-size-value" class="slider-value-input" min="9" max="22" step="1" value="13" aria-label="Description font size value">
                             </div>
                         </div>
-                        <div class="layout-control-group">
-                            <div class="image-control-row">
-                                <label for="section-header-font-size">Ingredient/Instruction Headers</label>
-                                <input type="range" id="section-header-font-size" min="8" max="22" step="1" value="14">
-                                <input type="number" id="section-header-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="14" aria-label="Ingredient and instruction header font size value">
-                            </div>
-                        </div>
-                        <div class="layout-control-group">
-                            <div class="image-control-row">
-                                <label for="section-label-spacing">Header/Subtitle Spacing</label>
-                                <input type="range" id="section-label-spacing" min="0" max="60" step="1" value="4">
-                                <span id="section-label-spacing-value">4px</span>
-                            </div>
-                            <p class="form-hint">Adjusts spacing around inline ingredient and instruction headers/subtitles.</p>
-                        </div>
-                        <div class="layout-control-group">
-                            <div class="image-control-row">
-                                <label for="step-to-header-spacing">Step to Header Spacing</label>
-                                <input type="range" id="step-to-header-spacing" min="0" max="100" step="1" value="32">
-                                <span id="step-to-header-spacing-value">32px</span>
-                            </div>
-                            <p class="form-hint">Controls the gap from an instruction step to the next inline header/subtitle.</p>
-                        </div>
-                        <div class="layout-control-group">
-                            <div class="image-control-row">
-                                <label for="subtitle-to-step-spacing">Subtitle to Step Spacing</label>
-                                <input type="range" id="subtitle-to-step-spacing" min="0" max="100" step="1" value="12">
-                                <span id="subtitle-to-step-spacing-value">12px</span>
-                            </div>
-                            <p class="form-hint">Controls the gap from an instruction subtitle to the next step.</p>
-                        </div>
-                        <div class="layout-control-group">
-                            <div class="image-control-row">
-                                <label for="body-text-font-size">Ingredient/Instruction Text</label>
-                                <input type="range" id="body-text-font-size" min="8" max="22" step="1" value="14">
-                                <input type="number" id="body-text-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="14" aria-label="Ingredient and instruction text font size value">
-                            </div>
-                        </div>
-                        <div class="layout-control-group">
-                            <div class="image-control-row">
-                                <label for="black-box-header-font-size">Black Box Titles</label>
-                                <input type="range" id="black-box-header-font-size" min="9" max="24" step="1" value="13">
-                                <input type="number" id="black-box-header-font-size-value" class="slider-value-input" min="9" max="24" step="1" value="13" aria-label="Black box title font size value">
-                            </div>
-                        </div>
-                        <div class="layout-control-group">
-                            <div class="image-control-row">
-                                <label for="instruction-badge-font-size">Instruction Badges</label>
-                                <input type="range" id="instruction-badge-font-size" min="8" max="20" step="1" value="12">
-                                <input type="number" id="instruction-badge-font-size-value" class="slider-value-input" min="8" max="20" step="1" value="12" aria-label="Instruction badge font size value">
-                            </div>
-                        </div>
-                        <div class="layout-control-group">
-                            <div class="image-control-row">
-                                <label for="checkbox-box-font-size">Checkbox Icons</label>
-                                <input type="range" id="checkbox-box-font-size" min="10" max="28" step="1" value="16">
-                                <input type="number" id="checkbox-box-font-size-value" class="slider-value-input" min="10" max="28" step="1" value="16" aria-label="Checkbox icon font size value">
-                            </div>
-                        </div>
-                        <div class="layout-control-group">
+                        <div class="layout-control-group" data-layout-preview="note-text-font-size">
                             <div class="image-control-row">
                                 <label for="note-text-font-size">Note Text</label>
                                 <input type="range" id="note-text-font-size" min="8" max="22" step="1" value="12">
                                 <input type="number" id="note-text-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="12" aria-label="Note text font size value">
                             </div>
                         </div>
-                        <div class="layout-control-group">
+                    </div>
+                    <div class="layout-control-container">
+                        <h3>Ingredients &amp; Instructions</h3>
+                        <div class="layout-control-group" data-layout-preview="body-text-font-size">
                             <div class="image-control-row">
-                                <label for="page-number-font-size">Page Number</label>
-                                <input type="range" id="page-number-font-size" min="10" max="28" step="1" value="16">
-                                <input type="number" id="page-number-font-size-value" class="slider-value-input" min="10" max="28" step="1" value="16" aria-label="Page number font size value">
+                                <label for="body-text-font-size">Ingredient/Instruction Text</label>
+                                <input type="range" id="body-text-font-size" min="8" max="22" step="1" value="14">
+                                <input type="number" id="body-text-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="14" aria-label="Ingredient and instruction text font size value">
                             </div>
                         </div>
-                        <div class="layout-control-group">
+                        <div class="layout-control-subsection">
+                            <h4>Ingredient Columns</h4>
+                            <div class="layout-control-group" data-layout-preview="ingredient-gap">
+                                <div class="image-control-row">
+                                    <label for="ingredient-gap">Ingredient–Amount Gap</label>
+                                    <input type="range" id="ingredient-gap" min="0" max="40" step="1" value="12">
+                                    <span id="ingredient-gap-value">12px</span>
+                                </div>
+                            </div>
+                            <div class="layout-control-group" data-layout-preview="ingredient-amount-width">
+                                <div class="image-control-row">
+                                    <label for="ingredient-amount-width">Amount Column Width</label>
+                                    <input type="range" id="ingredient-amount-width" min="30" max="65" step="1" value="46">
+                                    <span id="ingredient-amount-width-value">46%</span>
+                                </div>
+                                <p class="form-hint">Widen the amount column to fit longer quantities.</p>
+                            </div>
+                        </div>
+                        <div class="layout-control-subsection">
+                            <h4>Headings &amp; Spacing</h4>
+                            <div class="layout-control-group" data-layout-preview="section-header-font-size">
+                                <div class="image-control-row">
+                                    <label for="section-header-font-size">Ingredient/Instruction Headers</label>
+                                    <input type="range" id="section-header-font-size" min="8" max="22" step="1" value="14">
+                                    <input type="number" id="section-header-font-size-value" class="slider-value-input" min="8" max="22" step="1" value="14" aria-label="Ingredient and instruction header font size value">
+                                </div>
+                            </div>
+                            <div class="layout-control-group" data-layout-preview="section-label-spacing">
+                                <div class="image-control-row">
+                                    <label for="section-label-spacing">Header/Subtitle Spacing</label>
+                                    <input type="range" id="section-label-spacing" min="0" max="60" step="1" value="4">
+                                    <span id="section-label-spacing-value">4px</span>
+                                </div>
+                                <p class="form-hint">Adjusts spacing around inline ingredient and instruction headers/subtitles.</p>
+                            </div>
+                            <div class="layout-control-group" data-layout-preview="black-box-header-font-size">
+                                <div class="image-control-row">
+                                    <label for="black-box-header-font-size">Black Box Titles</label>
+                                    <input type="range" id="black-box-header-font-size" min="9" max="24" step="1" value="13">
+                                    <input type="number" id="black-box-header-font-size-value" class="slider-value-input" min="9" max="24" step="1" value="13" aria-label="Black box title font size value">
+                                </div>
+                            </div>
+                            <div class="layout-control-group" data-layout-preview="step-to-header-spacing">
+                                <div class="image-control-row">
+                                    <label for="step-to-header-spacing">Step to Header Spacing</label>
+                                    <input type="range" id="step-to-header-spacing" min="0" max="100" step="1" value="32">
+                                    <span id="step-to-header-spacing-value">32px</span>
+                                </div>
+                                <p class="form-hint">Controls the gap from an instruction step to the next inline header/subtitle.</p>
+                            </div>
+                            <div class="layout-control-group" data-layout-preview="subtitle-to-step-spacing">
+                                <div class="image-control-row">
+                                    <label for="subtitle-to-step-spacing">Subtitle to Step Spacing</label>
+                                    <input type="range" id="subtitle-to-step-spacing" min="0" max="100" step="1" value="12">
+                                    <span id="subtitle-to-step-spacing-value">12px</span>
+                                </div>
+                                <p class="form-hint">Controls the gap from an instruction subtitle to the next step.</p>
+                            </div>
+                        </div>
+                        <div class="layout-control-subsection">
+                            <h4>Step Markers</h4>
+                            <div class="layout-control-group" data-layout-preview="instruction-badge-font-size">
+                                <div class="image-control-row">
+                                    <label for="instruction-badge-font-size">Instruction Badges</label>
+                                    <input type="range" id="instruction-badge-font-size" min="8" max="20" step="1" value="12">
+                                    <input type="number" id="instruction-badge-font-size-value" class="slider-value-input" min="8" max="20" step="1" value="12" aria-label="Instruction badge font size value">
+                                </div>
+                            </div>
+                            <div class="layout-control-group" data-layout-preview="checkbox-box-font-size">
+                                <div class="image-control-row">
+                                    <label for="checkbox-box-font-size">Checkbox Icons</label>
+                                    <input type="range" id="checkbox-box-font-size" min="10" max="28" step="1" value="16">
+                                    <input type="number" id="checkbox-box-font-size-value" class="slider-value-input" min="10" max="28" step="1" value="16" aria-label="Checkbox icon font size value">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="layout-control-container">
+                        <h3>Portion Variations</h3>
+                        <div class="layout-control-group" data-layout-preview="portion-label-font-size">
                             <div class="image-control-row">
                                 <label for="portion-label-font-size">Portion Label</label>
                                 <input type="range" id="portion-label-font-size" min="7" max="18" step="1" value="10">
                                 <input type="number" id="portion-label-font-size-value" class="slider-value-input" min="7" max="18" step="1" value="10" aria-label="Portion label font size value">
                             </div>
                         </div>
-                        <div class="layout-control-group">
+                        <div class="layout-control-group" data-layout-preview="portion-macro-value-font-size">
                             <div class="image-control-row">
                                 <label for="portion-macro-value-font-size">Portion Macro Value</label>
                                 <input type="range" id="portion-macro-value-font-size" min="7" max="20" step="1" value="11">
                                 <input type="number" id="portion-macro-value-font-size-value" class="slider-value-input" min="7" max="20" step="1" value="11" aria-label="Portion macro value font size value">
                             </div>
                         </div>
-                        <div class="layout-control-group">
+                        <div class="layout-control-group" data-layout-preview="portion-macro-unit-font-size">
                             <div class="image-control-row">
                                 <label for="portion-macro-unit-font-size">Portion Macro Unit</label>
                                 <input type="range" id="portion-macro-unit-font-size" min="6" max="16" step="1" value="9">
                                 <input type="number" id="portion-macro-unit-font-size-value" class="slider-value-input" min="6" max="16" step="1" value="9" aria-label="Portion macro unit font size value">
                             </div>
                         </div>
-                        <p class="form-hint">These controls affect the app preview and JPEG export. PDF font sizes are handled separately.</p>
                     </div>
-                    <div class="layout-control-group">
-                        <div class="image-control-row">
-                            <label for="printer-title-top-padding">Printer Title Top Padding</label>
-                            <input type="range" id="printer-title-top-padding" min="0" max="120" step="1" value="70">
-                            <span id="printer-title-top-padding-value">70px</span>
+                    <div class="layout-control-container">
+                        <h3>Page Number</h3>
+                        <div class="form-group" data-layout-preview="page-number">
+                            <label for="page-number">Page Number</label>
+                            <input type="text" id="page-number" name="pageNumber" placeholder="e.g., 14">
                         </div>
-                        <p class="form-hint">Sets the top space above the title on printer-friendly pages.</p>
-                    </div>
-                    <div class="layout-control-group">
-                        <div class="image-control-row">
-                            <label for="printer-title-macro-spacing">Title to Macro Spacing</label>
-                            <input type="range" id="printer-title-macro-spacing" min="0" max="200" step="1" value="35">
-                            <span id="printer-title-macro-spacing-value">35px</span>
+                        <div class="layout-control-group" data-layout-preview="page-number-font-size">
+                            <div class="image-control-row">
+                                <label for="page-number-font-size">Page Number Size</label>
+                                <input type="range" id="page-number-font-size" min="10" max="28" step="1" value="16">
+                                <input type="number" id="page-number-font-size-value" class="slider-value-input" min="10" max="28" step="1" value="16" aria-label="Page number font size value">
+                            </div>
                         </div>
-                        <p class="form-hint">Controls the gap between the title and macro bar.</p>
-                    </div>
-                    <div class="layout-control-group">
-                        <div class="image-control-row">
-                            <label for="page-bottom-margin">Bottom Margin</label>
-                            <input type="range" id="page-bottom-margin" min="0" max="200" step="5" value="20">
-                            <span id="page-bottom-margin-value">20px</span>
-                        </div>
-                        <p class="form-hint">Adds extra bottom clearance before content flows to the next column or page.</p>
-                    </div>
-                    <div class="layout-control-group">
-                        <div class="image-control-row">
-                            <label for="continuation-content-spacing">Page 2+ Hero to Content Spacing</label>
-                            <input type="range" id="continuation-content-spacing" min="0" max="200" step="5" value="50">
-                            <span id="continuation-content-spacing-value">50px</span>
-                        </div>
-                        <p class="form-hint">Controls the top gap before content starts on continuation pages.</p>
                     </div>
                 </section>
 
@@ -770,22 +790,21 @@
 
     <!-- Load Recipe Overlay -->
     <div class="load-recipe-overlay" id="load-recipe-overlay">
-        <div class="load-recipe-modal" role="dialog" aria-modal="true" aria-labelledby="load-recipe-heading">
+        <div class="load-recipe-modal is-browsing-airtable" role="dialog" aria-modal="true" aria-labelledby="load-recipe-heading">
             <div class="equipment-modal-header">
-                <h3 id="load-recipe-heading">Load Recipe</h3>
+                <h3 id="load-recipe-heading">Browse Recipes</h3>
                 <button type="button" class="btn-close-modal" id="btn-close-load-recipe" aria-label="Close Load Recipe">&times;</button>
             </div>
-            <div class="load-recipe-body" id="load-recipe-recent">
-                <div class="load-recipe-section-title">Recent Recipes</div>
+            <div class="load-recipe-body" id="load-recipe-recent" hidden>
                 <div id="recent-recipes-list" class="recent-recipes-list">
                     <!-- Recent recipes will be populated by JS -->
                 </div>
                 <div class="load-recipe-actions">
-                    <button type="button" id="btn-load-from-computer" class="btn-secondary">Load from computer</button>
-                    <button type="button" id="btn-load-from-airtable" class="btn-primary">Load from Airtable</button>
+                    <button type="button" class="btn-secondary" data-load-from-device>Load from device</button>
+                    <button type="button" id="btn-load-from-airtable" class="btn-primary">Browse Recipes</button>
                 </div>
             </div>
-            <form class="load-recipe-body airtable-recipe-browser" id="load-airtable-recipe-form" hidden>
+            <form class="load-recipe-body airtable-recipe-browser" id="load-airtable-recipe-form">
                 <div class="recipe-browser-search">
                     <label class="visually-hidden" for="load-airtable-recipe-search">Search recipes</label>
                     <span class="recipe-browser-search-icon" aria-hidden="true"></span>
@@ -822,7 +841,8 @@
                 </div>
                 <div id="load-airtable-recipe-status" class="master-paste-status" role="status"></div>
                 <div class="load-recipe-actions">
-                    <button type="button" id="btn-back-load-recipe" class="btn-secondary">Back</button>
+                    <button type="button" id="btn-load-recent-recipes" class="btn-secondary">Recent Recipes</button>
+                    <button type="button" id="btn-load-from-device" class="btn-secondary" data-load-from-device>Load from device</button>
                     <button type="submit" id="btn-load-airtable-recipe" class="btn-primary" disabled>Load Recipe</button>
                 </div>
             </form>
@@ -862,6 +882,10 @@
                             <span>Mark as fixed</span>
                         </label>
                         <p id="meal-planner-mark-fixed-help" class="form-hint">Clears Needs fixing and adds a dated completion line to any review notes.</p>
+                        <label class="meal-planner-ingredient-tags">
+                            <input type="checkbox" id="meal-planner-generate-ingredient-tags" disabled>
+                            <span>Generate and replace ingredient tags</span>
+                        </label>
                     </div>
                     <div class="meal-planner-export-actions">
                         <button type="button" id="btn-generate-meal-planner-metadata" class="btn-secondary">Generate</button>
